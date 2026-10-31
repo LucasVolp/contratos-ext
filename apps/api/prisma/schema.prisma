@@ -1,0 +1,86 @@
+generator client {
+ provider = "prisma-client"
+ output = "../src/generated/prisma"
+ moduleFormat = "cjs"
+}
+datasource db {
+ provider = "postgresql"
+}
+model Contract {
+ id String @id @default(uuid()) @db.Uuid
+ number String
+ object String
+ supplierName String
+ supplierDocument String
+ uasg String
+ unitName String @default("")
+ startDate String?
+ endDate String?
+ initialValue Decimal @db.Decimal(24,6)
+ globalValue Decimal @db.Decimal(24,6)
+ source String @default("MANUAL")
+ externalId String?
+ lastSyncedAt DateTime?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@unique([number, uasg])
+ @@index([uasg])
+}
+model PriceRecord {
+ id String @id @default(uuid()) @db.Uuid
+ number String
+ processNumber String @default("")
+ purchaseNumber String @default("")
+ purchaseYear Int?
+ modality String @default("PREGAO")
+ object String
+ startDate String?
+ endDate String?
+ renewable Boolean @default(false)
+ uasg String
+ organizationName String @default("")
+ organizationDocument String @default("")
+ organizationStreet String @default("")
+ organizationNumber String @default("")
+ organizationCity String @default("")
+ organizationState String @default("")
+ authorityName String @default("")
+ authorityRole String @default("")
+ authorityRegistration String @default("")
+ ordinanceNumber String @default("")
+ ordinanceDate String?
+ ordinancePublicationDate String?
+ supplierName String @default("")
+ supplierDocument String @default("")
+ supplierRepresentative String @default("")
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ items RecordItem[]
+ exports DocumentExport[]
+ @@unique([number,uasg])
+}
+model RecordItem {
+ id String @id @default(uuid()) @db.Uuid
+ recordId String @db.Uuid
+ record PriceRecord @relation(fields:[recordId],references:[id],onDelete:Cascade)
+ number Int
+ description String @default("")
+ brand String @default("")
+ model String @default("")
+ unit String @default("")
+ quantity Decimal @db.Decimal(24,6)
+ minimumQuantity Decimal @db.Decimal(24,6)
+ unitPrice Decimal @db.Decimal(24,6)
+ warranty String @default("")
+ @@unique([recordId,number])
+}
+model DocumentExport {
+ id String @id @default(uuid()) @db.Uuid
+ recordId String @db.Uuid
+ record PriceRecord @relation(fields:[recordId],references:[id],onDelete:Cascade)
+ format String
+ templateVersion String
+ itemNumber Int?
+ snapshot Json
+ createdAt DateTime @default(now())
+}

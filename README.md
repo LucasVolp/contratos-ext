@@ -27,6 +27,8 @@ O seed é opcional e idempotente. Os dados importados e cadastrados ficam no vol
 
 **Atas e documentos:** crie uma ata ou importe os dados públicos disponíveis. Preencha organização, autoridade signatária, fornecedor e itens. Salve rascunhos e consulte as pendências antes de exportar. Baixe a ata completa ou um item em DOCX/PDF. O histórico registra cada geração concluída.
 
+Contratos importados anteriormente são atualizados sem duplicação; cadastros manuais com a mesma identidade são preservados e geram conflito explícito. Atas existentes não são substituídas por nova importação: use a edição para manter o preenchimento local.
+
 A importação usa somente a API pública Compras.gov.br. Não chama APIs SAGA/DIRAD. Dados indisponíveis externamente devem ser preenchidos no editor. Uma ata corresponde a um fornecedor; respostas com vários fornecedores são rejeitadas para evitar documentos incorretos.
 
 ## Arquitetura
@@ -59,6 +61,8 @@ Configurações locais em `.env`: `DATABASE_URL`, `GOTENBERG_URL` e `API_INTERNA
 
 ```sh
 pnpm test
+# Com o banco disponível:
+pnpm --filter @contracts/api test:integration
 pnpm lint
 pnpm build
 # Com a aplicação e o Gotenberg rodando:

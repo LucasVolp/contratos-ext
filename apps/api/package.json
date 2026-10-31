@@ -1,0 +1,39 @@
+{
+  "name": "@contracts/api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "prisma generate && tsc && mkdir -p dist/templates && cp templates/*.docx dist/templates/",
+    "start": "node dist/main.js",
+    "test": "pnpm run build && tsx --test test/*.test.ts && node --test test/production/*.test.cjs",
+    "lint": "prisma generate && tsc --noEmit",
+    "db:migrate": "prisma generate && prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
+    "test:integration": "tsx --test test/integration/*.test.ts",
+    "test:production": "pnpm run build && node --test test/production/*.test.cjs"
+  },
+  "dependencies": {
+    "@nestjs/common": "11.2.8",
+    "@nestjs/core": "11.2.8",
+    "@nestjs/platform-express": "11.2.8",
+    "@prisma/client": "7.10.1",
+    "@prisma/adapter-pg": "7.10.1",
+    "pg": "^8.16.3",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "decimal.js": "^10.6.0",
+    "docxtemplater": "^3.67.6",
+    "pizzip": "^3.2.0",
+    "class-validator": "^0.14.2",
+    "class-transformer": "^0.5.1"
+  },
+  "devDependencies": {
+    "prisma": "7.10.1",
+    "typescript": "^5.9.3",
+    "tsx": "^4.20.6",
+    "@types/node": "^22.19.0",
+    "@types/express": "^5.0.5",
+    "@types/pg": "^8.15.6"
+  }
+}

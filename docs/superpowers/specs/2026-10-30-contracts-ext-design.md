@@ -1,6 +1,6 @@
 # Contracts Ext — proposta de implementação
 
-Data: 30/10/2026. Estado: proposta para revisão do usuário.
+Data: 30/10/2026. Estado: aprovado pelo usuário em 30/10/2026, com UI/UX independente dos projetos de referência.
 
 ## Objetivo
 

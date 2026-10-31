@@ -16,13 +16,17 @@ const record = {
   ordinanceNumber: '123/2026', ordinanceDate: '2026-01-01', ordinancePublicationDate: '2026-01-02',
   supplierName: 'Fornecedor de teste automatizado', supplierDocument: '12345678000190', supplierRepresentative: 'João de Teste',
   items: [
-    { number: '1', description: 'Papel para impressão de documentos', brand: 'Teste', model: 'A4', unit: 'resma', quantity: '3', minimumQuantity: '1', unitPrice: '0.10', warranty: '12 meses' },
-    { number: '2', description: 'Caneta esferográfica azul', brand: 'Teste', model: 'Azul', unit: 'unidade', quantity: '10', minimumQuantity: '1', unitPrice: '2.50', warranty: '12 meses' },
+    { number: 1, description: 'Papel para impressão de documentos', brand: 'Teste', model: 'A4', unit: 'resma', quantity: '3', minimumQuantity: '1', unitPrice: '0.10', warranty: '12 meses' },
+    { number: 2, description: 'Caneta esferográfica azul', brand: 'Teste', model: 'Azul', unit: 'unidade', quantity: '10', minimumQuantity: '1', unitPrice: '2.50', warranty: '12 meses' },
   ],
 };
 let contractId: string;
 let recordId: string;
 test.describe.serial('Sistema independente', () => {
+  test.afterAll(async ({ request }) => {
+    if (contractId) await request.delete(`/api/contracts/${contractId}`);
+    if (recordId) await request.delete(`/api/records/${recordId}`);
+  });
   test('API persiste contrato e rejeita vigência invertida', async ({ request }) => {
     const invalid = await request.post('/api/contracts', { data: { ...contract, startDate: '2027-01-01' } });
     expect(invalid.status()).toBe(400);
@@ -76,6 +80,7 @@ test.describe.serial('Sistema independente', () => {
   test('navegação móvel mantém módulos e não extrapola viewport', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/contratos'); await expect(page.getByRole('heading', { name: 'Contratos', exact: true })).toBeVisible();
+    await expect(page.getByRole('table')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     await page.goto(`/atas/${recordId}`); await expect(page.getByRole('button', { name: /baixar docx/i })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
