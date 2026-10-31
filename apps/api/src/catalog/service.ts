@@ -28,14 +28,19 @@ import {
   linkedPurchaseCache,
   purchaseResultEvidence,
 } from "./purchase-evidence";
+import { AutomaticRefresh, fresh } from "./automatic";
 import { CatalogDrafts } from "./drafts";
 import { CatalogSupplements, presentSupplement } from "./supplements";
 
 export class CatalogService {
+  private readonly automatic = new AutomaticRefresh();
+  private readonly supplements: CatalogSupplements;
   constructor(
     readonly db: PrismaClient,
     readonly client: CatalogClient = new CatalogClient(),
-  ) {}
+  ) {
+    this.supplements = new CatalogSupplements(db, client);
+  }
   async purchases(query: Raw) {
     filters(query);
     const { page, limit } = pagination(query);
@@ -507,10 +512,73 @@ export class CatalogService {
     });
     return this.record(id);
   }
+  ensurePurchase(id: string, body: Raw = {}) {
+    return this.automatic.run(`purchase:${id}`, async () => {
+      let row = await this.purchaseRow(id);
+      const errors: { details?: string; records?: string } = {};
+      if (body.force === true || !fresh(row.detailsSyncedAt)) {
+        const error = await this.automatic.stage(
+          `purchase-details:${id}`,
+          body.force === true,
+          "Não foi possível atualizar os detalhes do pregão no Compras.gov. A última consulta salva foi preservada.",
+          () => this.refreshPurchase(id),
+        );
+        if (error) errors.details = error;
+      }
+      row = await this.purchaseRow(id);
+      if (
+        row.srp === true &&
+        (body.force === true || !fresh(row.recordsSyncedAt))
+      ) {
+        const error = await this.automatic.stage(
+          `purchase-records:${id}`,
+          body.force === true,
+          "Não foi possível consultar as atas vinculadas no Compras.gov. A última consulta salva foi preservada.",
+          () => this.refreshLinkedRecords(id),
+        );
+        if (error) errors.records = error;
+      }
+      return { data: await this.purchase(id), errors };
+    });
+  }
+  ensureRecord(id: string, body: Raw = {}) {
+    return this.automatic.run(`record:${id}`, async () => {
+      const row = await this.recordRow(id);
+      const errors: { details?: string } = {};
+      if (body.force === true || !fresh(row.detailsSyncedAt)) {
+        const error = await this.automatic.stage(
+          `record-details:${id}`,
+          body.force === true,
+          "Não foi possível atualizar os detalhes da ata no Compras.gov. A última consulta salva foi preservada.",
+          () => this.refreshRecord(id),
+        );
+        if (error) errors.details = error;
+      }
+      return { data: await this.record(id), errors };
+    });
+  }
+  refreshSupplements(id: string, body: Raw = {}) {
+    return this.automatic.run(`supplements:${id}`, async () => {
+      const summary = await this.supplements.refreshAll(
+        id,
+        body.force === true,
+      );
+      return {
+        data: await this.record(id),
+        errors: summary.failed
+          ? {
+              supplements:
+                "Não foi possível atualizar todas as partes dos itens no Compras.gov. A última consulta salva foi preservada.",
+            }
+          : {},
+        summary,
+      };
+    });
+  }
   draft(id: string, body: Raw) {
     return new CatalogDrafts(this.db).create(id, body);
   }
   refreshSupplement(id: string, item: string) {
-    return new CatalogSupplements(this.db, this.client).refresh(id, item);
+    return this.supplements.refresh(id, item);
   }
 }

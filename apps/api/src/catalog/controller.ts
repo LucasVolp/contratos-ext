@@ -24,6 +24,12 @@ export class PurchasesController {
   @Get(":id") detail(@Param("id", new ParseUUIDPipe()) id: string) {
     return this.catalog.purchase(id);
   }
+  @Post(":id/ensure-details") ensure(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() body: Raw,
+  ) {
+    return this.catalog.ensurePurchase(id, body ?? {});
+  }
   @Post(":id/refresh") refresh(@Param("id", new ParseUUIDPipe()) id: string) {
     return this.catalog.refreshPurchase(id);
   }
@@ -47,6 +53,18 @@ export class PublicRecordsController {
   }
   @Get(":id") detail(@Param("id", new ParseUUIDPipe()) id: string) {
     return this.catalog.record(id);
+  }
+  @Post(":id/ensure-details") ensure(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() body: Raw,
+  ) {
+    return this.catalog.ensureRecord(id, body ?? {});
+  }
+  @Post(":id/supplements/refresh") supplements(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() body: Raw,
+  ) {
+    return this.catalog.refreshSupplements(id, body ?? {});
   }
   @Post(":id/refresh") refresh(@Param("id", new ParseUUIDPipe()) id: string) {
     return this.catalog.refreshRecord(id);

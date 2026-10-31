@@ -346,3 +346,155 @@ test("catalog HTTP snapshots, cross-year links, supplements and supplier drafts 
     await app.close();
   }
 });
+
+test("automatic public endpoints share requests, retain partial cache, and bulk refresh every unique item", async () => {
+  const app = await createApplication();
+  await app.listen(0, "127.0.0.1");
+  const base = await app.getUrl(),
+    db = app.get(Database),
+    client = app.get(CatalogClient);
+  const marker = `AUTO-${Date.now()}`;
+  const call = async (path: string, body: unknown = {}) => {
+    const response = await fetch(`${base}/api${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return { status: response.status, body: await response.json() };
+  };
+  const purchase = await db.publicPurchase.create({
+    data: {
+      externalId: marker,
+      uasg: "999998",
+      number: marker,
+      srp: true,
+      year: 2026,
+      summary: {},
+      snapshot: { items: [{ number: "cached" }] },
+    },
+  });
+  const record = await db.publicRecord.create({
+    data: {
+      externalId: `ATA-${marker}`,
+      uasg: "999998",
+      number: marker,
+      summary: {},
+      detailsSyncedAt: new Date(),
+      snapshot: {
+        items: [
+          { key: "00001", supplierDocument: "a" },
+          { key: "1", supplierDocument: "b" },
+          { key: "2", supplierDocument: "c" },
+        ],
+      },
+    },
+  });
+  let purchaseCalls = 0,
+    recordsCalls = 0,
+    units = 0,
+    commitments = 0,
+    adhesions = 0,
+    fail = false;
+  Object.assign(client, {
+    purchase: async () => {
+      purchaseCalls++;
+      await new Promise((r) => setTimeout(r, 10));
+      throw Error("offline");
+    },
+    records: async () => {
+      recordsCalls++;
+      throw Error("offline");
+    },
+    record: async () => {
+      throw Error("offline");
+    },
+    units: async () => {
+      units++;
+      return [{ codigoUnidade: "u" }];
+    },
+    commitments: async () => {
+      commitments++;
+      return [{ numeroItem: "1", quantidadeRegistrada: "3" }];
+    },
+    adhesions: async () => {
+      adhesions++;
+      if (fail) throw Error("offline");
+      return [{ unidadeNaoParticipante: "u", quantidadeAprovadaAdesao: "2" }];
+    },
+  });
+  try {
+    const [first, second] = await Promise.all([
+      call(`/purchases/${purchase.id}/ensure-details`),
+      call(`/purchases/${purchase.id}/ensure-details`),
+    ]);
+    assert.equal(first.status, 201);
+    assert.deepEqual(first, second);
+    assert.ok(first.body.errors.details);
+    assert.ok(first.body.errors.records);
+    assert.equal(first.body.data.items[0].number, "cached");
+    assert.deepEqual([purchaseCalls, recordsCalls], [1, 1]);
+    await call(`/purchases/${purchase.id}/ensure-details`);
+    assert.deepEqual([purchaseCalls, recordsCalls], [1, 1]);
+    await call(`/purchases/${purchase.id}/ensure-details`, { force: true });
+    assert.deepEqual([purchaseCalls, recordsCalls], [2, 2]);
+    const fresh = await call(`/public-records/${record.id}/ensure-details`);
+    assert.deepEqual(fresh.body.errors, {});
+    const failed = await call(`/public-records/${record.id}/ensure-details`, {
+      force: true,
+    });
+    assert.ok(failed.body.errors.details);
+    assert.equal(failed.body.data.items.length, 3);
+    const [bulk, duplicate] = await Promise.all([
+      call(`/public-records/${record.id}/supplements/refresh`),
+      call(`/public-records/${record.id}/supplements/refresh`),
+    ]);
+    assert.equal(bulk.status, 201);
+    assert.deepEqual(bulk, duplicate);
+    assert.deepEqual(bulk.body.summary, { items: 2, loaded: 2, failed: 0 });
+    assert.deepEqual([units, commitments, adhesions], [2, 1, 2]);
+    assert.deepEqual(
+      bulk.body.data.items[0].supplement,
+      bulk.body.data.items[1].supplement,
+    );
+    await call(`/public-records/${record.id}/supplements/refresh`);
+    assert.deepEqual([units, commitments, adhesions], [2, 1, 2]);
+    fail = true;
+    const partial = await call(
+      `/public-records/${record.id}/supplements/refresh`,
+      { force: true },
+    );
+    assert.equal(partial.status, 201);
+    assert.ok(partial.body.errors.supplements);
+    assert.deepEqual(partial.body.summary, { items: 2, loaded: 0, failed: 2 });
+    assert.equal(
+      partial.body.data.items[0].supplement.adhesions.status,
+      "error",
+    );
+    assert.equal(
+      partial.body.data.items[0].supplement.adhesions.data[0].quantity,
+      "2",
+    );
+    await call(`/public-records/${record.id}/supplements/refresh`);
+    assert.equal(adhesions, 4);
+    await db.publicRecord.update({
+      where: { id: record.id },
+      data: { detailsSyncedAt: null },
+    });
+    assert.equal(
+      (await call(`/public-records/${record.id}/supplements/refresh`)).status,
+      422,
+    );
+    assert.equal(
+      (
+        await call(
+          "/public-records/00000000-0000-4000-8000-000000000000/ensure-details",
+        )
+      ).status,
+      404,
+    );
+  } finally {
+    await db.publicRecord.delete({ where: { id: record.id } });
+    await db.publicPurchase.delete({ where: { id: purchase.id } });
+    await app.close();
+  }
+});

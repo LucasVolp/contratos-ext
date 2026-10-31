@@ -21,6 +21,20 @@ export class CatalogClient {
       "pages"
     > = new ComprasClient(),
   ) {}
+  private active = 0;
+  private readonly queue: Array<() => void> = [];
+  private async pages(path: string, params: Raw): Promise<Raw[]> {
+    if (this.active >= 4)
+      await new Promise<void>((resolve) => this.queue.push(resolve));
+    else this.active++;
+    try {
+      return await this.transport.pages(path, params);
+    } finally {
+      const next = this.queue.shift();
+      if (next) next();
+      else this.active--;
+    }
+  }
   async windows(
     from: string,
     to: string,
@@ -47,7 +61,7 @@ export class CatalogClient {
       // The source interprets the final date as midnight, so query the next day.
       const upper = new Date(`${end}T00:00:00Z`);
       upper.setUTCDate(upper.getUTCDate() + 1);
-      const rows = await this.transport.pages(PATHS.purchases, {
+      const rows = await this.pages(PATHS.purchases, {
         unidadeOrgaoCodigoUnidade: uasg,
         codigoModalidade: 5,
         dataPublicacaoPncpInicial: start,
@@ -63,7 +77,7 @@ export class CatalogClient {
 
   records(uasg: string, from: string, to: string) {
     return this.windows(from, to, (start, end) =>
-      this.transport.pages(PATHS.records, {
+      this.pages(PATHS.records, {
         codigoUnidadeGerenciadora: uasg,
         dataVigenciaInicialMin: start,
         dataVigenciaInicialMax: end,
@@ -73,35 +87,35 @@ export class CatalogClient {
   async purchase(externalId: string) {
     const params = { tipo: "idCompra", codigo: externalId };
     const [headers, items, results] = await Promise.all([
-      this.transport.pages(PATHS.purchase, params),
-      this.transport.pages(PATHS.items, params),
-      this.transport.pages(PATHS.results, params),
+      this.pages(PATHS.purchase, params),
+      this.pages(PATHS.items, params),
+      this.pages(PATHS.results, params),
     ]);
     return { headers, items, results };
   }
   async record(externalId: string) {
     const params = { numeroControlePncpAta: externalId };
     const [headers, items] = await Promise.all([
-      this.transport.pages(PATHS.record, params),
-      this.transport.pages(PATHS.recordItems, params),
+      this.pages(PATHS.record, params),
+      this.pages(PATHS.recordItems, params),
     ]);
     return { headers, items };
   }
   units(number: string, uasg: string, item: string) {
-    return this.transport.pages(PATHS.units, {
+    return this.pages(PATHS.units, {
       numeroAta: number,
       unidadeGerenciadora: uasg,
       numeroItem: item,
     });
   }
   commitments(number: string, uasg: string) {
-    return this.transport.pages(PATHS.commitments, {
+    return this.pages(PATHS.commitments, {
       numeroAta: number,
       unidadeGerenciadora: uasg,
     });
   }
   adhesions(number: string, uasg: string, item: string) {
-    return this.transport.pages(PATHS.adhesions, {
+    return this.pages(PATHS.adhesions, {
       numeroAta: number,
       unidadeGerenciadora: uasg,
       numeroItem: item,
