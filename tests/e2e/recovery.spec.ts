@@ -4,9 +4,9 @@ test.beforeAll(async ({ request }) => {
   const created = await request.post('/api/records', { data: {
     number: `RECOVERY-${Date.now()}`, object: 'Ata de teste de recuperação', uasg: '999997',
     processNumber: 'QA-2026', purchaseNumber: '90001/2026', purchaseYear: 2026,
-    organizationName: 'Organização de teste', organizationDocument: '12345678000190',
+    organizationName: 'Organização de teste', organizationDocument: '11222333000181',
     organizationStreet: 'Rua Exemplo', organizationCity: 'Campo Grande', organizationState: 'MS',
-    authorityName: 'Maria Exemplo', authorityRole: 'Diretora', supplierName: 'Fornecedor de teste', supplierDocument: '12345678000190',
+    authorityName: 'Maria Exemplo', authorityRole: 'Diretora', supplierName: 'Fornecedor de teste', supplierDocument: '11222333000181',
     items: [{ number: 1, description: 'Material de teste', unit: 'UN', quantity: '1', minimumQuantity: '0', unitPrice: '1' }],
   } });
   expect(created.status()).toBe(201);
@@ -55,7 +55,7 @@ test('número de compra já completo não recebe ano duplicado na ficha', async 
 
 test('contrato importado informa origem e data da última importação', async ({ page }) => {
   const id = '40000000-0000-4000-8000-000000000001';
-  await page.route(`**/api/contracts/${id}`, route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id, number: 'IMPORT-QA', object: 'Contrato importado para teste visual', supplierName: 'Fornecedor de teste', supplierDocument: '12345678000190', uasg: '999999', unitName: 'Unidade de teste', startDate: '2026-01-01', endDate: '2027-01-01', initialValue: '100', globalValue: '100', status: 'ACTIVE', source: 'COMPRAS_GOV', lastSyncedAt: '2026-10-30T12:30:00.000Z' }) }));
+  await page.route(`**/api/contracts/${id}`, route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id, number: 'IMPORT-QA', object: 'Contrato importado para teste visual', supplierName: 'Fornecedor de teste', supplierDocument: '11222333000181', uasg: '999999', unitName: 'Unidade de teste', startDate: '2026-01-01', endDate: '2027-01-01', initialValue: '100', globalValue: '100', status: 'ACTIVE', source: 'COMPRAS_GOV', lastSyncedAt: '2026-10-30T12:30:00.000Z' }) }));
   await page.goto(`/contratos/${id}`);
   await expect(page.getByText('Última importação', { exact: true })).toBeVisible();
   await expect(page.locator('.metadata')).toContainText('30/10/2026');
@@ -68,7 +68,7 @@ test('falha ao carregar edição bloqueia formulário até repetir a leitura com
   await page.route(`**/api/contracts/${id}`, route => {
     if (route.request().method() === 'PUT') { writes++; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id }) }); }
     if (failLoad) return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'Contrato temporariamente indisponível no teste' }) });
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id, number: 'LOAD-QA', object: 'Dados originais preservados', supplierName: 'Fornecedor original', supplierDocument: '12345678000190', uasg: '999999', unitName: 'Unidade de teste', startDate: '2026-01-01', endDate: '2027-01-01', initialValue: '100', globalValue: '100', status: 'ACTIVE', source: 'MANUAL' }) });
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id, number: 'LOAD-QA', object: 'Dados originais preservados', supplierName: 'Fornecedor original', supplierDocument: '11222333000181', uasg: '999999', unitName: 'Unidade de teste', startDate: '2026-01-01', endDate: '2027-01-01', initialValue: '100', globalValue: '100', status: 'ACTIVE', source: 'MANUAL' }) });
   });
   await page.goto(`/contratos/${id}/editar`);
   await expect(page.getByText('Contrato temporariamente indisponível no teste', { exact: true })).toBeVisible();

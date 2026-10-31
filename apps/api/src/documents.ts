@@ -1,3 +1,4 @@
+import { maskDocument, formatDecimal } from "@contracts/validation";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -15,14 +16,10 @@ export const TEMPLATE_VERSION = "arp-ata-14133-standalone-v2";
 const brDate = (value: string | null) =>
   value ? value.split("-").reverse().join("/") : " ";
 function documentId(value: string) {
-  const digits = value.replace(/\D/g, "");
-  return digits.length === 14
-    ? digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")
-    : value;
+  return maskDocument(value);
 }
 function currency(value: string) {
-  const [integer, fraction] = new Decimal(value).toFixed(2).split(".");
-  return `R$ ${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ".")},${fraction}`;
+  return formatDecimal(value, true);
 }
 export function renderDocx(record: Data): Buffer {
   const supplier = [

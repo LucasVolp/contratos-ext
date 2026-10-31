@@ -1,3 +1,4 @@
+import { validateFilters } from "@contracts/validation";
 import {
   BadRequestException,
   ConflictException,
@@ -29,6 +30,12 @@ export class ApplicationService {
     readonly external: ComprasClient = new ComprasClient(),
   ) {}
   async contracts(query: Data) {
+    const fieldErrors = validateFilters(query);
+    if (Object.keys(fieldErrors).length)
+      throw new BadRequestException({
+        message: Object.values(fieldErrors).join(" · "),
+        fieldErrors,
+      });
     const { page, limit } = pagination(query),
       from = date(query.from, "from"),
       to = date(query.to, "to");

@@ -5,7 +5,7 @@
   "packageManager": "pnpm@10.32.1",
   "scripts": {
     "build": "pnpm --filter @contracts/api build && pnpm --filter @contracts/web build",
-    "test": "pnpm --filter @contracts/api test",
+    "test": "pnpm --filter @contracts/validation test && pnpm --filter @contracts/api test",
     "lint": "pnpm --filter @contracts/api lint && pnpm --filter @contracts/web lint",
     "dev": "pnpm -r --parallel dev",
     "db:migrate": "pnpm --filter @contracts/api db:migrate",

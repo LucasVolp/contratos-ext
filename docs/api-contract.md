@@ -1,6 +1,6 @@
 # Contrato interno da API v1
 
-Prefixo `/api`. O frontend usa `/api/*` na mesma origem, encaminhado a `API_INTERNAL_URL` (padrão http://localhost:4100). API porta 4100; web 3100. Datas de negócio YYYY-MM-DD, valores decimais serializados como strings. IDs UUID. Sem autenticação. Erros `{message: string | string[], missingFields?: string[]}`. GET /health retorna `{status:'ok', database:'ok'}` com verificação do banco.
+Prefixo `/api`. O frontend usa `/api/*` na mesma origem, encaminhado a `API_INTERNAL_URL` (padrão http://localhost:4100). API porta 4100; web 3100. Datas de negócio YYYY-MM-DD, valores decimais serializados como strings. IDs UUID. Sem autenticação. Erros `{message: string | string[], fieldErrors?: Record<string,string>, missingFields?: string[]}`. Erros de campo retornam400, com chaves do payload; itens usam `items.<índice>.campo`. GET /health retorna `{status:'ok', database:'ok'}` com verificação do banco.
 
 ## Contratos
 `GET /contracts?search=&status=&uasg=&from=&to=&page=1&limit=12` retorna `{data: Contract[], total, page, limit, stats:{count,totalValue,expiringCount}}`; stats sobre o filtro todo. Status: UPCOMING, ACTIVE, EXPIRING, EXPIRED, UNKNOWN. Janela vencendo 30 dias; UTC por dia de calendário. Filtro de período por interseção da vigência, incluindo datas iguais; datas desconhecidas só aparecem sem filtro de período.
@@ -14,3 +14,13 @@ PriceRecord: `{id,number,processNumber,purchaseNumber,purchaseYear,modality:'PRE
 `POST /records/import` body `{uasg,number,from,to}` retorna PriceRecord importada. Identidade já existente retorna 409 e preserva campos e itens locais; não há substituição por reimportação. Datas from/to restringem busca pública; fornecedor único por ata/documento; rejeitar resposta com vários fornecedores (422), nunca escolher primeiro silenciosamente. Campos ausentes importados como rascunho editável.
 `GET /records/:id/readiness?itemId=` retorna `{ready:boolean,missingFields:string[]}`. Obrigatórios: number,processNumber,purchaseNumber,object,organizationName,organizationDocument,organizationStreet,organizationCity,organizationState,authorityName,authorityRole,supplierName,supplierDocument e ao menos um item com descrição,unidade,quantidade>0 e preço>0. Validação consistente export/readiness.
 `GET /records/:id/document?format=docx|pdf&itemId=` download arquivo binário com Content-Disposition. Registra export somente após geração bem sucedida. Exporta com modelo arp-ata-14133.docx original adaptado. Sem Gotenberg DOCX continua disponível. PDF timeout retorna 503 mensagem útil. Export snapshot imutável JSON salva dados e itemId, formato e templateVersion. `GET /records/:id/exports` retorna `{id,format,templateVersion,createdAt,itemNumber?}[]`.
+
+## Regras de entrada e apresentação (31/10/2026)
+
+- Identificação de fornecedor: CPF de11 dígitos ou CNPJ de14 posições, com dígitos verificadores corretos. CNPJ aceita letras A-Z nas12 primeiras posições, preservadas em maiúsculas conforme o formato da Receita Federal. Organização exige CNPJ. Máscaras `000.000.000-00` / `00.000.000/0000-00` são apresentação; API normaliza pontuação conhecida e valida também entradas diretas.
+- UASG é string com exatamente6 dígitos, inclusive zeros iniciais. UF é sigla válida entre as27 unidades federativas, normalizada em maiúsculas.
+- Decimais possuem até18 dígitos inteiros e6 fracionários, não negativos; UI aceita colagem brasileira como `R$1.234,567890` e decimal canônico. Nenhum parser remove sinal negativo para tornar um valor positivo nem trunca casas excedentes. Valores enviados/armazenados continuam decimais canônicos string. Valores unitários na tela e no Word preservam casas significativas até6.
+- Datas são dias reais AAAA-MM-DD; fim não pode anteceder início. Aplicar também a filtros e importações.
+- Número da ata/compra/processo aceita formatos institucionais variados, com validação de texto/tamanho, sem impor NUP a todos.
+- Rascunhos continuam aceitando campos opcionais vazios. Quando preenchidos, precisam ser válidos; documentos legados inválidos devem ser corrigidos antes da exportação.
+- Interface valida no blur e no envio, mostra resumo e erros ao lado dos campos, associa aria-describedby e focaliza o primeiro campo inválido. Falha de carregamento nunca libera formulário vazio para substituir um registro existente.

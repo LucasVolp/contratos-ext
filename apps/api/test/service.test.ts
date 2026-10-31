@@ -5,14 +5,14 @@ import { ApplicationService } from "../src/service";
 const base = {
   id: "id",
   number: "1",
-  uasg: "123",
+  uasg: "000123",
   object: "Material",
   startDate: "2026-01-01",
   endDate: "2099-01-01",
   initialValue: "0.1",
   globalValue: "0.2",
   supplierName: "Empresa",
-  supplierDocument: "123",
+  supplierDocument: "52998224725",
 };
 test("contract pagination and whole-filter statistics execute in database", async () => {
   let args: any;
@@ -57,7 +57,7 @@ test("failing import never starts database transaction", async () => {
   await assert.rejects(
     () =>
       new ApplicationService(db, external).importContracts({
-        uasg: "123",
+        uasg: "000123",
         from: "2026-01-01",
         to: "2026-12-31",
       }),
@@ -92,7 +92,7 @@ test("import waits for all data and commits upserts in one transaction", async (
     },
   };
   const result = await new ApplicationService(db, external).importContracts({
-    uasg: "123",
+    uasg: "000123",
     from: "2026-01-01",
     to: "2026-12-31",
   });
@@ -114,7 +114,7 @@ test("record replacement updates items atomically while retaining export history
   await new ApplicationService(db).saveRecord("id", {
     number: "1",
     object: "Objeto",
-    uasg: "123",
+    uasg: "000123",
     items: [],
   });
   assert.deepEqual(update.data.items, { deleteMany: {}, create: [] });
@@ -156,7 +156,7 @@ test("import refuses an existing manual contract before performing any write", a
   await assert.rejects(
     () =>
       new ApplicationService(db, external).importContracts({
-        uasg: "123",
+        uasg: "000123",
         from: "2026-01-01",
         to: "2026-12-31",
       }),
@@ -174,7 +174,7 @@ for (const scenario of ["manual", "importada e enriquecida"]) {
     const existing = {
       id: "local-record",
       number: "77/2026",
-      uasg: "123",
+      uasg: "000123",
       object: "Objeto local",
       processNumber: "Processo corrigido",
       organizationName: "Organização local",
@@ -212,7 +212,7 @@ for (const scenario of ["manual", "importada e enriquecida"]) {
     const external: any = {
       record: async () => ({
         number: "77/2026",
-        uasg: "123",
+        uasg: "000123",
         object: "Objeto público",
         items: [],
       }),
@@ -221,7 +221,7 @@ for (const scenario of ["manual", "importada e enriquecida"]) {
       () =>
         new ApplicationService(db, external).importRecord({
           number: "77/2026",
-          uasg: "123",
+          uasg: "000123",
           from: "2026-01-01",
           to: "2026-12-31",
         }),

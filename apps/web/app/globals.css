@@ -1505,3 +1505,8 @@ textarea {
     transition: none !important;
   }
 }
+
+.field-hint { color: var(--muted, #625f55); font-size: .76rem; line-height: 1.5; }
+.field-error { color: #a52824; font-size: .8rem; line-height: 1.5; }
+.field [aria-invalid="true"] { border-color: #a52824; }
+.field input:focus-visible, .field textarea:focus-visible, .field select:focus-visible { outline: 2px solid #537550; outline-offset: 3px; }

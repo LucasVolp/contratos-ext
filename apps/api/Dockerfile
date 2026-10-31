@@ -4,6 +4,7 @@ RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
 WORKDIR /app
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/api/package.json apps/api/package.json
+COPY packages/validation packages/validation
 RUN pnpm install --frozen-lockfile --filter @contracts/api
 COPY apps/api apps/api
 RUN pnpm --filter @contracts/api build

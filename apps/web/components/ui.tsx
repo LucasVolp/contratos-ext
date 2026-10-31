@@ -1,5 +1,30 @@
 "use client";
 import Link from "next/link";
+import { createContext, useContext, useState } from "react";
+import {
+  maskDocument,
+  normalizeDocument,
+  formatDecimal,
+  validateFields,
+  FieldErrors,
+} from "@contracts/validation";
+export const FormValidation = createContext<{
+  errors: FieldErrors;
+  onBlur?: (name: string) => void;
+}>({ errors: {} });
+export function focusInvalid(errors: FieldErrors) {
+  const key = Object.keys(errors)[0];
+  const inputName = key?.replace(/^items\.(\d+)\.(.+)$/, "item-$1-$2");
+  const input = document.getElementsByName(inputName)[0] as
+    | HTMLElement
+    | undefined;
+  let ancestor = input?.parentElement;
+  while (ancestor) {
+    if (ancestor instanceof HTMLDetailsElement) ancestor.open = true;
+    ancestor = ancestor.parentElement;
+  }
+  input?.focus();
+}
 import { ArrowLeft, ArrowRight, Plus, RefreshCw } from "lucide-react";
 import { statusLabels } from "@/lib/api";
 export function PageHead({
@@ -138,6 +163,9 @@ export function Field({
   type = "text",
   required = false,
   wide = false,
+  error,
+  hint,
+  onBlur,
 }: {
   name: string;
   label: string;
@@ -146,7 +174,65 @@ export function Field({
   type?: string;
   required?: boolean;
   wide?: boolean;
+  error?: string;
+  hint?: string;
+  onBlur?: () => void;
 }) {
+  const context = useContext(FormValidation);
+  const [focused, setFocused] = useState(false);
+  const [localError, setLocalError] = useState("");
+  const key = name.replace(/^item-(\d+)-(.+)$/, "items.$1.$2");
+  const message = context.errors[key] || error || localError;
+  const documentField = name.endsWith("Document");
+  const monetary =
+    ["initialValue", "globalValue"].includes(name) ||
+    name.endsWith("-unitPrice");
+  const help =
+    hint ||
+    (documentField
+      ? name === "organizationDocument"
+        ? "CNPJ numérico ou alfanumérico com 14 posições."
+        : "CPF com 11 dígitos ou CNPJ com 14 posições; CNPJ também aceita letras."
+      : name === "uasg"
+        ? "6 dígitos, incluindo os zeros iniciais."
+        : name === "organizationState"
+          ? "Sigla da unidade federativa, como MS."
+          : type === "decimal"
+            ? "Até 6 casas decimais. Aceita vírgula ou ponto decimal."
+            : "");
+  const raw = String(value ?? "");
+  const display = documentField
+    ? maskDocument(raw, name === "organizationDocument")
+    : type === "decimal" && !focused && raw
+      ? formatDecimal(raw, monetary)
+      : raw;
+  const blur = () => {
+    setFocused(false);
+    const errors = validateFields(
+      { number: "ok", object: "ok", uasg: "000001", [name]: raw },
+      "record",
+    );
+    setLocalError(
+      required && !raw.trim()
+        ? "Preencha este campo obrigatório."
+        : errors[name] || "",
+    );
+    context.onBlur?.(key);
+    onBlur?.();
+  };
+  const common = {
+    id: name,
+    name,
+    required,
+    value: display,
+    "aria-invalid": !!message,
+    "aria-describedby":
+      [help && `${name}-hint`, message && `${name}-error`]
+        .filter(Boolean)
+        .join(" ") || undefined,
+    onFocus: () => setFocused(true),
+    onBlur: blur,
+  };
   return (
     <div className={`field ${wide ? "wide" : ""}`}>
       <label htmlFor={name}>
@@ -155,23 +241,68 @@ export function Field({
       </label>
       {type === "textarea" ? (
         <textarea
-          id={name}
-          name={name}
-          required={required}
-          value={String(value ?? "")}
-          onChange={(e) => onChange(name, e.target.value)}
+          {...common}
+          onChange={(e) => {
+            setLocalError("");
+            onChange(name, e.target.value);
+          }}
           rows={3}
         />
       ) : (
         <input
-          id={name}
-          name={name}
-          required={required}
+          {...common}
           type={type === "decimal" ? "text" : type}
-          inputMode={type === "decimal" ? "decimal" : undefined}
-          value={String(value ?? "")}
-          onChange={(e) => onChange(name, e.target.value)}
+          inputMode={
+            type === "decimal"
+              ? "decimal"
+              : name === "uasg"
+                ? "numeric"
+                : undefined
+          }
+          onKeyDown={(e) => {
+            if (!documentField || e.key !== "Backspace") return;
+            const input = e.currentTarget,
+              position = input.selectionStart ?? 0;
+            if (
+              position === input.selectionEnd &&
+              /[.\/\-]/.test(input.value[position - 1] || "")
+            )
+              input.setSelectionRange(position - 1, position - 1);
+          }}
+          onChange={(e) => {
+            setLocalError("");
+            const input = e.currentTarget;
+            let next = input.value;
+            const position = input.selectionStart ?? next.length;
+            const count = next
+              .slice(0, position)
+              .replace(/[^a-zA-Z0-9]/g, "").length;
+            if (documentField) next = normalizeDocument(next);
+            if (name === "uasg") next = next.replace(/\D/g, "");
+            if (name === "organizationState") next = next.toUpperCase();
+            onChange(name, next);
+            if (documentField)
+              requestAnimationFrame(() => {
+                let digits = 0,
+                  caret = 0;
+                while (caret < input.value.length && digits < count) {
+                  if (/[A-Z0-9]/.test(input.value[caret])) digits++;
+                  caret++;
+                }
+                input.setSelectionRange(caret, caret);
+              });
+          }}
         />
+      )}
+      {help && (
+        <small className="field-hint" id={`${name}-hint`}>
+          {help}
+        </small>
+      )}
+      {message && (
+        <small className="field-error" id={`${name}-error`} role="alert">
+          {message}
+        </small>
       )}
     </div>
   );

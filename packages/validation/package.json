@@ -1,0 +1,8 @@
+{
+  "name": "@contracts/validation",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": { "test": "node --test validation.test.cjs" }
+}

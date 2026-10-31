@@ -1,25 +1,38 @@
+import {
+  validateFields,
+  normalizeDocument,
+  parseDecimal,
+  isDate,
+} from "@contracts/validation";
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import Decimal from "decimal.js";
 Decimal.set({ precision: 60 });
 export type Data = Record<string, any>;
+function invalid(fieldErrors: Record<string, string>): never {
+  throw new BadRequestException({
+    message: Object.values(fieldErrors).join(" · "),
+    fieldErrors,
+  });
+}
+function check(body: Data, kind: "record" | "contract" | "import") {
+  const errors = validateFields(body, kind);
+  if (Object.keys(errors).length) invalid(errors);
+}
 export function date(value: unknown, field: string): string | null {
   if (value === undefined || value === null || value === "") return null;
-  if (
-    typeof value !== "string" ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
-    !Number.isFinite(Date.parse(value)) ||
-    new Date(value).toISOString().slice(0, 10) !== value
-  )
-    throw new BadRequestException(`Data inválida em ${field}; use AAAA-MM-DD.`);
-  return value;
+  if (!isDate(value)) invalid({ [field]: "Data inválida; use AAAA-MM-DD." });
+  return value as string;
 }
 export function decimal(value: unknown, field: string): string {
-  if (typeof value !== "string" || !/^\d{1,18}(\.\d{1,6})?$/.test(value))
-    throw new BadRequestException(
-      `${field}: informe decimal não negativo, com até 18 inteiros e 6 casas decimais.`,
-    );
-  return value;
+  const parsed = parseDecimal(value);
+  if (parsed === null)
+    invalid({
+      [field]:
+        "Informe decimal não negativo, com até 18 inteiros e 6 casas decimais.",
+    });
+  return parsed;
 }
+
 function text(body: Data, key: string, required = false): string {
   const value = body[key] ?? "";
   if (
@@ -27,9 +40,9 @@ function text(body: Data, key: string, required = false): string {
     value.length > 20000 ||
     (required && !value.trim())
   )
-    throw new BadRequestException(
-      `${key}: texto ${required ? "obrigatório" : "inválido"}.`,
-    );
+    invalid({
+      [key]: `${key}: texto ${required ? "obrigatório" : "inválido"}.`,
+    });
   return value.trim();
 }
 function dates(body: Data, keys = ["startDate", "endDate"]): Data {
@@ -44,6 +57,7 @@ function dates(body: Data, keys = ["startDate", "endDate"]): Data {
 export function validateContract(body: Data): Data {
   if (!body || Array.isArray(body) || typeof body !== "object")
     throw new BadRequestException("Informe os dados do contrato.");
+  check(body, "contract");
   const result: Data = {};
   for (const key of [
     "number",
@@ -53,6 +67,7 @@ export function validateContract(body: Data): Data {
     "uasg",
   ])
     result[key] = text(body, key, true);
+  result.supplierDocument = normalizeDocument(result.supplierDocument);
   result.unitName = text(body, "unitName");
   Object.assign(result, dates(body));
   for (const key of ["initialValue", "globalValue"])
@@ -82,9 +97,13 @@ export const recordStrings = [
 export function validateRecord(body: Data): Data {
   if (!body || Array.isArray(body) || typeof body !== "object")
     throw new BadRequestException("Informe os dados da ata.");
+  check(body, "record");
   const result: Data = {};
   for (const key of recordStrings)
     result[key] = text(body, key, ["number", "object", "uasg"].includes(key));
+  result.supplierDocument = normalizeDocument(result.supplierDocument);
+  result.organizationDocument = normalizeDocument(result.organizationDocument);
+  result.organizationState = result.organizationState.toUpperCase();
   Object.assign(
     result,
     dates(body, [
@@ -104,7 +123,7 @@ export function validateRecord(body: Data): Data {
       result.purchaseYear < 1900 ||
       result.purchaseYear > 2200)
   )
-    throw new BadRequestException("Ano da compra inválido.");
+    invalid({ purchaseYear: "Ano da compra inválido." });
   result.renewable = body.renewable ?? false;
   if (typeof result.renewable !== "boolean")
     throw new BadRequestException("renewable deve ser booleano.");
@@ -183,6 +202,8 @@ export function readiness(
     "supplierDocument",
   ];
   const missingFields = required.filter((key) => !record[key]?.trim());
+  for (const key of Object.keys(validateFields(record, "record")))
+    if (!missingFields.includes(key)) missingFields.push(key);
   const items = itemId
     ? (record.items ?? []).filter((item: Data) => item.id === itemId)
     : (record.items ?? []);
@@ -193,7 +214,10 @@ export function readiness(
     for (const key of ["description", "unit"])
       if (!item[key]?.trim()) missingFields.push(`items.${item.number}.${key}`);
     for (const key of ["quantity", "unitPrice"])
-      if (!new Decimal(item[key].toString()).gt(0))
+      if (
+        parseDecimal(String(item[key] ?? "")) === null ||
+        !new Decimal(item[key].toString()).gt(0)
+      )
         missingFields.push(`items.${item.number}.${key}`);
   }
   return { ready: !missingFields.length, missingFields };
@@ -214,6 +238,7 @@ export function pagination(query: Data) {
   return { page, limit };
 }
 export function importRange(body: Data) {
+  check(body ?? {}, "import");
   const from = date(body?.from, "from"),
     to = date(body?.to, "to");
   if (!from || !to || from > to)

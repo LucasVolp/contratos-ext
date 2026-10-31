@@ -1,10 +1,17 @@
+import { normalizeDocument } from "@contracts/validation";
 import {
   BadGatewayException,
   NotFoundException,
   ServiceUnavailableException,
   UnprocessableEntityException,
 } from "@nestjs/common";
-import { Data, date, decimal, validateRecord } from "./domain";
+import {
+  Data,
+  date,
+  decimal,
+  validateRecord,
+  validateContract,
+} from "./domain";
 const str = (value: unknown) =>
   value === null || value === undefined ? "" : String(value);
 const money = (value: unknown) => decimal(str(value ?? "0"), "valor importado");
@@ -138,16 +145,18 @@ export class ComprasClient {
 }
 export function mapImportedContract(row: Data, uasg: string): Data {
   return {
-    number: str(row.numeroContrato),
-    object: str(row.objeto),
-    supplierName: str(row.nomeRazaoSocialFornecedor),
-    supplierDocument: str(row.niFornecedor),
-    uasg,
-    unitName: str(row.nomeUnidadeGestora),
-    startDate: day(row.dataVigenciaInicial),
-    endDate: day(row.dataVigenciaFinal),
-    initialValue: money(row.valorInicial ?? row.valorGlobal),
-    globalValue: money(row.valorGlobal),
+    ...validateContract({
+      number: str(row.numeroContrato),
+      object: str(row.objeto),
+      supplierName: str(row.nomeRazaoSocialFornecedor),
+      supplierDocument: normalizeDocument(str(row.niFornecedor)),
+      uasg,
+      unitName: str(row.nomeUnidadeGestora),
+      startDate: day(row.dataVigenciaInicial),
+      endDate: day(row.dataVigenciaFinal),
+      initialValue: money(row.valorInicial ?? row.valorGlobal),
+      globalValue: money(row.valorGlobal),
+    }),
     source: "COMPRAS_GOV",
     externalId: str(row.numeroControlePncpContrato) || null,
     lastSyncedAt: new Date(),
@@ -162,7 +171,7 @@ export function mapImportedRecord(
     items
       .map(
         (i) =>
-          str(i.niFornecedor).replace(/\D/g, "") ||
+          normalizeDocument(str(i.niFornecedor)) ||
           str(i.nomeRazaoSocialFornecedor).trim().toLowerCase(),
       )
       .filter(Boolean),

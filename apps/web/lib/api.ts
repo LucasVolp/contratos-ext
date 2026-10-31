@@ -1,3 +1,4 @@
+import { parseDecimal, formatDecimal } from "@contracts/validation";
 export type Contract = {
   id: string;
   number: string;
@@ -55,6 +56,14 @@ export type PageData<T> = {
     exportsCount?: number;
   };
 };
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly fieldErrors: Record<string, string> = {},
+  ) {
+    super(message);
+  }
+}
 export async function api<T>(
   path: string,
   options: RequestInit = {},
@@ -74,17 +83,18 @@ export async function api<T>(
     const data = await response
       .json()
       .catch(() => ({ message: "Não foi possível concluir a solicitação." }));
-    throw new Error(
+    throw new ApiError(
       Array.isArray(data.message) ? data.message.join(" · ") : data.message,
+      data.fieldErrors ?? {},
     );
   }
   if (response.status === 204) return undefined as T;
   return response.json();
 }
 export const currency = (value: unknown) =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-    Number(value || 0),
-  );
+  value === null || value === undefined || value === ""
+    ? "Não informado"
+    : formatDecimal(String(value), true);
 export const date = (value: unknown) =>
   value
     ? new Date(String(value).slice(0, 10) + "T12:00:00").toLocaleDateString(
@@ -92,10 +102,10 @@ export const date = (value: unknown) =>
       )
     : "Não informada";
 export function decimal(value: string) {
-  const trimmed = value.trim().replace(/\s/g, "");
-  if (trimmed.includes(","))
-    return trimmed.replace(/\./g, "").replace(",", ".");
-  return trimmed || "0";
+  const parsed = parseDecimal(value);
+  if (parsed === null)
+    throw new Error("Informe decimal não negativo, com até 6 casas decimais.");
+  return parsed;
 }
 export const statusLabels: Record<string, string> = {
   ACTIVE: "Em vigor",
@@ -134,6 +144,14 @@ export const labels: Record<string, string> = {
   description: "Descrição",
   unit: "Unidade de fornecimento",
   quantity: "Quantidade",
+  minimumQuantity: "Quantidade mínima",
+  modality: "Modalidade",
+  renewable: "Prorrogação",
+  brand: "Marca",
+  model: "Modelo",
+  warranty: "Garantia",
+  from: "Data inicial da consulta",
+  to: "Data final da consulta",
   unitPrice: "Preço unitário",
   items: "Itens",
 };
@@ -145,4 +163,21 @@ export function fieldLabel(key: string) {
         labels[part] || (/^\d+$/.test(part) ? `item ${Number(part)}` : part),
     )
     .join(" / ");
+}
+
+export function validationSummary(errors: Record<string, string>) {
+  const keys = Object.keys(errors);
+  const names = [
+    ...new Set(
+      keys.map((key) =>
+        fieldLabel(
+          key.replace(
+            /^items\.(\d+)\./,
+            (_, index) => `items.${Number(index) + 1}.`,
+          ),
+        ),
+      ),
+    ),
+  ];
+  return `Revise ${keys.length} ${keys.length === 1 ? "campo" : "campos"}: ${names.join("; ")}.`;
 }

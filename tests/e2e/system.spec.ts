@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 const suffix = Date.now().toString(36);
 const contract = {
   number: `QA-${suffix}`, object: 'Aquisição de materiais para verificação de persistência',
-  supplierName: 'Fornecedor de teste automatizado', supplierDocument: '12345678000190',
+  supplierName: 'Fornecedor de teste automatizado', supplierDocument: '11222333000181',
   uasg: '999999', unitName: 'Unidade de teste', startDate: '2026-01-01', endDate: '2026-12-31',
   initialValue: '1250.10', globalValue: '1250.10',
 };
@@ -10,11 +10,11 @@ const record = {
   number: `ATA-QA-${suffix}`, object: 'Materiais de expediente para teste documental', uasg: '999999',
   processNumber: '12345.001234/2026-01', purchaseNumber: '90001', purchaseYear: 2026,
   modality: 'PREGAO', renewable: false, startDate: '2026-01-01', endDate: '2026-12-31',
-  organizationName: 'Organização demonstrativa de testes', organizationDocument: '12345678000190',
+  organizationName: 'Organização demonstrativa de testes', organizationDocument: '11222333000181',
   organizationStreet: 'Rua das Palmeiras', organizationNumber: '120', organizationCity: 'Campo Grande', organizationState: 'MS',
   authorityName: 'Maria de Teste', authorityRole: 'Diretora Administrativa', authorityRegistration: '1234567',
   ordinanceNumber: '123/2026', ordinanceDate: '2026-01-01', ordinancePublicationDate: '2026-01-02',
-  supplierName: 'Fornecedor de teste automatizado', supplierDocument: '12345678000190', supplierRepresentative: 'João de Teste',
+  supplierName: 'Fornecedor de teste automatizado', supplierDocument: '11222333000181', supplierRepresentative: 'João de Teste',
   items: [
     { number: 1, description: 'Papel para impressão de documentos', brand: 'Teste', model: 'A4', unit: 'resma', quantity: '3', minimumQuantity: '1', unitPrice: '0.10', warranty: '12 meses' },
     { number: 2, description: 'Caneta esferográfica azul', brand: 'Teste', model: 'Azul', unit: 'unidade', quantity: '10', minimumQuantity: '1', unitPrice: '2.50', warranty: '12 meses' },

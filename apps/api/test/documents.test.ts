@@ -11,14 +11,14 @@ export const complete = {
     processNumber: "Proc-XYZ",
     purchaseNumber: "12/2026",
     organizationName: "Órgão Exemplo",
-    organizationDocument: "12345678000199",
+    organizationDocument: "11222333000181",
     organizationStreet: "Rua Exemplo",
     organizationCity: "Brasília",
     organizationState: "DF",
     authorityName: "Ana Silva",
     authorityRole: "Diretora",
     supplierName: "Fornecedor Exemplo",
-    supplierDocument: "98765432000199",
+    supplierDocument: "11222333000181",
     items: [
       {
         number: 1,
@@ -53,7 +53,7 @@ test("original styled Word template fills identifying fields, supplier document 
   assert.ok(xml.includes("77/2026"));
   assert.ok(xml.includes("Proc-XYZ"));
   assert.ok(xml.includes("Cadeira ABC"));
-  assert.ok(xml.includes("98.765.432/0001-99"));
+  assert.ok(xml.includes("11.222.333/0001-81"));
   assert.ok(xml.includes("styles") || zip.file("word/styles.xml"));
   assert.ok(!/\{[^}]+\}/.test(xml));
   assert.ok(!xml.includes("undefined"));
@@ -104,7 +104,7 @@ test("successful export stores immutable full snapshot with version and selected
 test("incomplete export returns the exact same readiness fields", async () => {
   const app: any = {
     record: async () =>
-      validateRecord({ number: "1", object: "Objeto", uasg: "123" }),
+      validateRecord({ number: "1", object: "Objeto", uasg: "000123" }),
   };
   await assert.rejects(
     () => new DocumentService({}, app).generate("x", "docx"),
@@ -167,4 +167,13 @@ test("Word output uses clean legal text and readable non-splitting table rows", 
   );
   assert.ok(widths[1] >= 2000, "description needs more room");
   assert.ok(widths[7] >= 1200, "currency needs enough room");
+});
+
+test("Word preserves six decimal places in unit prices without rounding", () => {
+  const record = structuredClone(complete);
+  record.items[0].unitPrice = "0.123456";
+  const xml = new PizZip(renderDocx(record))
+    .file("word/document.xml")!
+    .asText();
+  assert.ok(xml.includes("0,123456"));
 });

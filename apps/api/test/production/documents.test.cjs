@@ -14,14 +14,14 @@ for (const format of ["docx", "pdf"]) {
         purchaseNumber: "90001",
         purchaseYear: 2026,
         organizationName: "Organização de teste",
-        organizationDocument: "12345678000199",
+        organizationDocument: "11222333000181",
         organizationStreet: "Rua de teste",
         organizationCity: "Brasília",
         organizationState: "DF",
         authorityName: "Pessoa de teste",
         authorityRole: "Diretor",
         supplierName: "Fornecedor de teste",
-        supplierDocument: "98765432000199",
+        supplierDocument: "11222333000181",
         items: [
           {
             number: 1,

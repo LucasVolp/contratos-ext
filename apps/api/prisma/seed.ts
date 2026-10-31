@@ -52,14 +52,14 @@ async function seed() {
       ...sample,
       uasg: "999999",
       unitName: "Unidade de demonstração",
-      supplierDocument: "00000000000100",
+      supplierDocument: "11222333000181",
       initialValue: sample.globalValue,
       source: "MANUAL",
     };
     await db.contract.upsert({
       where: { id: data.id },
       create: data,
-      update: data,
+      update: {},
     });
   }
   const { items, ...data } = validateRecord({
@@ -73,7 +73,7 @@ async function seed() {
     renewable: true,
     uasg: "999999",
     organizationName: "Órgão de Demonstração",
-    organizationDocument: "00000000000100",
+    organizationDocument: "11222333000181",
     organizationStreet: "Rua de Exemplo",
     organizationNumber: "100",
     organizationCity: "Brasília",
@@ -81,7 +81,7 @@ async function seed() {
     authorityName: "Responsável de Demonstração",
     authorityRole: "Diretor(a)",
     supplierName: "Fornecedor de Demonstração Ltda.",
-    supplierDocument: "00000000000200",
+    supplierDocument: "12ABC34501DE35",
     supplierRepresentative: "Representante de Demonstração",
     items: [
       {
@@ -116,7 +116,7 @@ async function seed() {
       ...(data as any),
       items: { create: items },
     },
-    update: { ...data, items: { deleteMany: {}, create: items } },
+    update: {},
   });
   console.log(
     "Demonstração pronta: 4 contratos e 1 ata. Os dados são fictícios; nenhum outro registro foi removido.",

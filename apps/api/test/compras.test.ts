@@ -35,13 +35,15 @@ test("contract mapper preserves external identity and decimal strings", () => {
     {
       numeroContrato: "1/2026",
       objeto: "Papel",
+      nomeRazaoSocialFornecedor: "Empresa",
+      niFornecedor: "11222333000181",
       valorGlobal: "0.1",
       codigoUnidadeGestora: 123,
       numeroControlePncpContrato: "pncp",
       dataVigenciaInicial: "2026-01-01T00:00:00",
       dataVigenciaFinal: "2026-12-31",
     },
-    "123",
+    "000123",
   );
   assert.equal(result.globalValue, "0.1");
   assert.equal(result.externalId, "pncp");
@@ -53,10 +55,10 @@ test("multiple suppliers cannot be silently flattened into a single document", (
       mapImportedRecord(
         { numeroAtaRegistroPreco: "1" },
         [
-          { numeroItem: 1, niFornecedor: "111" },
-          { numeroItem: 2, niFornecedor: "222" },
+          { numeroItem: 1, niFornecedor: "11222333000181" },
+          { numeroItem: 2, niFornecedor: "52998224725" },
         ],
-        "123",
+        "000123",
       ),
     /fornecedores/,
   );
@@ -71,15 +73,15 @@ test("imported incomplete ata remains an editable draft and unrelated items are 
     [
       {
         numeroItem: 1,
-        niFornecedor: "111",
+        niFornecedor: "11222333000181",
         numeroControlePncpAta: "pncp",
         valorUnitario: "0.2",
         quantidadeHomologadaItem: "0.1",
       },
     ],
-    "123",
+    "000123",
   );
-  assert.equal(record.supplierDocument, "111");
+  assert.equal(record.supplierDocument, "11222333000181");
   assert.equal(record.items[0].unitPrice, "0.2");
   assert.equal(record.organizationStreet, "");
 });
@@ -90,7 +92,7 @@ test("ata modality uses Compras.gov codes 06 Dispensa and 05 Pregão", () => {
       mapImportedRecord(
         { numeroAtaRegistroPreco: "1", codigoModalidadeCompra },
         [],
-        "123",
+        "000123",
       ).modality,
       "DISPENSA",
     );
@@ -103,7 +105,7 @@ test("ata modality uses Compras.gov codes 06 Dispensa and 05 Pregão", () => {
         nomeModalidadeCompra: "Pregão",
       },
       [],
-      "123",
+      "000123",
     ).modality,
     "PREGAO",
   );
@@ -117,7 +119,7 @@ test("known modality names are normalized when a public code is missing or incon
         nomeModalidadeCompra: " DISPENSA ELETRÔNICA ",
       },
       [],
-      "123",
+      "000123",
     ).modality,
     "DISPENSA",
   );
@@ -129,7 +131,7 @@ test("known modality names are normalized when a public code is missing or incon
         nomeModalidadeCompra: "Dispensa",
       },
       [],
-      "123",
+      "000123",
     ).modality,
     "DISPENSA",
   );
@@ -140,7 +142,7 @@ test("known modality names are normalized when a public code is missing or incon
         nomeModalidadeCompra: "Pregao - Eletronico",
       },
       [],
-      "123",
+      "000123",
     ).modality,
     "PREGAO",
   );
@@ -156,9 +158,27 @@ test("unsupported named modalities cannot silently become a pregão document", (
           nomeModalidadeCompra: "Concorrência",
         },
         [],
-        "123",
+        "000123",
       ),
     (error: any) =>
       error.getStatus() === 422 && /modalidade/i.test(error.message),
+  );
+});
+test("imported contracts retain and validate alphanumeric supplier documents", () => {
+  const source = {
+    numeroContrato: "1",
+    objeto: "Objeto",
+    nomeRazaoSocialFornecedor: "Empresa",
+    niFornecedor: "12.abc.345/01de-35",
+    valorGlobal: "1.123456",
+  };
+  assert.equal(
+    mapImportedContract(source, "001234").supplierDocument,
+    "12ABC34501DE35",
+  );
+  assert.throws(
+    () =>
+      mapImportedContract({ ...source, niFornecedor: "11111111111" }, "001234"),
+    /CPF|CNPJ/,
   );
 });

@@ -17,7 +17,16 @@ import {
   RecordData,
   statusLabels,
 } from "@/lib/api";
-import { Empty, ErrorState, Loading, PageHead, Pager, Status } from "./ui";
+import {
+  Empty,
+  ErrorState,
+  Loading,
+  PageHead,
+  Pager,
+  Status,
+  Field,
+} from "./ui";
+import { validateFilters } from "@contracts/validation";
 export function ListPage({ records = false }: { records?: boolean }) {
   const [search, setSearch] = useState(""),
     [status, setStatus] = useState(""),
@@ -36,6 +45,12 @@ export function ListPage({ records = false }: { records?: boolean }) {
     const timer = setTimeout(() => {
       setLoading(true);
       setError("");
+      const errors = records ? {} : validateFilters({ uasg, from, to });
+      if (Object.keys(errors).length) {
+        setError(Object.values(errors).join(" · "));
+        setLoading(false);
+        return;
+      }
       const query = new URLSearchParams({
         search,
         page: String(page),
@@ -166,29 +181,29 @@ export function ListPage({ records = false }: { records?: boolean }) {
         </div>
         {advanced && (
           <div className="advanced-filters">
-            <label>
-              UASG
-              <input
-                value={uasg}
-                onChange={(e) => filter(setUasg, e.target.value)}
-              />
-            </label>
-            <label>
-              Vigência a partir de
-              <input
-                type="date"
-                value={from}
-                onChange={(e) => filter(setFrom, e.target.value)}
-              />
-            </label>
-            <label>
-              Vigência até
-              <input
-                type="date"
-                value={to}
-                onChange={(e) => filter(setTo, e.target.value)}
-              />
-            </label>
+            <Field
+              name="uasg"
+              label="UASG"
+              value={uasg}
+              onChange={(_, value) => filter(setUasg, value)}
+              error={validateFilters({ uasg }).uasg}
+            />
+            <Field
+              name="from"
+              label="Vigência a partir de"
+              type="date"
+              value={from}
+              onChange={(_, value) => filter(setFrom, value)}
+              error={validateFilters({ from, to }).from}
+            />
+            <Field
+              name="to"
+              label="Vigência até"
+              type="date"
+              value={to}
+              onChange={(_, value) => filter(setTo, value)}
+              error={validateFilters({ from, to }).to}
+            />
             <button
               className="text-button"
               onClick={() => {

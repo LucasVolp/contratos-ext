@@ -3,8 +3,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowDownToLine, ExternalLink } from "lucide-react";
 import Link from "next/link";
-import { api } from "@/lib/api";
-import { ErrorState, Field, PageHead } from "./ui";
+import { api, ApiError, validationSummary } from "@/lib/api";
+import {
+  ErrorState,
+  Field,
+  PageHead,
+  FormValidation,
+  focusInvalid,
+} from "./ui";
+import { validateFields, FieldErrors } from "@contracts/validation";
 export function ImportPage({ records = false }: { records?: boolean }) {
   const [values, setValues] = useState<Record<string, string>>({
       uasg: "",
@@ -19,6 +26,7 @@ export function ImportPage({ records = false }: { records?: boolean }) {
       updated: number;
       total: number;
     } | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const router = useRouter();
   const root = records ? "/atas" : "/contratos";
   function change(k: string, v: string) {
@@ -26,6 +34,15 @@ export function ImportPage({ records = false }: { records?: boolean }) {
   }
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    const errors = validateFields(values, "import");
+    if (records && !values.number.trim())
+      errors.number = "Informe o número da ata.";
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) {
+      setError(validationSummary(errors));
+      focusInvalid(errors);
+      return;
+    }
     setBusy(true);
     setError("");
     setResult(null);
@@ -51,7 +68,15 @@ export function ImportPage({ records = false }: { records?: boolean }) {
         );
       }
     } catch (e) {
-      setError((e as Error).message);
+      if (e instanceof ApiError) {
+        setFieldErrors(e.fieldErrors);
+        focusInvalid(e.fieldErrors);
+      }
+      setError(
+        e instanceof ApiError && Object.keys(e.fieldErrors).length
+          ? validationSummary(e.fieldErrors)
+          : (e as Error).message,
+      );
     } finally {
       setBusy(false);
     }
@@ -65,65 +90,86 @@ export function ImportPage({ records = false }: { records?: boolean }) {
         back={root}
       />
       <div className="import-layout">
-        <form className="import-form" onSubmit={submit}>
-          <div className="eyebrow">CONSULTA À FONTE PÚBLICA</div>
-          <h2>Encontre os registros da unidade.</h2>
-          <div className="form-grid">
-            <Field
-              name="uasg"
-              label="UASG"
-              value={values.uasg}
-              onChange={change}
-              required
-            />
-            {records && (
+        <FormValidation.Provider
+          value={{
+            errors: fieldErrors,
+            onBlur: (name) => {
+              const errors = validateFields(values, "import");
+              if (records && !values.number.trim())
+                errors.number = "Informe o número da ata.";
+              setFieldErrors((old) => {
+                const next = { ...old };
+                for (const key of name === "from" || name === "to"
+                  ? ["from", "to"]
+                  : [name]) {
+                  if (errors[key]) next[key] = errors[key];
+                  else delete next[key];
+                }
+                return next;
+              });
+            },
+          }}
+        >
+          <form className="import-form" onSubmit={submit} noValidate>
+            <div className="eyebrow">CONSULTA À FONTE PÚBLICA</div>
+            <h2>Encontre os registros da unidade.</h2>
+            <div className="form-grid">
               <Field
-                name="number"
-                label="Número da ata"
-                value={values.number}
+                name="uasg"
+                label="UASG"
+                value={values.uasg}
                 onChange={change}
                 required
               />
-            )}
-            <Field
-              name="from"
-              label="Data inicial da consulta"
-              value={values.from}
-              onChange={change}
-              type="date"
-              required
-            />
-            <Field
-              name="to"
-              label="Data final da consulta"
-              value={values.to}
-              onChange={change}
-              type="date"
-              required
-            />
-          </div>
-          <div aria-live="polite">
-            {error && <ErrorState message={error} />}{" "}
-            {result && (
-              <div className="success-state">
-                <h3>Importação concluída</h3>
-                <p>
-                  {result.created} criados · {result.updated} atualizados ·{" "}
-                  {result.total} consultados
-                </p>
-                <Link href="/contratos">Ver contratos →</Link>
-              </div>
-            )}
-          </div>
-          <button type="submit" disabled={busy} className="button">
-            <ArrowDownToLine size={16} />
-            {busy
-              ? "Consultando registros…"
-              : records
-                ? "Importar ata"
-                : "Importar contratos"}
-          </button>
-        </form>
+              {records && (
+                <Field
+                  name="number"
+                  label="Número da ata"
+                  value={values.number}
+                  onChange={change}
+                  required
+                />
+              )}
+              <Field
+                name="from"
+                label="Data inicial da consulta"
+                value={values.from}
+                onChange={change}
+                type="date"
+                required
+              />
+              <Field
+                name="to"
+                label="Data final da consulta"
+                value={values.to}
+                onChange={change}
+                type="date"
+                required
+              />
+            </div>
+            <div aria-live="polite">
+              {error && <ErrorState message={error} />}{" "}
+              {result && (
+                <div className="success-state">
+                  <h3>Importação concluída</h3>
+                  <p>
+                    {result.created} criados · {result.updated} atualizados ·{" "}
+                    {result.total} consultados
+                  </p>
+                  <Link href="/contratos">Ver contratos →</Link>
+                </div>
+              )}
+            </div>
+            <button type="submit" disabled={busy} className="button">
+              <ArrowDownToLine size={16} />
+              {busy
+                ? "Consultando registros…"
+                : records
+                  ? "Importar ata"
+                  : "Importar contratos"}
+            </button>
+          </form>
+        </FormValidation.Provider>
         <aside className="import-note">
           <ExternalLink size={25} strokeWidth={1} />
           <h2>

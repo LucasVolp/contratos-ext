@@ -54,7 +54,7 @@ const contract = {
   number: "1",
   object: "Compra",
   supplierName: "Fornecedor",
-  supplierDocument: "123",
+  supplierDocument: "52998224725",
   uasg: "123456",
   initialValue: "0.10",
   globalValue: "0.20",
@@ -101,7 +101,8 @@ test("record totals use decimal arithmetic", () => {
 });
 test("record accepts a draft but rejects duplicate items and minimum greater than quantity", () => {
   assert.equal(
-    validateRecord({ number: "1", object: "Objeto", uasg: "1" }).items.length,
+    validateRecord({ number: "1", object: "Objeto", uasg: "000001" }).items
+      .length,
     0,
   );
   assert.throws(
@@ -109,7 +110,7 @@ test("record accepts a draft but rejects duplicate items and minimum greater tha
       validateRecord({
         number: "1",
         object: "Objeto",
-        uasg: "1",
+        uasg: "000001",
         items: [item, item],
       }),
     /único/,
@@ -119,7 +120,7 @@ test("record accepts a draft but rejects duplicate items and minimum greater tha
       validateRecord({
         number: "1",
         object: "Objeto",
-        uasg: "1",
+        uasg: "000001",
         items: [{ ...item, minimumQuantity: "2" }],
       }),
     /mínima/,
@@ -129,10 +130,73 @@ test("readiness is shared and selected item must exist", () => {
   const draft = validateRecord({
     number: "1",
     object: "Objeto",
-    uasg: "1",
+    uasg: "000001",
     items: [item],
   });
   assert.equal(readiness(draft).ready, false);
   assert.ok(readiness(draft).missingFields.includes("supplierDocument"));
   assert.throws(() => readiness(draft, "missing"), /Item/);
+});
+
+test("shared server validation returns every exact field error and canonical identifiers", () => {
+  assert.throws(
+    () =>
+      validateContract({
+        ...contract,
+        uasg: "123",
+        supplierDocument: "11111111111",
+        globalValue: "-1",
+      }),
+    (error: any) => {
+      assert.equal(error.getStatus(), 400);
+      const { fieldErrors } = error.getResponse();
+      assert.ok(fieldErrors.uasg);
+      assert.ok(fieldErrors.supplierDocument);
+      assert.ok(fieldErrors.globalValue);
+      return true;
+    },
+  );
+  const normalized = validateContract({
+    ...contract,
+    supplierDocument: "12.abc.345/01de-35",
+    globalValue: "R$ 1.234,567890",
+  });
+  assert.equal(normalized.supplierDocument, "12ABC34501DE35");
+  assert.equal(normalized.globalValue, "1234.567890");
+  const record = validateRecord({
+    number: "DEMO",
+    object: "Objeto",
+    uasg: "001234",
+    organizationState: "ms",
+    organizationDocument: "11.222.333/0001-81",
+  });
+  assert.equal(record.organizationState, "MS");
+  assert.equal(record.organizationDocument, "11222333000181");
+});
+test("legacy invalid documents and UF prevent document readiness", () => {
+  const record = {
+    number: "1",
+    processNumber: "PROC",
+    purchaseNumber: "COMPRA",
+    object: "Objeto",
+    uasg: "001234",
+    organizationName: "Órgão",
+    organizationDocument: "123",
+    organizationStreet: "Rua",
+    organizationCity: "Cidade",
+    organizationState: "XX",
+    authorityName: "Pessoa",
+    authorityRole: "Diretor",
+    supplierName: "Empresa",
+    supplierDocument: "11111111111",
+    items: [item],
+  };
+  const result = readiness(record);
+  assert.equal(result.ready, false);
+  for (const key of [
+    "supplierDocument",
+    "organizationDocument",
+    "organizationState",
+  ])
+    assert.ok(result.missingFields.includes(key));
 });
