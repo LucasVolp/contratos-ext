@@ -26,6 +26,12 @@ import { ApplicationService } from "./service";
 import { DocumentService } from "./documents";
 import { Database } from "./database";
 import { Data, readiness } from "./domain";
+import { CatalogClient } from "./catalog/client";
+import { CatalogService } from "./catalog/service";
+import {
+  PurchasesController,
+  PublicRecordsController,
+} from "./catalog/controller";
 
 @Catch()
 class ApiErrors implements ExceptionFilter {
@@ -40,11 +46,14 @@ class ApiErrors implements ExceptionFilter {
     }
     const code = (error as { code?: string })?.code;
     if (code === "P2002") {
+      const target =
+        (error as { meta?: { target?: string[] } }).meta?.target ?? [];
       response
         .status(409)
         .json({
-          message:
-            "Já existe um registro com esse número nesta UASG. Edite o registro existente.",
+          message: target.includes("supplierDocument")
+            ? "Já existe documento com este número, UASG e fornecedor. Abra e edite o cadastro existente."
+            : "Já existe um registro com esse número nesta UASG. Edite o registro existente.",
         });
       return;
     }
@@ -60,12 +69,10 @@ class ApiErrors implements ExceptionFilter {
       "Falha interna da API:",
       error instanceof Error ? error.message : "erro desconhecido",
     );
-    response
-      .status(500)
-      .json({
-        message:
-          "Não foi possível concluir a operação. Verifique o serviço e tente novamente.",
-      });
+    response.status(500).json({
+      message:
+        "Não foi possível concluir a operação. Verifique o serviço e tente novamente.",
+    });
   }
 }
 @Controller("contracts")
@@ -162,9 +169,22 @@ class HealthController {
   }
 }
 @Module({
-  controllers: [ContractsController, RecordsController, HealthController],
+  controllers: [
+    ContractsController,
+    RecordsController,
+    HealthController,
+    PurchasesController,
+    PublicRecordsController,
+  ],
   providers: [
     Database,
+    { provide: CatalogClient, useFactory: () => new CatalogClient() },
+    {
+      provide: CatalogService,
+      useFactory: (db: Database, client: CatalogClient) =>
+        new CatalogService(db, client),
+      inject: [Database, CatalogClient],
+    },
     {
       provide: ApplicationService,
       useFactory: (db: Database) => new ApplicationService(db),

@@ -274,8 +274,8 @@ export class ApplicationService {
       from,
       to,
     );
-    const existing = await this.db.priceRecord.findUnique({
-      where: { number_uasg: { number: value.number, uasg } },
+    const existing = await this.db.priceRecord.findFirst({
+      where: { number: value.number, uasg },
     });
     if (existing) {
       throw new ConflictException(

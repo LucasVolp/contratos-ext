@@ -198,6 +198,7 @@ for (const scenario of ["manual", "importada e enriquecida"]) {
     const db: any = {
       priceRecord: {
         findUnique: async () => existing,
+        findFirst: async () => existing,
         update: async ({ data }: any) => {
           writes++;
           Object.assign(existing, data, { items: data.items.create });
