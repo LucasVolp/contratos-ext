@@ -24,7 +24,10 @@ import {
   string,
 } from "./mappers";
 import { asJson, plain, filters, syncRange, linkedWhere } from "./helpers";
-import { linkedPurchaseCache, purchaseResultEvidence } from "./purchase-evidence";
+import {
+  linkedPurchaseCache,
+  purchaseResultEvidence,
+} from "./purchase-evidence";
 import { CatalogDrafts } from "./drafts";
 import { CatalogSupplements, presentSupplement } from "./supplements";
 
@@ -83,7 +86,10 @@ export class CatalogService {
   }
   purchaseSummary(row: PublicPurchase) {
     const { summary, snapshot, ...result } = row;
-    return result;
+    return {
+      ...result,
+      recordsLookup: (snapshot as Raw).recordsLookup ?? null,
+    };
   }
   async purchaseRow(id: string) {
     const row = await this.db.publicPurchase.findUnique({ where: { id } });
@@ -166,15 +172,19 @@ export class CatalogService {
       rawItems: items,
       rawResults: results,
     };
-    await this.db.publicPurchase.update({
-      where: { id },
-      data: {
-        ...mapPurchase(header),
-        summary: asJson(header),
-        snapshot: asJson(snapshot),
-        lastSyncedAt: new Date(),
-        detailsSyncedAt: new Date(),
-      },
+    await this.db.$transaction(async (tx) => {
+      await tx.publicPurchase.update({
+        where: { id },
+        data: {
+          ...mapPurchase(header),
+          summary: asJson(header),
+          lastSyncedAt: new Date(),
+          detailsSyncedAt: new Date(),
+        },
+      });
+      // Merge independent snapshot sections so detail refresh cannot erase
+      // the result of a concurrent linked-record lookup.
+      await tx.$executeRaw`UPDATE "PublicPurchase" SET "snapshot" = "snapshot" || ${JSON.stringify(snapshot)}::jsonb WHERE "id" = ${id}::uuid`;
     });
     return this.purchase(id);
   }
@@ -351,8 +361,19 @@ export class CatalogService {
     if (!from || !to || from > to)
       throw new BadRequestException("Informe um período válido.");
     const fetched = await this.client.records(purchase.uasg, from, to);
-    const rows = this.uniqueRecords(fetched).filter((raw) =>
-      linkedToPurchase(mapPublicRecord(raw), purchase),
+    // ARP listing spans the entire unit; unrelated incomplete rows must not
+    // prevent this purchase's lookup from completing.
+    const matching = fetched.filter(
+      (raw) =>
+        !raw.ataExcluido && linkedToPurchase(mapPublicRecord(raw), purchase),
+    );
+    const recordsLookup = {
+      incompleteRecords: matching
+        .filter((raw) => !string(raw.numeroControlePncpAta).trim())
+        .map((raw) => ({ number: string(raw.numeroAtaRegistroPreco) })),
+    };
+    const rows = this.uniqueRecords(
+      matching.filter((raw) => string(raw.numeroControlePncpAta).trim()),
     );
     await this.db.$transaction(
       async (tx) => {
@@ -361,6 +382,7 @@ export class CatalogService {
           where: { id },
           data: { recordsSyncedAt: new Date() },
         });
+        await tx.$executeRaw`UPDATE "PublicPurchase" SET "snapshot" = "snapshot" || ${JSON.stringify({ recordsLookup })}::jsonb WHERE "id" = ${id}::uuid`;
       },
       { timeout: 60000 },
     );
@@ -372,6 +394,7 @@ export class CatalogService {
     return plain({
       total: records.length,
       records: await this.recordSummaries(records),
+      recordsLookup,
       from,
       to,
     });
@@ -416,7 +439,8 @@ export class CatalogService {
           states: mapPurchaseResultStates(
             purchaseItems,
             purchase.results.filter(
-              (r) => !r.idCompra || string(r.idCompra) === mapped.purchaseExternalId,
+              (r) =>
+                !r.idCompra || string(r.idCompra) === mapped.purchaseExternalId,
             ),
           ),
           syncedAt: new Date().toISOString(),

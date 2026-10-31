@@ -1,5 +1,7 @@
 import { formatDecimal, maskDocument } from "@contracts/validation";
+export type RecordsLookup = { incompleteRecords: { number: string }[] };
 export type PurchaseSummary = {
+  recordsLookup?: RecordsLookup | null;
   id: string;
   externalId: string;
   number: string;

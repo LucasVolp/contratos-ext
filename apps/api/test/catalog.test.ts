@@ -231,22 +231,117 @@ test("invalid public dates stay unknown rather than creating impossible calendar
   assert.equal(row.publishedAt, null);
 });
 
-test('purchase sync includes the final publication day and excludes next-day boundary rows',async()=>{
- const calls:any[]=[];const transport:any={pages:async(_path:string,params:any)=>{calls.push(params);return params.dataPublicacaoPncpFinal==='2025-11-19'?[{idCompra:'late18',dataPublicacaoPncp:'2025-11-18T07:00:00'},{idCompra:'midnight19',dataPublicacaoPncp:'2025-11-19T00:00:00'}]:[];}};
- const rows=await new CatalogClient(transport).purchases('158148','2025-11-18','2025-11-18');
- assert.deepEqual(rows.map(row=>row.idCompra),['late18']);assert.equal(calls[0].dataPublicacaoPncpFinal,'2025-11-19');
+test("purchase sync includes the final publication day and excludes next-day boundary rows", async () => {
+  const calls: any[] = [];
+  const transport: any = {
+    pages: async (_path: string, params: any) => {
+      calls.push(params);
+      return params.dataPublicacaoPncpFinal === "2025-11-19"
+        ? [
+            { idCompra: "late18", dataPublicacaoPncp: "2025-11-18T07:00:00" },
+            {
+              idCompra: "midnight19",
+              dataPublicacaoPncp: "2025-11-19T00:00:00",
+            },
+          ]
+        : [];
+    },
+  };
+  const rows = await new CatalogClient(transport).purchases(
+    "158148",
+    "2025-11-18",
+    "2025-11-18",
+  );
+  assert.deepEqual(
+    rows.map((row) => row.idCompra),
+    ["late18"],
+  );
+  assert.equal(calls[0].dataPublicacaoPncpFinal, "2025-11-19");
 });
-test('inclusive publication windows neither lose nor duplicate the year seam',async()=>{
- const calls:any[]=[];const all=[{idCompra:'last2025',dataPublicacaoPncp:'2025-12-31T07:00:00'},{idCompra:'first2026',dataPublicacaoPncp:'2026-01-01T00:00:00'},{idCompra:'outside',dataPublicacaoPncp:'2026-01-02T00:00:00'}];
- const transport:any={pages:async(_path:string,params:any)=>{calls.push(params);return all.filter(r=>r.dataPublicacaoPncp>=params.dataPublicacaoPncpInicial&&r.dataPublicacaoPncp<=params.dataPublicacaoPncpFinal+'T00:00:00');}};
- const rows=await new CatalogClient(transport).purchases('158148','2025-01-01','2026-01-01');
- assert.deepEqual(rows.map(row=>row.idCompra),['last2025','first2026']);assert.equal(calls.length,2);assert.equal(calls[0].dataPublicacaoPncpFinal,'2026-01-01');assert.equal(calls[1].dataPublicacaoPncpInicial,'2026-01-01');
+test("inclusive publication windows neither lose nor duplicate the year seam", async () => {
+  const calls: any[] = [];
+  const all = [
+    { idCompra: "last2025", dataPublicacaoPncp: "2025-12-31T07:00:00" },
+    { idCompra: "first2026", dataPublicacaoPncp: "2026-01-01T00:00:00" },
+    { idCompra: "outside", dataPublicacaoPncp: "2026-01-02T00:00:00" },
+  ];
+  const transport: any = {
+    pages: async (_path: string, params: any) => {
+      calls.push(params);
+      return all.filter(
+        (r) =>
+          r.dataPublicacaoPncp >= params.dataPublicacaoPncpInicial &&
+          r.dataPublicacaoPncp <= params.dataPublicacaoPncpFinal + "T00:00:00",
+      );
+    },
+  };
+  const rows = await new CatalogClient(transport).purchases(
+    "158148",
+    "2025-01-01",
+    "2026-01-01",
+  );
+  assert.deepEqual(
+    rows.map((row) => row.idCompra),
+    ["last2025", "first2026"],
+  );
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].dataPublicacaoPncpFinal, "2026-01-01");
+  assert.equal(calls[1].dataPublicacaoPncpInicial, "2026-01-01");
 });
-test('draft excludes a supplier item whose exact purchase results are all confirmed cancelled',async()=>{
- const source:any={id:'ata',number:'77',object:'Material',uasg:'158148',detailsSyncedAt:new Date(),purchaseNumber:'90001',purchaseYear:2025,snapshot:{modality:'PREGAO',purchaseSrp:true,rawItems:[{}],items:[{key:'1',number:'1',supplierDocument:supplier,supplierName:'Empresa',description:'Material',unit:'UN',quantity:'1',unitPrice:'2'}],purchaseResultStates:[{itemNumber:'1',supplierDocument:supplier,cancelled:true}]}};
- let writes=0;const tx:any={priceRecord:{findUnique:async()=>null,findMany:async()=>[],create:async()=>{writes++;return {id:'new'}}}};
- const db:any={publicRecord:{findUnique:async()=>source},priceRecord:{findUnique:async()=>null},$transaction:async(fn:any)=>fn(tx)};
- await assert.rejects(()=>new CatalogService(db,{} as any).draft('ata',{supplierDocument:supplier}),(error:any)=>error.getStatus()===422);assert.equal(writes,0);
+test("draft excludes a supplier item whose exact purchase results are all confirmed cancelled", async () => {
+  const source: any = {
+    id: "ata",
+    number: "77",
+    object: "Material",
+    uasg: "158148",
+    detailsSyncedAt: new Date(),
+    purchaseNumber: "90001",
+    purchaseYear: 2025,
+    snapshot: {
+      modality: "PREGAO",
+      purchaseSrp: true,
+      rawItems: [{}],
+      items: [
+        {
+          key: "1",
+          number: "1",
+          supplierDocument: supplier,
+          supplierName: "Empresa",
+          description: "Material",
+          unit: "UN",
+          quantity: "1",
+          unitPrice: "2",
+        },
+      ],
+      purchaseResultStates: [
+        { itemNumber: "1", supplierDocument: supplier, cancelled: true },
+      ],
+    },
+  };
+  let writes = 0;
+  const tx: any = {
+    priceRecord: {
+      findUnique: async () => null,
+      findMany: async () => [],
+      create: async () => {
+        writes++;
+        return { id: "new" };
+      },
+    },
+  };
+  const db: any = {
+    publicRecord: { findUnique: async () => source },
+    priceRecord: { findUnique: async () => null },
+    $transaction: async (fn: any) => fn(tx),
+  };
+  await assert.rejects(
+    () =>
+      new CatalogService(db, {} as any).draft("ata", {
+        supplierDocument: supplier,
+      }),
+    (error: any) => error.getStatus() === 422,
+  );
+  assert.equal(writes, 0);
 });
 
 test("purchase cancellation states use exact item IDs, PNCP numbers and normalized suppliers", () => {
@@ -255,76 +350,316 @@ test("purchase cancellation states use exact item IDs, PNCP numbers and normaliz
     { idCompraItem: "opaque-B", numeroItemCompra: 1, numeroItemPncp: 2 },
   ];
   const results = [
-    { idCompraItem: "opaque-A", niFornecedor: "11.222.333/0001-81", cancelado: true },
-    { idCompraItem: "opaque-A", niFornecedor: supplier, dataCancelamentoPncp: "2026-01-01" },
+    {
+      idCompraItem: "opaque-A",
+      niFornecedor: "11.222.333/0001-81",
+      cancelado: true,
+    },
+    {
+      idCompraItem: "opaque-A",
+      niFornecedor: supplier,
+      dataCancelamentoPncp: "2026-01-01",
+    },
     { idCompraItem: "opaque-A", niFornecedor: "52998224725", cancelado: false },
-    { idCompraItem: "opaque-B", niFornecedor: supplier, situacaoCompraItemResultadoNome: "Cancelado" },
-    { idCompraItem: "foreign", numeroItemPncp: 1, niFornecedor: supplier, cancelado: false },
+    {
+      idCompraItem: "opaque-B",
+      niFornecedor: supplier,
+      situacaoCompraItemResultadoNome: "Cancelado",
+    },
+    {
+      idCompraItem: "foreign",
+      numeroItemPncp: 1,
+      niFornecedor: supplier,
+      cancelado: false,
+    },
   ];
   assert.deepEqual(mapPurchaseResultStates(items, results), [
     { itemNumber: "1", supplierDocument: supplier, cancelled: true },
     { itemNumber: "1", supplierDocument: "52998224725", cancelled: false },
     { itemNumber: "2", supplierDocument: supplier, cancelled: true },
   ]);
-  const active = mapPurchaseResultStates(items, [...results, { idCompraItem: "opaque-A", niFornecedor: supplier }]);
-  assert.equal(active.find(row => row.itemNumber === "1" && row.supplierDocument === supplier)?.cancelled, false);
-  assert.equal(active.find(row => row.itemNumber === "2" && row.supplierDocument === supplier)?.cancelled, true);
+  const active = mapPurchaseResultStates(items, [
+    ...results,
+    { idCompraItem: "opaque-A", niFornecedor: supplier },
+  ]);
+  assert.equal(
+    active.find(
+      (row) => row.itemNumber === "1" && row.supplierDocument === supplier,
+    )?.cancelled,
+    false,
+  );
+  assert.equal(
+    active.find(
+      (row) => row.itemNumber === "2" && row.supplierDocument === supplier,
+    )?.cancelled,
+    true,
+  );
 });
 
 for (const pncpOnly of [false, true]) {
-  for (const oldStates of [[], [{ itemNumber: "1", supplierDocument: supplier, cancelled: false }]]) {
-    test(`newer cached cancellation replaces stale ${oldStates.length ? 'active' : 'empty'} record evidence (${pncpOnly ? 'PNCP' : 'id'})`, async () => {
+  for (const oldStates of [
+    [],
+    [{ itemNumber: "1", supplierDocument: supplier, cancelled: false }],
+  ]) {
+    test(`newer cached cancellation replaces stale ${oldStates.length ? "active" : "empty"} record evidence (${pncpOnly ? "PNCP" : "id"})`, async () => {
       const oldTime = "2026-01-01T00:00:00.000Z";
       const newTime = "2026-01-02T00:00:00.000Z";
-      const header = { numeroControlePncpAta: "ata", ...(pncpOnly ? {} : { idCompra: "purchase" }), numeroControlePncpCompra: "pncp" };
-      const source: any = { id: "ata", externalId: "ata", detailsSyncedAt: new Date(oldTime), snapshot: { items: [], purchaseResultStates: oldStates, purchaseResultsSyncedAt: oldTime } };
-      const cached: any = { externalId: "purchase", pncpId: "pncp", detailsSyncedAt: new Date(newTime), summary: { idCompra: "purchase" }, snapshot: { rawItems: [{ idCompraItem: "opaque", numeroItemPncp: 1 }], rawResults: [{ idCompraItem: "opaque", niFornecedor: supplier, cancelado: true }] } };
-      const db: any = { publicRecord: { findUnique: async () => source, update: async ({data}: any) => { source.snapshot = data.snapshot; } }, publicPurchase: { findUnique: async () => cached, findFirst: async () => cached } };
-      const client: any = { record: async () => ({ headers: [header], items: [] }), purchase: async () => { throw new Error("offline"); } };
+      const header = {
+        numeroControlePncpAta: "ata",
+        ...(pncpOnly ? {} : { idCompra: "purchase" }),
+        numeroControlePncpCompra: "pncp",
+      };
+      const source: any = {
+        id: "ata",
+        externalId: "ata",
+        detailsSyncedAt: new Date(oldTime),
+        snapshot: {
+          items: [],
+          purchaseResultStates: oldStates,
+          purchaseResultsSyncedAt: oldTime,
+        },
+      };
+      const cached: any = {
+        externalId: "purchase",
+        pncpId: "pncp",
+        detailsSyncedAt: new Date(newTime),
+        summary: { idCompra: "purchase" },
+        snapshot: {
+          rawItems: [{ idCompraItem: "opaque", numeroItemPncp: 1 }],
+          rawResults: [
+            { idCompraItem: "opaque", niFornecedor: supplier, cancelado: true },
+          ],
+        },
+      };
+      const db: any = {
+        publicRecord: {
+          findUnique: async () => source,
+          update: async ({ data }: any) => {
+            source.snapshot = data.snapshot;
+          },
+        },
+        publicPurchase: {
+          findUnique: async () => cached,
+          findFirst: async () => cached,
+        },
+      };
+      const client: any = {
+        record: async () => ({ headers: [header], items: [] }),
+        purchase: async () => {
+          throw new Error("offline");
+        },
+      };
       const service = new CatalogService(db, client);
       service.record = async () => source as any;
       await service.refreshRecord("ata");
-      assert.deepEqual(source.snapshot.purchaseResultStates, [{ itemNumber: "1", supplierDocument: supplier, cancelled: true }]);
+      assert.deepEqual(source.snapshot.purchaseResultStates, [
+        { itemNumber: "1", supplierDocument: supplier, cancelled: true },
+      ]);
       assert.equal(source.snapshot.purchaseResultsSyncedAt, newTime);
     });
   }
 }
 
 test("draft uses newer local purchase cancellation without refreshing the record", async () => {
-  const source: any = { id: "ata", purchaseExternalId: "purchase", detailsSyncedAt: new Date("2026-01-01"), snapshot: { modality: "PREGAO", purchaseResultStates: [], purchaseResultsSyncedAt: "2026-01-01T00:00:00.000Z", rawItems: [{}], items: [{number: "1", supplierDocument: supplier}] } };
-  const cached: any = { detailsSyncedAt: new Date("2026-01-02"), snapshot: { rawItems: [{ idCompraItem: "opaque", numeroItemPncp: 1 }], rawResults: [{ idCompraItem: "opaque", niFornecedor: supplier, cancelado: true }] } };
-  const db: any = { publicRecord: { findUnique: async () => source }, publicPurchase: { findUnique: async () => cached }, priceRecord: { findUnique: async () => null } };
-  await assert.rejects(() => new CatalogService(db, {} as any).draft("ata", {supplierDocument: supplier}), (error: any) => error.getStatus?.() === 422);
+  const source: any = {
+    id: "ata",
+    purchaseExternalId: "purchase",
+    detailsSyncedAt: new Date("2026-01-01"),
+    snapshot: {
+      modality: "PREGAO",
+      purchaseResultStates: [],
+      purchaseResultsSyncedAt: "2026-01-01T00:00:00.000Z",
+      rawItems: [{}],
+      items: [{ number: "1", supplierDocument: supplier }],
+    },
+  };
+  const cached: any = {
+    detailsSyncedAt: new Date("2026-01-02"),
+    snapshot: {
+      rawItems: [{ idCompraItem: "opaque", numeroItemPncp: 1 }],
+      rawResults: [
+        { idCompraItem: "opaque", niFornecedor: supplier, cancelado: true },
+      ],
+    },
+  };
+  const db: any = {
+    publicRecord: { findUnique: async () => source },
+    publicPurchase: { findUnique: async () => cached },
+    priceRecord: { findUnique: async () => null },
+  };
+  await assert.rejects(
+    () =>
+      new CatalogService(db, {} as any).draft("ata", {
+        supplierDocument: supplier,
+      }),
+    (error: any) => error.getStatus?.() === 422,
+  );
 });
 
 test("older cached active results preserve newer record cancellation and its evidence timestamp", () => {
   const newer = "2026-01-03T00:00:00.000Z";
-  const states = [{ itemNumber: "1", supplierDocument: supplier, cancelled: true }];
+  const states = [
+    { itemNumber: "1", supplierDocument: supplier, cancelled: true },
+  ];
   const evidence = purchaseResultEvidence(
     { purchaseResultStates: states, purchaseResultsSyncedAt: newer },
     new Date("2026-01-04"),
-    { detailsSyncedAt: new Date("2026-01-02"), snapshot: {
-      rawItems: [{ idCompraItem: "opaque", numeroItemPncp: 1 }],
-      rawResults: [{ idCompraItem: "opaque", niFornecedor: supplier, cancelado: false }],
-    } },
+    {
+      detailsSyncedAt: new Date("2026-01-02"),
+      snapshot: {
+        rawItems: [{ idCompraItem: "opaque", numeroItemPncp: 1 }],
+        rawResults: [
+          { idCompraItem: "opaque", niFornecedor: supplier, cancelado: false },
+        ],
+      },
+    },
   );
   assert.deepEqual(evidence, { states, syncedAt: newer });
-  assert.deepEqual(purchaseResultEvidence(
-    { purchaseResultStates: evidence.states, purchaseResultsSyncedAt: evidence.syncedAt },
-    new Date("2026-01-05"), null,
-  ), evidence);
+  assert.deepEqual(
+    purchaseResultEvidence(
+      {
+        purchaseResultStates: evidence.states,
+        purchaseResultsSyncedAt: evidence.syncedAt,
+      },
+      new Date("2026-01-05"),
+      null,
+    ),
+    evidence,
+  );
 });
 
 test("padded PNCP item numbers join units and commitments without changing display keys", () => {
-  const rows = mapRecordItems([{numeroItem: "00001", idCompra: "opaque"}], [{idCompra: "opaque", numeroItemPncp: 1, unidadeMedida: "KG"}]);
+  const rows = mapRecordItems(
+    [{ numeroItem: "00001", idCompra: "opaque" }],
+    [{ idCompra: "opaque", numeroItemPncp: 1, unidadeMedida: "KG" }],
+  );
   assert.equal(rows[0].key, "00001");
   assert.equal(rows[0].number, "00001");
   assert.equal(rows[0].unit, "KG");
-  assert.equal(mapCommitments([{numeroItem: 1}, {numeroItem: "00002"}, {numeroItem: "A1"}], "00001").length, 1);
+  assert.equal(
+    mapCommitments(
+      [{ numeroItem: 1 }, { numeroItem: "00002" }, { numeroItem: "A1" }],
+      "00001",
+    ).length,
+    1,
+  );
 });
 
 test("padded record item cannot bypass cancellation for the same numeric PNCP item", async () => {
-  const source: any = { id: "ata", detailsSyncedAt: new Date(), snapshot: { modality: "PREGAO", purchaseResultStates: [{itemNumber: "1", supplierDocument: supplier, cancelled: true}], rawItems: [{}], items: [{number: "00001", supplierDocument: supplier}] } };
-  const db: any = { publicRecord: { findUnique: async () => source }, priceRecord: { findUnique: async () => null } };
-  await assert.rejects(() => new CatalogService(db, {} as any).draft("ata", {supplierDocument: supplier}), (error: any) => error.getStatus?.() === 422);
+  const source: any = {
+    id: "ata",
+    detailsSyncedAt: new Date(),
+    snapshot: {
+      modality: "PREGAO",
+      purchaseResultStates: [
+        { itemNumber: "1", supplierDocument: supplier, cancelled: true },
+      ],
+      rawItems: [{}],
+      items: [{ number: "00001", supplierDocument: supplier }],
+    },
+  };
+  const db: any = {
+    publicRecord: { findUnique: async () => source },
+    priceRecord: { findUnique: async () => null },
+  };
+  await assert.rejects(
+    () =>
+      new CatalogService(db, {} as any).draft("ata", {
+        supplierDocument: supplier,
+      }),
+    (error: any) => error.getStatus?.() === 422,
+  );
+});
+
+function linkedLookupFixture(rows: any[]) {
+  const saved: any[] = [];
+  let writes = 0;
+  const purchase = {
+    id: "local",
+    externalId: "own",
+    pncpId: "own-pncp",
+    srp: true,
+    year: 2025,
+    uasg: "158148",
+  };
+  const tx: any = {
+    publicRecord: {
+      findUnique: async () => null,
+      upsert: async ({ create }: any) => {
+        saved.push({ id: "ata-local", ...create });
+      },
+    },
+    publicPurchase: {
+      update: async () => {
+        writes++;
+      },
+    },
+    $executeRaw: async () => 1,
+  };
+  const db: any = {
+    publicPurchase: {
+      findUnique: async () => purchase,
+      findMany: async () => [],
+    },
+    publicRecord: { findMany: async () => saved },
+    $transaction: async (fn: any) => fn(tx),
+  };
+  return {
+    service: new CatalogService(db, { records: async () => rows } as any),
+    saved,
+    writes: () => writes,
+  };
+}
+
+test("linked lookup ignores unrelated ARPs without PNCP identifiers before validating matching records", async () => {
+  const f = linkedLookupFixture([
+    { idCompra: "foreign", numeroAtaRegistroPreco: "LEGACY" },
+    { idCompra: "foreign", numeroControlePncpCompra: "own-pncp" },
+    {
+      idCompra: "own",
+      numeroAtaRegistroPreco: "001/2026",
+      numeroControlePncpAta: "official-id",
+    },
+  ]);
+  const result = await f.service.refreshLinkedRecords("local");
+  assert.equal(result.total, 1);
+  assert.equal(result.records[0].externalId, "official-id");
+  assert.equal(f.writes(), 1);
+});
+
+test("matching ARPs without PNCP identifiers return a partial lookup alongside valid records", async () => {
+  const f = linkedLookupFixture([
+    { idCompra: "own", numeroAtaRegistroPreco: "001/2026" },
+    {
+      idCompra: "own",
+      numeroAtaRegistroPreco: "002/2026",
+      numeroControlePncpAta: "valid-id",
+    },
+  ]);
+  const result = await f.service.refreshLinkedRecords("local");
+  assert.equal(result.total, 1);
+  assert.deepEqual(result.recordsLookup, {
+    incompleteRecords: [{ number: "001/2026" }],
+  });
+  assert.equal(f.writes(), 1);
+  assert.equal(f.saved.length, 1);
+});
+
+test("only incomplete matching ARPs are distinct from a confirmed absence", async () => {
+  const f = linkedLookupFixture([
+    { idCompra: "own", numeroAtaRegistroPreco: "001/2026" },
+  ]);
+  const result = await f.service.refreshLinkedRecords("local");
+  assert.equal(result.total, 0);
+  assert.equal(result.recordsLookup.incompleteRecords.length, 1);
+  assert.equal(f.writes(), 1);
+});
+
+test("unrelated incomplete records produce a confirmed empty lookup rather than an upstream error", async () => {
+  const f = linkedLookupFixture([
+    { idCompra: "foreign", numeroAtaRegistroPreco: "LEGACY" },
+  ]);
+  const result = await f.service.refreshLinkedRecords("local");
+  assert.equal(result.total, 0);
+  assert.equal(f.writes(), 1);
 });

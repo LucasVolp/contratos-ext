@@ -60,6 +60,7 @@ export class ApiError extends Error {
   constructor(
     message: string,
     readonly fieldErrors: Record<string, string> = {},
+    readonly status: number = 0,
   ) {
     super(message);
   }
@@ -86,6 +87,7 @@ export async function api<T>(
     throw new ApiError(
       Array.isArray(data.message) ? data.message.join(" · ") : data.message,
       data.fieldErrors ?? {},
+      response.status,
     );
   }
   if (response.status === 204) return undefined as T;

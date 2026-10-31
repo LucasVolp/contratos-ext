@@ -2,17 +2,18 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
-import { api, currency, date } from "@/lib/api";
+import { api, ApiError, currency, date } from "@/lib/api";
 import {
   PurchaseDetail,
+  RecordsLookup,
   PublicRecordSummary,
   known,
-  quantity,
   document,
   stamp,
   purchaseNumber,
 } from "@/lib/catalog-api";
 import { ErrorState, Loading, PageHead } from "../ui";
+import { PurchaseItems } from "./purchase-items";
 export function PurchaseDetailPage({ id }: { id: string }) {
   const [data, setData] = useState<PurchaseDetail | null>(null),
     [error, setError] = useState(""),
@@ -51,21 +52,26 @@ export function PurchaseDetailPage({ id }: { id: string }) {
     setBusy("records");
     setLinkedError("");
     try {
-      const value = await api<{ records: PublicRecordSummary[] }>(
-        `/purchases/${id}/records/refresh`,
-        { method: "POST", body: "{}" },
-      );
+      const value = await api<{
+        records: PublicRecordSummary[];
+        recordsLookup?: RecordsLookup;
+      }>(`/purchases/${id}/records/refresh`, { method: "POST", body: "{}" });
       setData((old) =>
         old
           ? {
               ...old,
               linkedRecords: value.records,
+              recordsLookup: value.recordsLookup ?? null,
               recordsSyncedAt: new Date().toISOString(),
             }
           : old,
       );
     } catch (e) {
-      setLinkedError((e as Error).message);
+      setLinkedError(
+        e instanceof ApiError && e.status > 0 && e.status < 500
+          ? e.message
+          : "Não conseguimos concluir a consulta no Compras.gov.br. Tente novamente em instantes. As atas já salvas continuam disponíveis.",
+      );
     } finally {
       setBusy("");
     }
@@ -164,125 +170,11 @@ export function PurchaseDetailPage({ id }: { id: string }) {
             </div>
           </dl>
         </section>
-        <section className="detail-section">
-          <div className="section-heading">
-            <h2>Itens e resultados</h2>
-            <span className="tiny-label">
-              {data.detailsSyncedAt
-                ? `${data.items.length} ITENS SALVOS`
-                : "NÃO CONSULTADO"}
-            </span>
-          </div>
-          {!data.detailsSyncedAt && (
-            <p className="catalog-notice">
-              Detalhes ainda não consultados. Use “Atualizar detalhes” para
-              consultar a fonte pública.
-            </p>
-          )}
-          {data.detailsSyncedAt && !data.items.length && (
-            <p className="muted">
-              Nenhum item informado na última consulta bem sucedida.
-            </p>
-          )}
-          {data.items.map((item, index) => (
-            <article
-              className="catalog-purchase-item"
-              key={`${item.externalId}-${index}`}
-            >
-              <div className="section-heading">
-                <div>
-                  <div className="eyebrow">
-                    ITEM {item.number} · {known(item.status)}
-                  </div>
-                  <h3>{known(item.description)}</h3>
-                </div>
-              </div>
-              <dl className="catalog-item-facts">
-                <div>
-                  <dt>Unidade</dt>
-                  <dd>{known(item.unit)}</dd>
-                </div>
-                <div>
-                  <dt>Quantidade</dt>
-                  <dd>{quantity(item.quantity)}</dd>
-                </div>
-                <div>
-                  <dt>Preço estimado</dt>
-                  <dd>{currency(item.estimatedUnitPrice)}</dd>
-                </div>
-                <div>
-                  <dt>Total estimado</dt>
-                  <dd>{currency(item.estimatedTotal)}</dd>
-                </div>
-              </dl>
-              {!item.results.length ? (
-                <p className="muted">
-                  Nenhum resultado informado na consulta salva.
-                </p>
-              ) : (
-                <div className="table-scroll">
-                  <table className="result-table">
-                    <caption>
-                      Resultados informados para o item {item.number}
-                    </caption>
-                    <thead>
-                      <tr>
-                        <th>Fornecedor</th>
-                        <th>Quantidade</th>
-                        <th>Preço unitário</th>
-                        <th>Total</th>
-                        <th>Resultado</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {item.results.map((result, i) => (
-                        <tr
-                          key={`${result.externalId}-${i}`}
-                          className={result.cancelled ? "cancelled-result" : ""}
-                        >
-                          <td>
-                            <strong>{known(result.supplierName)}</strong>
-                            <small className="date-end">
-                              {document(result.supplierDocument)}
-                            </small>
-                          </td>
-                          <td>{quantity(result.quantity)}</td>
-                          <td className="amount">
-                            {currency(result.unitPrice)}
-                          </td>
-                          <td className="amount">
-                            {currency(result.totalValue)}
-                          </td>
-                          <td>
-                            {result.cancelled ? (
-                              <>
-                                <span className="status expired">
-                                  <i />
-                                  Cancelado
-                                </span>
-                                <small className="date-end">
-                                  {date(result.cancelledAt)}
-                                </small>
-                              </>
-                            ) : (
-                              <>
-                                <span>{known(result.status)}</span>
-                                <small className="date-end">
-                                  Resultado informado ·{" "}
-                                  {date(result.resultDate)}
-                                </small>
-                              </>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </article>
-          ))}
-        </section>
+        <PurchaseItems
+          key={`${id}:${data.detailsSyncedAt}`}
+          items={data.items}
+          detailsSyncedAt={data.detailsSyncedAt}
+        />
         <section className="detail-section">
           <div className="section-heading">
             <div>
@@ -312,17 +204,55 @@ export function PurchaseDetailPage({ id }: { id: string }) {
               A consulta de atas vinculadas exige SRP confirmado.
             </p>
           )}
-          {data.srp === true && !data.recordsSyncedAt && (
+          {data.srp === true && !data.recordsSyncedAt && !linkedError && (
             <p className="catalog-notice">
               Atas vinculadas ainda não consultadas.
             </p>
           )}
-          {linkedError && <ErrorState message={linkedError} retry={linked} />}{" "}
-          {data.recordsSyncedAt && !data.linkedRecords.length && (
-            <p className="muted">
-              Nenhuma ata vinculada encontrada na última consulta bem sucedida.
-            </p>
+          {linkedError && (
+            <ErrorState
+              title="Não foi possível consultar as atas deste pregão"
+              message={linkedError}
+              retry={linked}
+            />
           )}
+          {!!data.recordsLookup?.incompleteRecords.length && (
+            <div className="catalog-notice" role="status">
+              <strong>
+                Consulta parcial: {data.recordsLookup.incompleteRecords.length}{" "}
+                {data.recordsLookup.incompleteRecords.length === 1
+                  ? "ata sem identificador PNCP"
+                  : "atas sem identificador PNCP"}
+              </strong>
+              <p>
+                O Compras.gov.br retornou registros incompletos. Somente as atas
+                identificadas podem ser abertas. Consulte novamente mais tarde
+                para verificar atualizações.
+              </p>
+              <p>
+                Números informados:{" "}
+                {data.recordsLookup.incompleteRecords
+                  .map((record) => record.number || "Não informado")
+                  .join(", ")}
+                .
+              </p>
+            </div>
+          )}
+          {data.recordsSyncedAt &&
+            !data.linkedRecords.length &&
+            !data.recordsLookup?.incompleteRecords.length &&
+            !linkedError && (
+              <div className="catalog-notice" role="status">
+                <strong>
+                  Nenhuma ata publicada encontrada para este pregão.
+                </strong>
+                <p>
+                  A última consulta ao Compras.gov.br não retornou atas
+                  vinculadas. Novas publicações podem aparecer em consultas
+                  futuras; você pode consultar novamente mais tarde.
+                </p>
+              </div>
+            )}
           {data.linkedRecords.length > 0 && (
             <div className="catalog-linked-list">
               {data.linkedRecords.map((record) => (

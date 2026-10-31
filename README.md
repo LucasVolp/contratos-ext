@@ -25,7 +25,7 @@ O seed é opcional e idempotente; não substitui exemplos já editados nem seu h
 
 **Contratos:** cadastre um contrato ou importe por UASG e período. Consulte fornecedor, objeto, valores e vigência; pesquise e filtre a listagem. A situação é calculada por data, sem necessidade de atualização manual.
 
-**Pregões:** consulte por UASG e período de publicação. A consulta salva os dados no banco local. Abra o pregão para atualizar detalhes, examinar todos os resultados dos itens, identificar cancelamentos e consultar atas vinculadas quando houver registro de preços (SRP). O vínculo usa os identificadores públicos completos da compra.
+**Pregões:** consulte por UASG e período de publicação. A consulta salva os dados no banco local. Abra o pregão para atualizar detalhes, examinar os itens com paginação e busca por número, descrição ou fornecedor, identificar cancelamentos e consultar atas vinculadas quando houver registro de preços (SRP). O vínculo usa os identificadores públicos completos da compra. Quando a fonte retorna algumas atas sem controle PNCP, as identificadas continuam disponíveis e a tela informa quais registros vieram incompletos, sem confundir essa situação com ausência de atas.
 
 **Atas publicadas:** consulte por UASG e início da vigência. No detalhe, atualize os itens e consulte participantes, empenhos/saldos e adesões por item. Cada consulta auxiliar informa separadamente seu resultado, erro e última consulta salva. Os dados auxiliares têm o escopo do item da ata quando a fonte não distingue o fornecedor. Para preparar um documento, selecione um fornecedor: a mesma ata oficial pode originar documentos distintos para cada fornecedor.
 

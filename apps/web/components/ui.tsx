@@ -16,7 +16,8 @@ export function focusInvalid(errors: FieldErrors) {
   const key = Object.keys(errors)[0];
   const inputName = key?.replace(/^items\.(\d+)\.(.+)$/, "item-$1-$2");
   const input = document.getElementsByName(inputName)[0] as
-    HTMLElement | undefined;
+    | HTMLElement
+    | undefined;
   let ancestor = input?.parentElement;
   while (ancestor) {
     if (ancestor instanceof HTMLDetailsElement) ancestor.open = true;
@@ -69,13 +70,15 @@ export function PageHead({
 export function ErrorState({
   message,
   retry,
+  title = "Não foi possível concluir",
 }: {
   message: string;
   retry?: () => void;
+  title?: string;
 }) {
   return (
     <div className="error-state" role="alert">
-      <strong>Não foi possível concluir</strong>
+      <strong>{title}</strong>
       <p>{message}</p>
       {retry && (
         <button type="button" className="button secondary" onClick={retry}>

@@ -125,13 +125,17 @@ test("catalog HTTP snapshots, cross-year links, supplements and supplier drafts 
               niFornecedor: supplierC,
               dataCancelamentoPncp: "2026-01-01T10:00:00",
             },
-            ...(reactivateCancelled ? [{
-              idCompra: marker,
-              idCompraItem: rawItems[0].idCompraItem,
-              sequencialResultado: 4,
-              niFornecedor: supplierC,
-              cancelado: false,
-            }] : []),
+            ...(reactivateCancelled
+              ? [
+                  {
+                    idCompra: marker,
+                    idCompraItem: rawItems[0].idCompraItem,
+                    sequencialResultado: 4,
+                    niFornecedor: supplierC,
+                    cancelado: false,
+                  },
+                ]
+              : []),
           ],
         };
       },
@@ -140,6 +144,11 @@ test("catalog HTTP snapshots, cross-year links, supplements and supplier drafts 
         assert.equal(to, "2026-12-31");
         return [
           ata,
+          {
+            ...ata,
+            numeroControlePncpAta: null,
+            numeroAtaRegistroPreco: "INCOMPLETE",
+          },
           {
             ...ata,
             numeroControlePncpAta: `OTHER-${marker}`,
@@ -152,12 +161,12 @@ test("catalog HTTP snapshots, cross-year links, supplements and supplier drafts 
       units: async (_number: string, _uasg: string, item: string) => {
         assert.equal(item, "00001");
         return [
-        {
-          codigoUnidade: "999999",
-          nomeUnidade: "Participante",
-          fornecedor: supplierA,
-          quantidadeRegistrada: "0.1",
-        },
+          {
+            codigoUnidade: "999999",
+            nomeUnidade: "Participante",
+            fornecedor: supplierA,
+            quantidadeRegistrada: "0.1",
+          },
         ];
       },
       commitments: async () => [
@@ -210,6 +219,14 @@ test("catalog HTTP snapshots, cross-year links, supplements and supplier drafts 
     failDetail = false;
     const linked = await call(`/purchases/${id}/records/refresh`, "POST", {});
     assert.equal(linked.total, 1);
+    assert.deepEqual(linked.recordsLookup, {
+      incompleteRecords: [{ number: "INCOMPLETE" }],
+    });
+    const refreshedPurchase = await call(`/purchases/${id}/refresh`, "POST");
+    assert.deepEqual(refreshedPurchase.recordsLookup, linked.recordsLookup);
+    const readPurchase = await call(`/purchases/${id}`);
+    assert.equal(readPurchase.items[0].results.length, 3);
+    assert.deepEqual(readPurchase.recordsLookup, linked.recordsLookup);
     assert.equal(
       await db.publicRecord.count({ where: { externalId: `OTHER-${marker}` } }),
       0,
@@ -221,7 +238,10 @@ test("catalog HTTP snapshots, cross-year links, supplements and supplier drafts 
     assert.equal(record.processNumber, "Processo público");
     assert.equal(record.suppliers.length, 3);
     assert.equal(record.linkedPurchaseId, id);
-    let aux = await call(`/public-records/${recordId}/items/00001/refresh`, "POST");
+    let aux = await call(
+      `/public-records/${recordId}/items/00001/refresh`,
+      "POST",
+    );
     assert.equal(aux.commitments.data.length, 1);
     assert.equal(aux.commitments.data[0].quantity, "0.1");
     assert.equal(aux.adhesions.status, "loaded");
@@ -231,9 +251,10 @@ test("catalog HTTP snapshots, cross-year links, supplements and supplier drafts 
     assert.equal(aux.adhesions.status, "error");
     assert.equal(aux.adhesions.data[0].quantity, "0.02");
     assert.ok(aux.adhesions.lastSyncedAt);
-    const cancelledDraft = () => req(`/public-records/${recordId}/draft`, "POST", {
-      supplierDocument: supplierC,
-    });
+    const cancelledDraft = () =>
+      req(`/public-records/${recordId}/draft`, "POST", {
+        supplierDocument: supplierC,
+      });
     assert.equal((await cancelledDraft()).status, 422);
     await call(`/public-records/${recordId}`);
     assert.equal((await cancelledDraft()).status, 422);
@@ -241,9 +262,17 @@ test("catalog HTTP snapshots, cross-year links, supplements and supplier drafts 
     failDetail = true;
     await call(`/public-records/${recordId}/refresh`, "POST");
     assert.equal((await cancelledDraft()).status, 422);
-    const savedRecord = await db.publicRecord.findUniqueOrThrow({ where: { id: recordId } });
-    assert.ok((savedRecord.snapshot as any).purchaseResultStates.some((state: any) =>
-      state.itemNumber === "1" && state.supplierDocument === supplierC && state.cancelled));
+    const savedRecord = await db.publicRecord.findUniqueOrThrow({
+      where: { id: recordId },
+    });
+    assert.ok(
+      (savedRecord.snapshot as any).purchaseResultStates.some(
+        (state: any) =>
+          state.itemNumber === "1" &&
+          state.supplierDocument === supplierC &&
+          state.cancelled,
+      ),
+    );
     failDetail = false;
     const first = await call(`/public-records/${recordId}/draft`, "POST", {
       supplierDocument: supplierA,
@@ -256,9 +285,13 @@ test("catalog HTTP snapshots, cross-year links, supplements and supplier drafts 
     // Another result for the same item and supplier prevents an all-cancelled state.
     reactivateCancelled = true;
     await call(`/public-records/${recordId}/refresh`, "POST");
-    const reactivated = await call(`/public-records/${recordId}/draft`, "POST", {
-      supplierDocument: supplierC,
-    });
+    const reactivated = await call(
+      `/public-records/${recordId}/draft`,
+      "POST",
+      {
+        supplierDocument: supplierC,
+      },
+    );
     assert.equal(reactivated.created, true);
     const draft = await call(`/records/${first.id}`);
     assert.equal(draft.number, marker);

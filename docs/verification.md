@@ -5,14 +5,14 @@ Verificado em 31/10/2026. Branch: `feat/public-catalog-and-validation`.
 ## Resultado final
 
 - Imagens Docker de API e web construídas; PostgreSQL, API e web saudáveis, Gotenberg ativo.
-- `pnpm test`: 9 testes de validação compartilhada, 53 unitários da API e 2 regressões executando o CommonJS compilado, todos passando.
+- `pnpm test`: 9 testes de validação compartilhada, 57 unitários da API e 2 regressões executando o CommonJS compilado, todos passando.
 - `pnpm --filter @contracts/api test:integration`: 2 integrações HTTP com PostgreSQL, passando.
-- `pnpm test:e2e`: 21 fluxos passando contra os containers de produção.
+- `pnpm test:e2e`: 23 fluxos passando contra os containers de produção.
 - `pnpm lint`: ESLint e TypeScript do frontend e TypeScript da API, passando.
 - Build de produção do frontend e build compilado da API passando.
 - `docker compose config --quiet` e verificação de whitespace das alterações finais sem erros. A migration gerada pelo Prisma foi preservada após aplicação, incluindo sua linha final vazia.
 
-Total: **87 testes automatizados aprovados**.
+Total: **93 testes automatizados aprovados**.
 
 ## Ampliação verificada
 
@@ -44,3 +44,12 @@ Os testes preservam CRUD, prontidão, documentos e recuperação de falhas da ba
 - Modelo Word v2 preservado: a inspeção anterior de suas 7 páginas permanece válida; esta ampliação não altera estrutura ou cláusulas. A geração DOCX/PDF real e o histórico passaram novamente nos fluxos ponta a ponta.
 
 Os testes de integração pública usam transportes simulados; não dependem do governo. As consultas reais acima foram verificações separadas. As fixtures de navegador são isoladas e removidas ao final. Permaneceram no catálogo local os dados públicos reais consultados, disponíveis para revisão na interface.
+
+
+## Correção dos detalhes do pregão 90260/2025
+
+Caso real informado pelo usuário: UUID local `d932468e-3d4a-4c5c-95a1-1e12f4572361`, UASG 158132, idCompra `15813205902602025`. A fonte retornou 279 registros da unidade, dos quais 44 pertencem ao pregão e 15 estão sem controle PNCP. A consulta agora salva as 29 atas identificadas e informa separadamente as 15 incompletas, sem inventar identificadores ou falhar toda a importação. O aviso persiste após GET/recarregamento e atualização dos detalhes. Mesclas JSONB transacionais preservam as seções independentes do snapshot.
+
+Os 223 itens salvos do pregão são apresentados com 5 por página por padrão, opções 5/10/25, busca por número/descrição/fornecedor e controles no início e no fim. Mudar página ou buscar não consulta novamente o governo. Resultados e cancelamentos continuam completos por item. Mensagens diferenciam ausência confirmada, consulta parcial e indisponibilidade, com nova tentativa e preservação do cache.
+
+Verificação: 4 novas regressões unitárias, integração PostgreSQL/HTTP ampliada e 2 novos fluxos de navegador, com RED observado antes das correções. Suíte final: 9 validações + 57 unitários API + 2 CommonJS + 2 integrações + 23 E2E = 93 testes. Build Docker e lint passando. Consulta real em Docker retornou 29 atas e 15 incompletas; GET e recarregamento preservaram os dados. Inspeção visual desktop e móvel: apenas 5 itens renderizados; viewport e scrollWidth de 390px no celular.
