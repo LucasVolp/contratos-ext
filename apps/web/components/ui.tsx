@@ -180,6 +180,7 @@ export function Field({
 }) {
   const context = useContext(FormValidation);
   const [focused, setFocused] = useState(false);
+  const [focusedDraft, setFocusedDraft] = useState("");
   const [localError, setLocalError] = useState("");
   const key = name.replace(/^item-(\d+)-(.+)$/, "items.$1.$2");
   const message = context.errors[key] || error || localError;
@@ -203,8 +204,12 @@ export function Field({
   const raw = String(value ?? "");
   const display = documentField
     ? maskDocument(raw, name === "organizationDocument")
-    : type === "decimal" && !focused && raw
-      ? formatDecimal(raw, monetary)
+    : type === "decimal"
+      ? focused
+        ? focusedDraft
+        : raw
+          ? formatDecimal(raw, monetary)
+          : raw
       : raw;
   const blur = () => {
     setFocused(false);
@@ -230,7 +235,13 @@ export function Field({
       [help && `${name}-hint`, message && `${name}-error`]
         .filter(Boolean)
         .join(" ") || undefined,
-    onFocus: () => setFocused(true),
+    onFocus: (
+      event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>,
+    ) => {
+      // Keep the DOM value stable so focusing preserves selection and caret.
+      setFocusedDraft(event.currentTarget.value);
+      setFocused(true);
+    },
     onBlur: blur,
   };
   return (
@@ -273,6 +284,7 @@ export function Field({
             setLocalError("");
             const input = e.currentTarget;
             let next = input.value;
+            if (type === "decimal") setFocusedDraft(next);
             const position = input.selectionStart ?? next.length;
             const count = next
               .slice(0, position)
