@@ -19,11 +19,19 @@ test.beforeEach(async ({page,request})=>{
 test("pregões listam dados salvos, todos resultados e atas ligadas pelo identificador exato", async ({
   page,
 }) => {
-  await page.goto("/pregoes");
-  await expect(
-    page.getByRole("heading", { name: "Pregões", exact: true }),
-  ).toBeVisible();
+  await page.goto("/");
+  // The app opens on the first purchase phase.
+  await expect(page).toHaveURL(/\/pregoes$/);
+  await expect(page.getByRole("link", { name: /Fase 1: Pregão/ })).toHaveAttribute("aria-current", "page");
+  // The sidebar names the section; listings open on their figures, without a title repeating it.
+  await expect(page.getByRole("heading", { name: "Pregões", exact: true })).toHaveCount(0);
   await page.getByRole("textbox", { name: "Buscar pregões" }).fill(fixture.key);
+  // Both fixture pregões: estimated 3 and awarded 2 each, only one with registro de preços.
+  const summary = page.getByRole("region", { name: "Resumo dos pregões" });
+  await expect(summary).toContainText("2pregões");
+  await expect(summary).toContainText("−33%");
+  await expect(summary.getByRole("img")).toHaveAttribute("aria-label", "Estimado R$ 6,00; homologado R$ 4,00");
+  await expect(summary).toContainText("1com registro de preços");
   await page.getByRole("link", { name: fixture.key, exact: true }).click();
   await expect(
     page.getByText("Papel de teste do catálogo", { exact: true }).first(),
@@ -220,6 +228,17 @@ test("catálogos e navegação cabem no celular com dados carregados", async ({
       () => document.documentElement.scrollWidth <= innerWidth + 1,
     ),
   ).toBe(true);
+  await page.goto("/atas/publicadas");
+  await page.getByRole("textbox", { name: "Buscar atas publicadas" }).fill(fixture.key);
+  // Fixture atas run from 2026-01-01 to 2027-01-01.
+  const published = page.getByRole("region", { name: "Resumo das atas publicadas" });
+  await expect(published).toContainText("2atas");
+  await expect(published.getByRole("img")).toHaveAttribute("aria-label", /encerradas/);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth + 1,
+    ),
+  ).toBe(true);
   await page.goto(`/atas/publicadas/${fixture.recordId}`);
   await expect(
     page.getByRole("heading", { name: fixture.recordNumber, exact: true }),
@@ -231,44 +250,53 @@ test("catálogos e navegação cabem no celular com dados carregados", async ({
   ).toBe(true);
 });
 
-test("consultas de catálogo validam os campos e preservam zeros da UASG", async ({
+test("atualização pelo Compras.gov valida o período antes de consultar a abrangência", async ({
   page,
 }) => {
-  let sent: { uasg: string; from: string; to: string } | undefined;
-  await page.route("**/api/purchases/sync", async (route) => {
+  let sent: Record<string, string> | undefined;
+  await page.route("**/api/purchases/sync-reach", async (route) => {
     sent = route.request().postDataJSON();
     await route.fulfill({
       status: 201,
       contentType: "application/json",
-      body: JSON.stringify({ created: 0, updated: 0, total: 0 }),
+      body: JSON.stringify({
+        from: sent!.from,
+        to: sent!.to,
+        created: 1,
+        updated: 0,
+        total: 1,
+        incomplete: 0,
+        failed: 1,
+        results: [
+          { uasg: "158132", name: "Reitoria de teste", created: 1, updated: 0, total: 1, incomplete: 0, error: null },
+          { uasg: "158454", name: "Campus de teste", created: 0, updated: 0, total: 0, incomplete: 0, error: "Fonte indisponível." },
+        ],
+      }),
     });
   });
-  await page.goto("/pregoes/consultar");
-  await page.locator('[name="uasg"]').fill("12");
-  await page.locator('[name="from"]').fill("2026-12-01");
-  await page.locator('[name="to"]').fill("2026-01-01");
-  await page
-    .getByRole("button", { name: "Consultar pregões", exact: true })
-    .click();
-  await expect(page.locator('[name="uasg"]')).toHaveAttribute(
-    "aria-invalid",
-    "true",
-  );
-  await expect(page.locator('[name="to"]')).toHaveAttribute(
-    "aria-invalid",
-    "true",
-  );
-  await expect(page.locator('[name="uasg"]')).toBeFocused();
+  await page.goto("/pregoes");
+  await expect(page).toHaveURL(/\/pregoes$/);
+  await page.getByRole("button", { name: "Atualizar do Compras.gov" }).first().click();
+  const form = page.getByRole("form", { name: "Atualizar do Compras.gov" });
+  await form.locator('[name="from"]').fill("2026-12-01");
+  await form.locator('[name="to"]').fill("2026-01-01");
+  await form.getByRole("button", { name: "Atualizar agora" }).click();
+  await expect(form.locator('[name="to"]')).toHaveAttribute("aria-invalid", "true");
   expect(sent).toBeUndefined();
-  await page.locator('[name="uasg"]').fill("001234");
-  await page.locator('[name="from"]').fill("2026-01-01");
-  await page.locator('[name="to"]').fill("2026-01-31");
-  await page
-    .getByRole("button", { name: "Consultar pregões", exact: true })
-    .click();
-  await expect
-    .poll(() => sent)
-    .toEqual({ uasg: "001234", from: "2026-01-01", to: "2026-01-31" });
+  await form.locator('[name="from"]').fill("2026-01-01");
+  await form.locator('[name="to"]').fill("2026-01-31");
+  await form.getByRole("button", { name: "Atualizar agora" }).click();
+  await expect.poll(() => sent?.from).toBe("2026-01-01");
+  expect(sent?.to).toBe("2026-01-31");
+  // A failing UASG is reported without hiding the ones that worked.
+  await expect(form.getByRole("alert")).toContainText("1 de 2 UASGs");
+  await expect(form).toContainText("Fonte indisponível.");
+  // The standalone consultation pages no longer exist.
+  for (const path of ["/pregoes/consultar", "/atas/publicadas/consultar"]) {
+    await page.goto(path);
+    await expect(page.getByText("Este caminho não está no arquivo.")).toBeVisible();
+    await expect(page.getByText(/uuid is expected/i)).toHaveCount(0);
+  }
 });
 
 test("itens do pregão são paginados após atualização e a busca não consulta novamente a fonte", async ({

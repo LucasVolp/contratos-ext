@@ -139,7 +139,6 @@ export function DetailPage({
   return (
     <>
       <PageHead
-        section={records ? "Atas & documentos" : "Contratos"}
         title={data.number}
         description={
           records ? "Ata de registro de preços" : "Ficha do contrato"

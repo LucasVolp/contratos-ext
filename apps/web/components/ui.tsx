@@ -25,46 +25,106 @@ export function focusInvalid(errors: FieldErrors) {
   }
   input?.focus();
 }
-import { ArrowLeft, ArrowRight, Plus, RefreshCw } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Building2,
+  Plus,
+  RefreshCw,
+} from "lucide-react";
 import { statusLabels } from "@/lib/api";
+import { institutionLabel, useSession, type Reach } from "@/lib/session";
+export function ReachSelect({
+  reach,
+  onChange,
+}: {
+  reach: Reach;
+  onChange?: () => void;
+}) {
+  if (reach.options.length < 2) return null;
+  return (
+    <select
+      aria-label="Abrangência da busca"
+      className="reach-select"
+      value={reach.key}
+      onChange={(e) => {
+        reach.setKey(e.target.value);
+        onChange?.();
+      }}
+    >
+      {reach.options.map((option) => (
+        <option key={option.key} value={option.key}>
+          {option.name}
+          {option.uasgs &&
+            ` · ${option.uasgs.length} ${option.uasgs.length === 1 ? "UASG" : "UASGs"}`}
+          {option.isDefault && " (padrão)"}
+        </option>
+      ))}
+    </select>
+  );
+}
+/** Header for a single record or form: the title names the record or the action, never the section. */
 export function PageHead({
-  section,
   title,
   description,
   children,
   back,
 }: {
-  section: string;
   title: string;
   description?: string;
   children?: React.ReactNode;
   back?: string;
 }) {
   return (
-    <>
-      <div className="breadcrumb">
-        Área de trabalho <span>/</span> {section}
+    <header className="page-head">
+      <div>
+        {back && (
+          <Link className="back" href={back}>
+            <ArrowLeft size={14} /> Voltar
+          </Link>
+        )}
+        <h1>{title}</h1>
+        {description && <p>{description}</p>}
       </div>
-      <header className="page-head">
-        <div>
-          {back && (
-            <Link className="back" href={back}>
-              <ArrowLeft size={14} /> Voltar
-            </Link>
-          )}
-          <div className="eyebrow">
-            {section === "Contratos"
-              ? "01 — GESTÃO CONTRATUAL"
-              : section === "Pregões"
-                ? "02 — CATÁLOGO DE COMPRAS"
-                : "03 — ARQUIVO DOCUMENTAL"}
-          </div>
-          <h1>{title}</h1>
-          {description && <p>{description}</p>}
-        </div>
-        <div className="head-actions">{children}</div>
-      </header>
-    </>
+      <div className="head-actions">{children}</div>
+    </header>
+  );
+}
+/** Slim top bar for listings: what is in view on the left, actions on the right. The sidebar names the page. */
+export function PageBar({
+  context,
+  children,
+}: {
+  context?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <header className="page-bar">
+      <div className="page-bar-context">{context}</div>
+      <div className="head-actions">{children}</div>
+    </header>
+  );
+}
+/** Reach selector for unrestricted viewers; otherwise the fixed reach of the viewer's institutions. */
+export function ReachContext({
+  reach,
+  onChange,
+}: {
+  reach: Reach;
+  onChange?: () => void;
+}) {
+  const { viewer } = useSession();
+  if (reach.options.length > 1)
+    return <ReachSelect reach={reach} onChange={onChange} />;
+  return (
+    <span className="reach-label">
+      <Building2 size={15} />
+      {viewer.allInstitutions
+        ? "Todas as instituições"
+        : viewer.institutions.length === 1
+          ? institutionLabel(viewer.institutions[0])
+          : `${viewer.institutions.length} instituições vinculadas`}
+    </span>
   );
 }
 export function ErrorState({
@@ -232,9 +292,13 @@ export function Field({
       { number: "ok", object: "ok", uasg: "000001", [name]: raw },
       "record",
     );
+    // Blur reuses the record rules for format; whether emptiness is an error
+    // depends only on this field's `required`, since filters reuse the same names.
     setLocalError(
-      required && !raw.trim()
-        ? "Preencha este campo obrigatório."
+      !raw.trim()
+        ? required
+          ? "Preencha este campo obrigatório."
+          : ""
         : errors[name] || "",
     );
     context.onBlur?.(key);

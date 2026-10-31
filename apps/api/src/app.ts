@@ -20,7 +20,7 @@ import {
   Res,
   ServiceUnavailableException,
 } from "@nestjs/common";
-import { NestFactory } from "@nestjs/core";
+import { APP_GUARD, NestFactory, Reflector } from "@nestjs/core";
 import type { Response } from "express";
 import { ApplicationService } from "./service";
 import { DocumentService } from "./documents";
@@ -32,6 +32,16 @@ import {
   PurchasesController,
   PublicRecordsController,
 } from "./catalog/controller";
+import { AuthService } from "./auth/service";
+import { DirectoryService } from "./auth/directory";
+import { PublicUnits } from "./auth/public-units";
+import { AuthGuard, CurrentScope, Public } from "./auth/guard";
+import type { Scope } from "./auth/access";
+import {
+  AuthController,
+  InstitutionsController,
+  UsersController,
+} from "./auth/controller";
 
 @Catch()
 class ApiErrors implements ExceptionFilter {
@@ -80,26 +90,33 @@ class ContractsController {
   constructor(
     @Inject(ApplicationService) private readonly app: ApplicationService,
   ) {}
-  @Get() list(@Query() query: Data) {
-    return this.app.contracts(query);
+  @Get() list(@Query() query: Data, @CurrentScope() scope: Scope) {
+    return this.app.contracts(query, scope);
   }
-  @Post("import") import(@Body() body: Data) {
-    return this.app.importContracts(body);
+  @Post("import") import(@Body() body: Data, @CurrentScope() scope: Scope) {
+    return this.app.importContracts(body, scope);
   }
-  @Post() create(@Body() body: Data) {
-    return this.app.saveContract(null, body);
+  @Post() create(@Body() body: Data, @CurrentScope() scope: Scope) {
+    return this.app.saveContract(null, body, scope);
   }
-  @Get(":id") get(@Param("id", new ParseUUIDPipe()) id: string) {
-    return this.app.contract(id);
+  @Get(":id") get(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @CurrentScope() scope: Scope,
+  ) {
+    return this.app.contract(id, scope);
   }
   @Put(":id") update(
     @Param("id", new ParseUUIDPipe()) id: string,
     @Body() body: Data,
+    @CurrentScope() scope: Scope,
   ) {
-    return this.app.saveContract(id, body);
+    return this.app.saveContract(id, body, scope);
   }
-  @Delete(":id") delete(@Param("id", new ParseUUIDPipe()) id: string) {
-    return this.app.deleteContract(id);
+  @Delete(":id") delete(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @CurrentScope() scope: Scope,
+  ) {
+    return this.app.deleteContract(id, scope);
   }
 }
 @Controller("records")
@@ -108,31 +125,36 @@ class RecordsController {
     @Inject(ApplicationService) private readonly app: ApplicationService,
     @Inject(DocumentService) private readonly documents: DocumentService,
   ) {}
-  @Get() list(@Query() query: Data) {
-    return this.app.records(query);
+  @Get() list(@Query() query: Data, @CurrentScope() scope: Scope) {
+    return this.app.records(query, scope);
   }
-  @Post("import") import(@Body() body: Data) {
-    return this.app.importRecord(body);
+  @Post("import") import(@Body() body: Data, @CurrentScope() scope: Scope) {
+    return this.app.importRecord(body, scope);
   }
-  @Post() create(@Body() body: Data) {
-    return this.app.saveRecord(null, body);
+  @Post() create(@Body() body: Data, @CurrentScope() scope: Scope) {
+    return this.app.saveRecord(null, body, scope);
   }
   @Get(":id/readiness") async ready(
     @Param("id", new ParseUUIDPipe()) id: string,
+    @CurrentScope() scope: Scope,
     @Query("itemId") itemId?: string,
   ) {
-    return readiness(await this.app.record(id), itemId);
+    return readiness(await this.app.record(id, scope), itemId);
   }
-  @Get(":id/exports") exports(@Param("id", new ParseUUIDPipe()) id: string) {
-    return this.app.exports(id);
+  @Get(":id/exports") exports(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @CurrentScope() scope: Scope,
+  ) {
+    return this.app.exports(id, scope);
   }
   @Get(":id/document") async document(
     @Param("id", new ParseUUIDPipe()) id: string,
     @Query("format") format: string = "docx",
     @Query("itemId") itemId: string | undefined,
+    @CurrentScope() scope: Scope,
     @Res() response: Response,
   ) {
-    const result = await this.documents.generate(id, format, itemId);
+    const result = await this.documents.generate(id, format, itemId, scope);
     response.set({
       "Content-Type": result.contentType,
       "Content-Disposition": `attachment; filename="${result.filename}"`,
@@ -141,23 +163,30 @@ class RecordsController {
     });
     response.end(result.buffer);
   }
-  @Get(":id") get(@Param("id", new ParseUUIDPipe()) id: string) {
-    return this.app.record(id);
+  @Get(":id") get(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @CurrentScope() scope: Scope,
+  ) {
+    return this.app.record(id, scope);
   }
   @Put(":id") update(
     @Param("id", new ParseUUIDPipe()) id: string,
     @Body() body: Data,
+    @CurrentScope() scope: Scope,
   ) {
-    return this.app.saveRecord(id, body);
+    return this.app.saveRecord(id, body, scope);
   }
-  @Delete(":id") delete(@Param("id", new ParseUUIDPipe()) id: string) {
-    return this.app.deleteRecord(id);
+  @Delete(":id") delete(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @CurrentScope() scope: Scope,
+  ) {
+    return this.app.deleteRecord(id, scope);
   }
 }
 @Controller()
 class HealthController {
   constructor(@Inject(Database) private readonly db: Database) {}
-  @Get("health") async health() {
+  @Public() @Get("health") async health() {
     try {
       await this.db.$queryRaw`SELECT 1`;
       return { status: "ok", database: "ok" };
@@ -175,9 +204,34 @@ class HealthController {
     HealthController,
     PurchasesController,
     PublicRecordsController,
+    AuthController,
+    UsersController,
+    InstitutionsController,
   ],
   providers: [
     Database,
+    {
+      provide: AuthService,
+      useFactory: (db: Database) => new AuthService(db),
+      inject: [Database],
+    },
+    {
+      provide: DirectoryService,
+      useFactory: (db: Database) => new DirectoryService(db),
+      inject: [Database],
+    },
+    {
+      provide: PublicUnits,
+      useFactory: (db: Database) => new PublicUnits(db),
+      inject: [Database],
+    },
+    {
+      // Every route requires a session unless marked @Public().
+      provide: APP_GUARD,
+      useFactory: (reflector: Reflector, auth: AuthService) =>
+        new AuthGuard(reflector, auth),
+      inject: [Reflector, AuthService],
+    },
     { provide: CatalogClient, useFactory: () => new CatalogClient() },
     {
       provide: CatalogService,

@@ -117,7 +117,6 @@ function PurchaseDetailPageContent({ id }: { id: string }) {
   return (
     <>
       <PageHead
-        section="Pregões"
         title={purchaseNumber(data.number, data.year)}
         description="Fonte: Compras.gov.br · dados salvos no arquivo local"
         back="/pregoes"

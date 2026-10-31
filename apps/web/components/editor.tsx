@@ -201,7 +201,6 @@ export function Editor({
     return (
       <>
         <PageHead
-          section={records ? "Atas & documentos" : "Contratos"}
           title={records ? "Editar ata" : "Editar contrato"}
           back={`${root}/${id}`}
         />
@@ -219,7 +218,6 @@ export function Editor({
   return (
     <>
       <PageHead
-        section={records ? "Atas & documentos" : "Contratos"}
         title={`${id ? "Editar" : records ? "Nova" : "Novo"} ${records ? "ata" : "contrato"}`}
         description={
           records

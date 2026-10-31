@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   BadGatewayException,
+  HttpException,
   NotFoundException,
   UnprocessableEntityException,
 } from "@nestjs/common";
@@ -31,6 +32,13 @@ import {
 import { AutomaticRefresh, fresh } from "./automatic";
 import { CatalogDrafts } from "./drafts";
 import { CatalogSupplements, presentSupplement } from "./supplements";
+import {
+  assertUasg,
+  inScope,
+  narrowScope,
+  Scope,
+  uasgWhere,
+} from "../auth/access";
 
 export class CatalogService {
   private readonly automatic = new AutomaticRefresh();
@@ -41,19 +49,19 @@ export class CatalogService {
   ) {
     this.supplements = new CatalogSupplements(db, client);
   }
-  async purchases(query: Raw) {
+  async purchases(query: Raw, scope: Scope) {
     filters(query);
     const { page, limit } = pagination(query);
-    const where: Prisma.PublicPurchaseWhereInput = {};
-    if (query.uasg) where.uasg = String(query.uasg);
+    const filter: Prisma.PublicPurchaseWhereInput = {};
+    if (query.uasg) filter.uasg = String(query.uasg);
     if (query.from || query.to)
-      where.publishedAt = {
+      filter.publishedAt = {
         not: null,
         ...(query.from ? { gte: query.from } : {}),
         ...(query.to ? { lte: query.to } : {}),
       };
     if (query.search)
-      where.OR = [
+      filter.OR = [
         "number",
         "object",
         "processNumber",
@@ -62,7 +70,11 @@ export class CatalogService {
       ].map((key) => ({
         [key]: { contains: String(query.search), mode: "insensitive" },
       }));
-    const [rows, stats, srpCount] = await Promise.all([
+    // The scope stays a separate clause so a requested UASG can only narrow it.
+    const where: Prisma.PublicPurchaseWhereInput = {
+      AND: [uasgWhere(narrowScope(scope, query.uasgs)), filter],
+    };
+    const [rows, stats, srpCount, homologated] = await Promise.all([
       this.db.publicPurchase.findMany({
         where,
         skip: (page - 1) * limit,
@@ -75,6 +87,18 @@ export class CatalogService {
         _sum: { estimatedValue: true, awardedValue: true },
       }),
       this.db.publicPurchase.count({ where: { AND: [where, { srp: true }] } }),
+      // Savings only make sense where both values are known; open pregões would inflate the gap.
+      this.db.publicPurchase.aggregate({
+        where: {
+          AND: [
+            where,
+            { estimatedValue: { not: null } },
+            { awardedValue: { not: null } },
+          ],
+        },
+        _count: { _all: true },
+        _sum: { estimatedValue: true, awardedValue: true },
+      }),
     ]);
     return plain({
       data: rows.map((row) => this.purchaseSummary(row)),
@@ -86,6 +110,11 @@ export class CatalogService {
         srpCount,
         estimatedValue: stats._sum.estimatedValue?.toString() ?? null,
         awardedValue: stats._sum.awardedValue?.toString() ?? null,
+        homologated: {
+          count: homologated._count._all,
+          estimatedValue: homologated._sum.estimatedValue?.toString() ?? null,
+          awardedValue: homologated._sum.awardedValue?.toString() ?? null,
+        },
       },
     });
   }
@@ -95,6 +124,25 @@ export class CatalogService {
       ...result,
       recordsLookup: (snapshot as Raw).recordsLookup ?? null,
     };
+  }
+  /** Rejects identifiers outside the viewer's UASGs before any read or public refresh. */
+  async authorizePurchase(id: string, scope: Scope) {
+    const row = await this.db.publicPurchase.findUnique({
+      where: { id },
+      select: { uasg: true },
+    });
+    if (row && !inScope(scope, row.uasg))
+      throw new NotFoundException("Pregão não encontrado no catálogo local.");
+  }
+  async authorizeRecord(id: string, scope: Scope) {
+    const row = await this.db.publicRecord.findUnique({
+      where: { id },
+      select: { uasg: true },
+    });
+    if (row && !inScope(scope, row.uasg))
+      throw new NotFoundException(
+        "Ata publicada não encontrada no catálogo local.",
+      );
   }
   async purchaseRow(id: string) {
     const row = await this.db.publicPurchase.findUnique({ where: { id } });
@@ -117,8 +165,9 @@ export class CatalogService {
       linkedRecords,
     });
   }
-  async syncPurchases(body: Raw) {
+  async syncPurchases(body: Raw, scope: Scope) {
     const { uasg, from, to } = syncRange(body, 366);
+    assertUasg(scope, uasg);
     const fetched = await this.client.purchases(uasg, from, to);
     const rows = [
       ...new Map(
@@ -218,20 +267,20 @@ export class CatalogService {
       return { ...result, linkedPurchaseId: purchase?.id ?? null };
     });
   }
-  async records(query: Raw) {
+  async records(query: Raw, scope: Scope) {
     filters(query);
     const { page, limit } = pagination(query);
-    const where: Prisma.PublicRecordWhereInput = {};
-    if (query.uasg) where.uasg = String(query.uasg);
+    const filter: Prisma.PublicRecordWhereInput = {};
+    if (query.uasg) filter.uasg = String(query.uasg);
     if (query.from || query.to)
-      where.AND = [
+      filter.AND = [
         { startDate: { not: null } },
         { endDate: { not: null } },
         ...(query.from ? [{ endDate: { gte: String(query.from) } }] : []),
         ...(query.to ? [{ startDate: { lte: String(query.to) } }] : []),
       ];
     if (query.search)
-      where.OR = [
+      filter.OR = [
         "number",
         "object",
         "organizationName",
@@ -240,7 +289,27 @@ export class CatalogService {
       ].map((key) => ({
         [key]: { contains: String(query.search), mode: "insensitive" },
       }));
-    const [rows, stats] = await Promise.all([
+    const where: Prisma.PublicRecordWhereInput = {
+      AND: [uasgWhere(narrowScope(scope, query.uasgs)), filter],
+    };
+    // An ata only serves while in force: split the selection by vigency, with a 90-day warning.
+    const today = new Date().toISOString().slice(0, 10);
+    const horizon = new Date(`${today}T00:00:00Z`);
+    horizon.setUTCDate(horizon.getUTCDate() + 90);
+    const active: Prisma.PublicRecordWhereInput = {
+      AND: [
+        where,
+        { startDate: { lte: today } },
+        { endDate: { gte: today } },
+      ],
+    };
+    const prepared = await this.db.priceRecord.findMany({
+      where: { sourcePublicRecordId: { not: null } },
+      select: { sourcePublicRecordId: true },
+      distinct: ["sourcePublicRecordId"],
+    });
+    const [rows, stats, activeStats, expiring, ended, withDocuments] =
+      await Promise.all([
       this.db.publicRecord.findMany({
         where,
         skip: (page - 1) * limit,
@@ -252,6 +321,33 @@ export class CatalogService {
         _count: { _all: true },
         _sum: { totalValue: true },
       }),
+      this.db.publicRecord.aggregate({
+        where: active,
+        _count: { _all: true },
+        _sum: { totalValue: true },
+      }),
+      this.db.publicRecord.count({
+        where: {
+          AND: [active, { endDate: { lte: horizon.toISOString().slice(0, 10) } }],
+        },
+      }),
+      this.db.publicRecord.count({
+        where: { AND: [where, { endDate: { lt: today } }] },
+      }),
+      this.db.publicRecord.count({
+        where: {
+          AND: [
+            where,
+            {
+              id: {
+                in: prepared
+                  .map((row) => row.sourcePublicRecordId)
+                  .filter((id): id is string => !!id),
+              },
+            },
+          ],
+        },
+      }),
     ]);
     return plain({
       data: await this.recordSummaries(rows),
@@ -261,6 +357,13 @@ export class CatalogService {
       stats: {
         count: stats._count._all,
         totalValue: stats._sum.totalValue?.toString() ?? null,
+        vigency: {
+          active: activeStats._count._all,
+          expiring,
+          ended,
+          activeValue: activeStats._sum.totalValue?.toString() ?? null,
+        },
+        withDocuments,
       },
     });
   }
@@ -338,12 +441,110 @@ export class CatalogService {
       ).values(),
     ];
   }
-  async syncRecords(body: Raw) {
+  async syncRecords(body: Raw, scope: Scope) {
     const { uasg, from, to } = syncRange(body);
-    const rows = this.uniqueRecords(await this.client.records(uasg, from, to));
-    return this.db.$transaction((tx) => this.storeRecords(tx, rows), {
-      timeout: 60000,
+    assertUasg(scope, uasg);
+    const fetched = (await this.client.records(uasg, from, to)).filter(
+      (raw) => !raw.ataExcluido,
+    );
+    // Like the linked-record lookup: identified atas are saved and incomplete ones are reported.
+    const identified = fetched.filter((raw) =>
+      string(raw.numeroControlePncpAta).trim(),
+    );
+    const incompleteRecords = fetched
+      .filter((raw) => !string(raw.numeroControlePncpAta).trim())
+      .map((raw) => ({ number: string(raw.numeroAtaRegistroPreco) }));
+    const rows = this.uniqueRecords(identified);
+    const stored = await this.db.$transaction(
+      (tx) => this.storeRecords(tx, rows),
+      { timeout: 60000 },
+    );
+    return { ...stored, incompleteRecords };
+  }
+  /**
+   * Refreshes every UASG in the viewer's reach (optionally narrowed by `uasgs`) for one period.
+   * Each UASG commits on its own: a failing unit is reported without discarding the others.
+   */
+  async syncReach(kind: "purchases" | "records", body: Raw, scope: Scope) {
+    const requested = narrowScope(scope, body?.uasgs);
+    const institutions = await this.db.institution.findMany({
+      where: requested === null ? {} : { uasg: { in: requested } },
+      select: { uasg: true, name: true },
+      orderBy: { name: "asc" },
     });
+    const names = new Map(institutions.map((i) => [i.uasg, i.name]));
+    const uasgs = (requested ?? institutions.map((i) => i.uasg)).slice().sort(
+      (a, b) =>
+        (names.get(a) ?? a).localeCompare(names.get(b) ?? b, "pt-BR"),
+    );
+    if (!uasgs.length)
+      throw new UnprocessableEntityException(
+        "Nenhuma UASG para atualizar. Vincule instituições ao seu perfil ou cadastre instituições.",
+      );
+    // Validate the period once, with field errors, before any public request.
+    const { from, to } = syncRange(
+      { uasg: uasgs[0], from: body?.from, to: body?.to },
+      kind === "purchases" ? 366 : undefined,
+    );
+    const results: Array<{
+      uasg: string;
+      name: string | null;
+      created: number;
+      updated: number;
+      total: number;
+      incomplete: number;
+      error: string | null;
+    }> = [];
+    const queue = [...uasgs];
+    // A few units at a time keeps the public API load modest and the wait short.
+    await Promise.all(
+      Array.from({ length: Math.min(3, queue.length) }, async () => {
+        for (let uasg = queue.shift(); uasg; uasg = queue.shift()) {
+          const base = { uasg, name: names.get(uasg) ?? null };
+          try {
+            const result =
+              kind === "purchases"
+                ? await this.syncPurchases({ uasg, from, to }, scope)
+                : await this.syncRecords({ uasg, from, to }, scope);
+            results.push({
+              ...base,
+              created: result.created,
+              updated: result.updated,
+              total: result.total,
+              incomplete:
+                (result as { incompleteRecords?: unknown[] }).incompleteRecords
+                  ?.length ?? 0,
+              error: null,
+            });
+          } catch (error) {
+            results.push({
+              ...base,
+              created: 0,
+              updated: 0,
+              total: 0,
+              incomplete: 0,
+              error:
+                error instanceof HttpException
+                  ? error.message
+                  : "Não foi possível consultar esta UASG no Compras.gov. Os dados salvos foram preservados.",
+            });
+          }
+        }
+      }),
+    );
+    results.sort((a, b) => uasgs.indexOf(a.uasg) - uasgs.indexOf(b.uasg));
+    const sum = (key: "created" | "updated" | "total" | "incomplete") =>
+      results.reduce((total, row) => total + row[key], 0);
+    return {
+      from,
+      to,
+      created: sum("created"),
+      updated: sum("updated"),
+      total: sum("total"),
+      incomplete: sum("incomplete"),
+      failed: results.filter((row) => row.error).length,
+      results,
+    };
   }
   async refreshLinkedRecords(id: string, body: Raw = {}) {
     const purchase = await this.purchaseRow(id);

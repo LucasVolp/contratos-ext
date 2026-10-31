@@ -12,10 +12,18 @@ import {
   date,
   importRange,
   pagination,
+  readiness,
   recordTotal,
   validateContract,
   validateRecord,
 } from "./domain";
+import {
+  assertUasg,
+  inScope,
+  narrowScope,
+  Scope,
+  uasgWhere,
+} from "./auth/access";
 import { PrismaClient, Prisma } from "./generated/prisma/client";
 const json = (value: any): any => JSON.parse(JSON.stringify(value));
 export function presentContract(value: Data): Data {
@@ -29,7 +37,7 @@ export class ApplicationService {
     readonly db: PrismaClient,
     readonly external: ComprasClient = new ComprasClient(),
   ) {}
-  async contracts(query: Data) {
+  async contracts(query: Data, scope: Scope) {
     const fieldErrors = validateFilters(query);
     if (Object.keys(fieldErrors).length)
       throw new BadRequestException({
@@ -50,7 +58,9 @@ export class ApplicationService {
       )
     )
       throw new BadRequestException("Status de contrato inválido.");
-    const clauses: Prisma.ContractWhereInput[] = [];
+    const clauses: Prisma.ContractWhereInput[] = [
+      uasgWhere(narrowScope(scope, query.uasgs)),
+    ];
     if (query.uasg) clauses.push({ uasg: String(query.uasg) });
     if (query.search)
       clauses.push({
@@ -94,7 +104,10 @@ export class ApplicationService {
     };
     if (query.status) clauses.push(statusFilters[query.status]);
     const where = { AND: clauses };
-    const [rows, stats, expiringCount] = await Promise.all([
+    const count = (status: string) =>
+      this.db.contract.count({ where: { AND: [where, statusFilters[status]] } });
+    const [rows, stats, expiringCount, active, ended, upcoming, unknown, inForce] =
+      await Promise.all([
       this.db.contract.findMany({
         where,
         skip: (page - 1) * limit,
@@ -106,8 +119,16 @@ export class ApplicationService {
         _count: { _all: true },
         _sum: { globalValue: true },
       }),
-      this.db.contract.count({
-        where: { AND: [where, statusFilters.EXPIRING] },
+      count("EXPIRING"),
+      count("ACTIVE"),
+      count("EXPIRED"),
+      count("UPCOMING"),
+      count("UNKNOWN"),
+      this.db.contract.aggregate({
+        where: {
+          AND: [where, { OR: [statusFilters.ACTIVE, statusFilters.EXPIRING] }],
+        },
+        _sum: { globalValue: true },
       }),
     ]);
     return {
@@ -119,31 +140,44 @@ export class ApplicationService {
         count: stats._count._all,
         totalValue: stats._sum.globalValue?.toString() ?? "0",
         expiringCount,
+        // Whole-filter vigency split; "active" excludes the 30-day expiring window.
+        vigency: {
+          active,
+          expiring: expiringCount,
+          ended,
+          upcoming,
+          unknown,
+          activeValue: inForce._sum.globalValue?.toString() ?? null,
+        },
       },
     };
   }
-  async contract(id: string) {
+  async contract(id: string, scope: Scope) {
     const value = await this.db.contract.findUnique({ where: { id } });
-    if (!value) throw new NotFoundException("Contrato não encontrado.");
+    // Out-of-scope rows answer like missing ones, so other institutions' identifiers are not disclosed.
+    if (!value || !inScope(scope, value.uasg))
+      throw new NotFoundException("Contrato não encontrado.");
     return presentContract(value);
   }
-  async saveContract(id: string | null, body: Data) {
+  async saveContract(id: string | null, body: Data, scope: Scope) {
     const data = validateContract(body) as Prisma.ContractCreateInput;
+    assertUasg(scope, data.uasg);
     if (id) {
-      await this.contract(id);
+      await this.contract(id, scope);
       return presentContract(
         await this.db.contract.update({ where: { id }, data }),
       );
     }
     return presentContract(await this.db.contract.create({ data }));
   }
-  async deleteContract(id: string) {
-    await this.contract(id);
+  async deleteContract(id: string, scope: Scope) {
+    await this.contract(id, scope);
     await this.db.contract.delete({ where: { id } });
     return { deleted: true };
   }
-  async importContracts(body: Data) {
+  async importContracts(body: Data, scope: Scope) {
     const { uasg, from, to } = importRange(body);
+    assertUasg(scope, uasg);
     const fetched = await this.external.contracts(uasg, from, to);
     // Fetch and validate every page before opening a transaction: remote failure cannot leave partial writes.
     const rows = [
@@ -184,9 +218,10 @@ export class ApplicationService {
       },
     );
   }
-  async records(query: Data) {
+  async records(query: Data, viewerScope: Scope) {
     const { page, limit } = pagination(query);
-    const where: Prisma.PriceRecordWhereInput = {};
+    const scope = narrowScope(viewerScope, query.uasgs);
+    const where: Prisma.PriceRecordWhereInput = { ...uasgWhere(scope) };
     if (query.search)
       where.OR = [
         "number",
@@ -197,7 +232,7 @@ export class ApplicationService {
       ].map((field) => ({
         [field]: { contains: String(query.search), mode: "insensitive" },
       }));
-    const [rows, count, exportsCount, totals] = await Promise.all([
+    const [rows, count, exportsCount, totals, all, exported] = await Promise.all([
       this.db.priceRecord.findMany({
         where,
         skip: (page - 1) * limit,
@@ -208,8 +243,13 @@ export class ApplicationService {
       this.db.priceRecord.count({ where }),
       this.db.documentExport.count({ where: { record: where } }),
       this.db.$queryRaw<Array<{ total: string }>>(
-        Prisma.sql`SELECT COALESCE(SUM(i.quantity * i."unitPrice"),0)::text AS total FROM "RecordItem" i JOIN "PriceRecord" r ON r.id=i."recordId" WHERE ${query.search ? Prisma.sql`(r.number ILIKE ${"%" + query.search + "%"} OR r.object ILIKE ${"%" + query.search + "%"} OR r."supplierName" ILIKE ${"%" + query.search + "%"} OR r."organizationName" ILIKE ${"%" + query.search + "%"} OR r.uasg ILIKE ${"%" + query.search + "%"})` : Prisma.sql`TRUE`}`,
+        Prisma.sql`SELECT COALESCE(SUM(i.quantity * i."unitPrice"),0)::text AS total FROM "RecordItem" i JOIN "PriceRecord" r ON r.id=i."recordId" WHERE ${scope === null ? Prisma.sql`TRUE` : Prisma.sql`r.uasg = ANY(${scope})`} AND ${query.search ? Prisma.sql`(r.number ILIKE ${"%" + query.search + "%"} OR r.object ILIKE ${"%" + query.search + "%"} OR r."supplierName" ILIKE ${"%" + query.search + "%"} OR r."organizationName" ILIKE ${"%" + query.search + "%"} OR r.uasg ILIKE ${"%" + query.search + "%"})` : Prisma.sql`TRUE`}`,
       ),
+      // Readiness is the same rule used before export; local documents are few, so check each one.
+      this.db.priceRecord.findMany({ where, include: { items: true } }),
+      this.db.priceRecord.count({
+        where: { AND: [where, { exports: { some: {} } }] },
+      }),
     ]);
     return {
       data: rows.map(presentRecord),
@@ -220,10 +260,13 @@ export class ApplicationService {
         count,
         totalValue: new Decimal(totals[0]?.total ?? "0").toFixed(),
         exportsCount,
+        ready: all.filter((row: Data) => readiness(presentRecord(row)).ready)
+          .length,
+        exported,
       },
     };
   }
-  async record(id: string) {
+  async record(id: string, scope: Scope) {
     const value = await this.db.priceRecord.findUnique({
       where: { id },
       include: {
@@ -240,13 +283,15 @@ export class ApplicationService {
         },
       },
     });
-    if (!value) throw new NotFoundException("Ata não encontrada.");
+    if (!value || !inScope(scope, value.uasg))
+      throw new NotFoundException("Ata não encontrada.");
     return presentRecord(value);
   }
-  async saveRecord(id: string | null, body: Data) {
+  async saveRecord(id: string | null, body: Data, scope: Scope) {
     const { items, ...fields } = validateRecord(body);
     const data = fields as Prisma.PriceRecordCreateInput;
-    if (id) await this.record(id);
+    assertUasg(scope, data.uasg);
+    if (id) await this.record(id, scope);
     const value = id
       ? await this.db.priceRecord.update({
           where: { id },
@@ -259,13 +304,14 @@ export class ApplicationService {
         });
     return presentRecord(value);
   }
-  async deleteRecord(id: string) {
-    await this.record(id);
+  async deleteRecord(id: string, scope: Scope) {
+    await this.record(id, scope);
     await this.db.priceRecord.delete({ where: { id } });
     return { deleted: true };
   }
-  async importRecord(body: Data) {
+  async importRecord(body: Data, scope: Scope) {
     const { uasg, from, to } = importRange(body);
+    assertUasg(scope, uasg);
     if (typeof body.number !== "string" || !body.number.trim())
       throw new BadRequestException("Número da ata é obrigatório.");
     const value = await this.external.record(
@@ -282,10 +328,10 @@ export class ApplicationService {
         `Ata já cadastrada: ${value.number}, UASG ${uasg}. Abra e edite o registro existente; a importação não substitui dados locais.`,
       );
     }
-    return this.saveRecord(null, value);
+    return this.saveRecord(null, value, scope);
   }
-  async exports(id: string) {
-    await this.record(id);
+  async exports(id: string, scope: Scope) {
+    await this.record(id, scope);
     return this.db.documentExport.findMany({
       where: { recordId: id },
       select: {

@@ -74,7 +74,13 @@ test("export failure never persists history", async () => {
     throw new Error("offline");
   };
   await assert.rejects(
-    () => new DocumentService(db, app, converter).generate("record", "pdf"),
+    () =>
+      new DocumentService(db, app, converter).generate(
+        "record",
+        "pdf",
+        undefined,
+        null,
+      ),
     /PDF|Gotenberg|offline/,
   );
   assert.equal(writes, 0);
@@ -93,6 +99,7 @@ test("successful export stores immutable full snapshot with version and selected
     "record",
     "docx",
     "item",
+    null,
   );
   assert.ok(result.buffer.length > 10000);
   assert.equal(saved.format, "docx");
@@ -107,7 +114,7 @@ test("incomplete export returns the exact same readiness fields", async () => {
       validateRecord({ number: "1", object: "Objeto", uasg: "000123" }),
   };
   await assert.rejects(
-    () => new DocumentService({}, app).generate("x", "docx"),
+    () => new DocumentService({}, app).generate("x", "docx", undefined, null),
     (e: any) =>
       e.getStatus() === 422 &&
       e.getResponse().missingFields.includes("supplierDocument"),

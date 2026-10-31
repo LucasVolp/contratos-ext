@@ -12,7 +12,9 @@
     "db:seed": "tsx prisma/seed.ts",
     "test:integration": "tsx --test test/integration/*.test.ts",
     "test:production": "pnpm run build && node --test test/production/*.test.cjs",
-    "db:repair-demo-identifiers": "tsx prisma/repair-demo-identifiers.ts"
+    "db:repair-demo-identifiers": "tsx prisma/repair-demo-identifiers.ts",
+    "db:seed:institutions": "tsx prisma/seed-institutions.ts",
+    "user:manager": "tsx prisma/create-manager.ts"
   },
   "dependencies": {
     "@nestjs/common": "11.2.8",

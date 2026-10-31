@@ -168,3 +168,62 @@ model CatalogSupplement {
 
   @@unique([publicRecordId, itemNumber, kind])
 }
+
+enum Role {
+  GESTOR_GERAL
+  DIRETOR
+  ADMINISTRATIVO
+  USUARIO
+}
+
+model Institution {
+  id           String            @id @default(uuid()) @db.Uuid
+  name         String
+  uasg         String            @unique
+  // Acronym grouping UASGs of the same body (e.g. IFMS); a link to one of them defaults searches to all.
+  organization String            @default("")
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  users        UserInstitution[]
+
+  @@index([organization])
+}
+
+model User {
+  id             String            @id @default(uuid()) @db.Uuid
+  name           String
+  email          String            @unique
+  passwordHash   String
+  role           Role              @default(USUARIO)
+  active         Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  institutions   UserInstitution[]
+  sessions       Session[]         @relation("SessionUser")
+  impersonations Session[]         @relation("SessionImpersonator")
+}
+
+model UserInstitution {
+  userId        String      @db.Uuid
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  institutionId String      @db.Uuid
+  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+
+  @@id([userId, institutionId])
+  @@index([institutionId])
+}
+
+model Session {
+  id             String   @id @default(uuid()) @db.Uuid
+  tokenHash      String   @unique
+  userId         String   @db.Uuid
+  user           User     @relation("SessionUser", fields: [userId], references: [id], onDelete: Cascade)
+  // Set while a general manager is using another account; the session returns to this user.
+  impersonatorId String?  @db.Uuid
+  impersonator   User?    @relation("SessionImpersonator", fields: [impersonatorId], references: [id], onDelete: Cascade)
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}

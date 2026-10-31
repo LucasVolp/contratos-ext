@@ -10,33 +10,53 @@ import {
 } from "@nestjs/common";
 import { CatalogService } from "./service";
 import { Raw } from "./types";
+import { CurrentScope } from "../auth/guard";
+import type { Scope } from "../auth/access";
 @Controller("purchases")
 export class PurchasesController {
   constructor(
     @Inject(CatalogService) private readonly catalog: CatalogService,
   ) {}
-  @Get() list(@Query() query: Raw) {
-    return this.catalog.purchases(query);
+  @Get() list(@Query() query: Raw, @CurrentScope() scope: Scope) {
+    return this.catalog.purchases(query, scope);
   }
-  @Post("sync") sync(@Body() body: Raw) {
-    return this.catalog.syncPurchases(body);
+  @Post("sync") sync(@Body() body: Raw, @CurrentScope() scope: Scope) {
+    return this.catalog.syncPurchases(body, scope);
   }
-  @Get(":id") detail(@Param("id", new ParseUUIDPipe()) id: string) {
+  @Post("sync-reach") syncReach(
+    @Body() body: Raw,
+    @CurrentScope() scope: Scope,
+  ) {
+    return this.catalog.syncReach("purchases", body, scope);
+  }
+  @Get(":id") async detail(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @CurrentScope() scope: Scope,
+  ) {
+    await this.catalog.authorizePurchase(id, scope);
     return this.catalog.purchase(id);
   }
-  @Post(":id/ensure-details") ensure(
+  @Post(":id/ensure-details") async ensure(
     @Param("id", new ParseUUIDPipe()) id: string,
     @Body() body: Raw,
+    @CurrentScope() scope: Scope,
   ) {
+    await this.catalog.authorizePurchase(id, scope);
     return this.catalog.ensurePurchase(id, body ?? {});
   }
-  @Post(":id/refresh") refresh(@Param("id", new ParseUUIDPipe()) id: string) {
+  @Post(":id/refresh") async refresh(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @CurrentScope() scope: Scope,
+  ) {
+    await this.catalog.authorizePurchase(id, scope);
     return this.catalog.refreshPurchase(id);
   }
-  @Post(":id/records/refresh") records(
+  @Post(":id/records/refresh") async records(
     @Param("id", new ParseUUIDPipe()) id: string,
     @Body() body: Raw,
+    @CurrentScope() scope: Scope,
   ) {
+    await this.catalog.authorizePurchase(id, scope);
     return this.catalog.refreshLinkedRecords(id, body ?? {});
   }
 }
@@ -45,40 +65,62 @@ export class PublicRecordsController {
   constructor(
     @Inject(CatalogService) private readonly catalog: CatalogService,
   ) {}
-  @Get() list(@Query() query: Raw) {
-    return this.catalog.records(query);
+  @Get() list(@Query() query: Raw, @CurrentScope() scope: Scope) {
+    return this.catalog.records(query, scope);
   }
-  @Post("sync") sync(@Body() body: Raw) {
-    return this.catalog.syncRecords(body);
+  @Post("sync") sync(@Body() body: Raw, @CurrentScope() scope: Scope) {
+    return this.catalog.syncRecords(body, scope);
   }
-  @Get(":id") detail(@Param("id", new ParseUUIDPipe()) id: string) {
+  @Post("sync-reach") syncReach(
+    @Body() body: Raw,
+    @CurrentScope() scope: Scope,
+  ) {
+    return this.catalog.syncReach("records", body, scope);
+  }
+  @Get(":id") async detail(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @CurrentScope() scope: Scope,
+  ) {
+    await this.catalog.authorizeRecord(id, scope);
     return this.catalog.record(id);
   }
-  @Post(":id/ensure-details") ensure(
+  @Post(":id/ensure-details") async ensure(
     @Param("id", new ParseUUIDPipe()) id: string,
     @Body() body: Raw,
+    @CurrentScope() scope: Scope,
   ) {
+    await this.catalog.authorizeRecord(id, scope);
     return this.catalog.ensureRecord(id, body ?? {});
   }
-  @Post(":id/supplements/refresh") supplements(
+  @Post(":id/supplements/refresh") async supplements(
     @Param("id", new ParseUUIDPipe()) id: string,
     @Body() body: Raw,
+    @CurrentScope() scope: Scope,
   ) {
+    await this.catalog.authorizeRecord(id, scope);
     return this.catalog.refreshSupplements(id, body ?? {});
   }
-  @Post(":id/refresh") refresh(@Param("id", new ParseUUIDPipe()) id: string) {
+  @Post(":id/refresh") async refresh(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @CurrentScope() scope: Scope,
+  ) {
+    await this.catalog.authorizeRecord(id, scope);
     return this.catalog.refreshRecord(id);
   }
-  @Post(":id/items/:itemKey/refresh") item(
+  @Post(":id/items/:itemKey/refresh") async item(
     @Param("id", new ParseUUIDPipe()) id: string,
     @Param("itemKey") item: string,
+    @CurrentScope() scope: Scope,
   ) {
+    await this.catalog.authorizeRecord(id, scope);
     return this.catalog.refreshSupplement(id, item);
   }
-  @Post(":id/draft") draft(
+  @Post(":id/draft") async draft(
     @Param("id", new ParseUUIDPipe()) id: string,
     @Body() body: Raw,
+    @CurrentScope() scope: Scope,
   ) {
+    await this.catalog.authorizeRecord(id, scope);
     return this.catalog.draft(id, body);
   }
 }

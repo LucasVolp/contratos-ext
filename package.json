@@ -10,7 +10,9 @@
     "dev": "pnpm -r --parallel dev",
     "db:migrate": "pnpm --filter @contracts/api db:migrate",
     "db:seed": "pnpm --filter @contracts/api db:seed",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "db:seed:institutions": "pnpm --filter @contracts/api db:seed:institutions",
+    "user:manager": "pnpm --filter @contracts/api user:manager"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1"
