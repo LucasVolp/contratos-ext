@@ -16,8 +16,7 @@ export function focusInvalid(errors: FieldErrors) {
   const key = Object.keys(errors)[0];
   const inputName = key?.replace(/^items\.(\d+)\.(.+)$/, "item-$1-$2");
   const input = document.getElementsByName(inputName)[0] as
-    | HTMLElement
-    | undefined;
+    HTMLElement | undefined;
   let ancestor = input?.parentElement;
   while (ancestor) {
     if (ancestor instanceof HTMLDetailsElement) ancestor.open = true;
@@ -55,7 +54,9 @@ export function PageHead({
           <div className="eyebrow">
             {section === "Contratos"
               ? "01 — GESTÃO CONTRATUAL"
-              : "02 — ARQUIVO DOCUMENTAL"}
+              : section === "Pregões"
+                ? "02 — CATÁLOGO DE COMPRAS"
+                : "03 — ARQUIVO DOCUMENTAL"}
           </div>
           <h1>{title}</h1>
           {description && <p>{description}</p>}
@@ -77,7 +78,7 @@ export function ErrorState({
       <strong>Não foi possível concluir</strong>
       <p>{message}</p>
       {retry && (
-        <button className="button secondary" onClick={retry}>
+        <button type="button" className="button secondary" onClick={retry}>
           <RefreshCw size={15} />
           Tentar novamente
         </button>
@@ -211,8 +212,19 @@ export function Field({
           ? formatDecimal(raw, monetary)
           : raw
       : raw;
-  const blur = () => {
+  const blur = (
+    event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => {
     setFocused(false);
+    // Submit validates the whole form. Avoid adding blur errors between
+    // pointer-down and click, which can move the submit button out of reach.
+    const next = event.relatedTarget;
+    if (
+      next instanceof HTMLButtonElement &&
+      next.type === "submit" &&
+      next.form === event.currentTarget.form
+    )
+      return;
     const errors = validateFields(
       { number: "ok", object: "ok", uasg: "000001", [name]: raw },
       "record",

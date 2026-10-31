@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowUpRight, Files, FileText } from "lucide-react";
+import { ArrowUpRight, Files, FileText, ListChecks } from "lucide-react";
 export function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   return (
@@ -25,10 +25,19 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <ArrowUpRight size={15} />
           </Link>
           <Link
+            className={path.startsWith("/pregoes") ? "active" : ""}
+            href="/pregoes"
+          >
+            <span className="nav-index">02</span>
+            <ListChecks size={17} />
+            Pregões
+            <ArrowUpRight size={15} />
+          </Link>
+          <Link
             className={path.startsWith("/atas") ? "active" : ""}
             href="/atas"
           >
-            <span className="nav-index">02</span>
+            <span className="nav-index">03</span>
             <Files size={17} />
             Atas & documentos
             <ArrowUpRight size={15} />

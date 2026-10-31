@@ -1,4 +1,5 @@
 "use client";
+import { CatalogTabs } from "./catalog/catalog-tabs";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
@@ -100,6 +101,7 @@ export function ListPage({ records = false }: { records?: boolean }) {
           {records ? "Nova ata" : "Novo contrato"}
         </Link>
       </PageHead>
+      {records && <CatalogTabs />}
       <section className="stats-strip" aria-label="Resumo dos registros">
         <div>
           <span>{records ? "ATAS NO ARQUIVO" : "CONTRATOS ENCONTRADOS"}</span>
