@@ -184,7 +184,11 @@ test("catalog lists combine the scope with requested filters", async () => {
     aggregate: async () => ({ _count: { _all: 0 }, _sum: {} }),
     count: async () => 0,
   };
-  const db: any = { publicPurchase: table, publicRecord: table };
+  const db: any = {
+    publicPurchase: table,
+    publicRecord: table,
+    priceRecord: { findMany: async () => [] },
+  };
   const catalog = new CatalogService(db, {} as any);
   await catalog.purchases({ uasg: "154054" }, ["158454"]);
   await catalog.records({ uasg: "154054", from: "2026-01-01" }, ["158454"]);

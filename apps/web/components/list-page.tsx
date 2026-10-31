@@ -22,14 +22,16 @@ import {
   Empty,
   ErrorState,
   Loading,
-  PageHead,
+  PageBar,
   Pager,
   Status,
   Field,
-  ReachSelect,
+  ReachContext,
 } from "./ui";
 import { validateFilters } from "@contracts/validation";
 import { useReach } from "@/lib/session";
+import { DocumentsOverview } from "./documents-overview";
+import { ContractsOverview } from "./contracts-overview";
 export function ListPage({ records = false }: { records?: boolean }) {
   const [search, setSearch] = useState(""),
     [status, setStatus] = useState(""),
@@ -87,13 +89,12 @@ export function ListPage({ records = false }: { records?: boolean }) {
   }
   return (
     <>
-      <PageHead
-        section={records ? "Atas & documentos" : "Contratos"}
-        title={records ? "Atas & documentos" : "Contratos"}
-        description={
-          records
-            ? "Da organização dos itens ao documento pronto para assinar."
-            : "Acompanhe os compromissos e os próximos passos da sua unidade."
+      <PageBar
+        context={
+          <>
+            {records && <CatalogTabs />}
+            <ReachContext reach={reach} onChange={() => setPage(1)} />
+          </>
         }
       >
         <Link className="button secondary" href={`${root}/importar`}>
@@ -104,48 +105,13 @@ export function ListPage({ records = false }: { records?: boolean }) {
           <Plus size={17} />
           {records ? "Nova ata" : "Novo contrato"}
         </Link>
-      </PageHead>
-      {records && <CatalogTabs />}
-      <section className="stats-strip" aria-label="Resumo dos registros">
-        <div>
-          <span>{records ? "ATAS NO ARQUIVO" : "CONTRATOS ENCONTRADOS"}</span>
-          <strong>
-            {data?.stats.count ?? "—"}
-            <small>registros</small>
-          </strong>
-        </div>
-        <div>
-          <span>VALOR TOTAL</span>
-          <strong className="money">
-            {data ? currency(data.stats.totalValue) : "—"}
-          </strong>
-        </div>
-        <div>
-          <span>{records ? "DOCUMENTOS GERADOS" : "ATENÇÃO À VIGÊNCIA"}</span>
-          <strong>
-            {data
-              ? records
-                ? data.stats.exportsCount
-                : data.stats.expiringCount
-              : "—"}
-            <small>{records ? "exportações" : "vencem em até 30 dias"}</small>
-          </strong>
-        </div>
-      </section>
+      </PageBar>
+      {records ? (
+        <DocumentsOverview stats={data?.stats ?? null} />
+      ) : (
+        <ContractsOverview stats={data?.stats ?? null} />
+      )}
       <section className="registry">
-        <div className="registry-top">
-          <div>
-            <span className="eyebrow">
-              {records ? "SEU ACERVO" : "VISÃO GERAL"}
-            </span>
-            <h2>{records ? "Registro de atas" : "Todos os contratos"}</h2>
-          </div>
-          <span className="archive-note">
-            {data
-              ? `${data.total} registros encontrados`
-              : "Consulta ao arquivo"}
-          </span>
-        </div>
         <div className="filters">
           <div className="search-field">
             <Search size={18} />
@@ -160,7 +126,6 @@ export function ListPage({ records = false }: { records?: boolean }) {
               onChange={(e) => filter(setSearch, e.target.value)}
             />
           </div>
-          <ReachSelect reach={reach} onChange={() => setPage(1)} />
           {!records && (
             <>
               <select

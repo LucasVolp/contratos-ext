@@ -691,3 +691,73 @@ test("record sync saves identified atas and reports those without official ident
     incompleteRecords: [{ number: "2/2026" }],
   });
 });
+test("purchase stats compare estimated and awarded values only where both exist", async () => {
+  const aggregates: any[] = [];
+  const db: any = {
+    publicPurchase: {
+      findMany: async () => [],
+      count: async () => 57,
+      aggregate: async (input: any) => {
+        aggregates.push(input.where);
+        // The second aggregate is the comparable subset.
+        return aggregates.length === 1
+          ? { _count: { _all: 68 }, _sum: { estimatedValue: "90", awardedValue: "55" } }
+          : { _count: { _all: 53 }, _sum: { estimatedValue: "80", awardedValue: "55" } };
+      },
+    },
+  };
+  const result = await new CatalogService(db, {} as any).purchases({}, null);
+  assert.deepEqual(result.stats.homologated, {
+    count: 53,
+    estimatedValue: "80",
+    awardedValue: "55",
+  });
+  const comparable = JSON.stringify(aggregates[1]);
+  assert.ok(comparable.includes('"estimatedValue":{"not":null}'));
+  assert.ok(comparable.includes('"awardedValue":{"not":null}'));
+});
+test("published ata stats split vigency into active, expiring and ended", async () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const horizon = new Date(`${today}T00:00:00Z`);
+  horizon.setUTCDate(horizon.getUTCDate() + 90);
+  const limit = horizon.toISOString().slice(0, 10);
+  const counts: string[] = [];
+  const aggregates: any[] = [];
+  const db: any = {
+    publicRecord: {
+      findMany: async () => [],
+      aggregate: async (input: any) => {
+        aggregates.push(input.where);
+        return aggregates.length === 1
+          ? { _count: { _all: 146 }, _sum: { totalValue: "100" } }
+          : { _count: { _all: 112 }, _sum: { totalValue: "80" } };
+      },
+      count: async ({ where }: any) => {
+        const text = JSON.stringify(where);
+        counts.push(text);
+        if (text.includes(`"lt":"${today}"`)) return 25;
+        if (text.includes(`"lte":"${limit}"`)) return 9;
+        if (text.includes('"in":["ata-1","ata-2"]')) return 2;
+        return 0;
+      },
+    },
+    priceRecord: {
+      findMany: async () => [
+        { sourcePublicRecordId: "ata-1" },
+        { sourcePublicRecordId: "ata-2" },
+      ],
+    },
+  };
+  const result = await new CatalogService(db, {} as any).records({}, null);
+  assert.deepEqual(result.stats.vigency, {
+    active: 112,
+    expiring: 9,
+    ended: 25,
+    activeValue: "80",
+  });
+  assert.equal(result.stats.withDocuments, 2);
+  // Active means started and not yet ended today.
+  const active = JSON.stringify(aggregates[1]);
+  assert.ok(active.includes(`"startDate":{"lte":"${today}"}`));
+  assert.ok(active.includes(`"endDate":{"gte":"${today}"}`));
+});

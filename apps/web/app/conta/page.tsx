@@ -48,7 +48,6 @@ export default function AccountPage() {
   return (
     <>
       <PageHead
-        section="Minha conta"
         title={viewer.name}
         description={`${viewer.roleLabel} · ${viewer.email}`}
       />

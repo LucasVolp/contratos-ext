@@ -19,11 +19,19 @@ test.beforeEach(async ({page,request})=>{
 test("pregões listam dados salvos, todos resultados e atas ligadas pelo identificador exato", async ({
   page,
 }) => {
-  await page.goto("/pregoes");
-  await expect(
-    page.getByRole("heading", { name: "Pregões", exact: true }),
-  ).toBeVisible();
+  await page.goto("/");
+  // The app opens on the first purchase phase.
+  await expect(page).toHaveURL(/\/pregoes$/);
+  await expect(page.getByRole("link", { name: /Fase 1: Pregão/ })).toHaveAttribute("aria-current", "page");
+  // The sidebar names the section; listings open on their figures, without a title repeating it.
+  await expect(page.getByRole("heading", { name: "Pregões", exact: true })).toHaveCount(0);
   await page.getByRole("textbox", { name: "Buscar pregões" }).fill(fixture.key);
+  // Both fixture pregões: estimated 3 and awarded 2 each, only one with registro de preços.
+  const summary = page.getByRole("region", { name: "Resumo dos pregões" });
+  await expect(summary).toContainText("2pregões");
+  await expect(summary).toContainText("−33%");
+  await expect(summary.getByRole("img")).toHaveAttribute("aria-label", "Estimado R$ 6,00; homologado R$ 4,00");
+  await expect(summary).toContainText("1com registro de preços");
   await page.getByRole("link", { name: fixture.key, exact: true }).click();
   await expect(
     page.getByText("Papel de teste do catálogo", { exact: true }).first(),
@@ -215,6 +223,17 @@ test("catálogos e navegação cabem no celular com dados carregados", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/pregoes");
   await expect(page.getByRole("table")).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth + 1,
+    ),
+  ).toBe(true);
+  await page.goto("/atas/publicadas");
+  await page.getByRole("textbox", { name: "Buscar atas publicadas" }).fill(fixture.key);
+  // Fixture atas run from 2026-01-01 to 2027-01-01.
+  const published = page.getByRole("region", { name: "Resumo das atas publicadas" });
+  await expect(published).toContainText("2atas");
+  await expect(published.getByRole("img")).toHaveAttribute("aria-label", /encerradas/);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth + 1,

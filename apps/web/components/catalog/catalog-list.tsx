@@ -18,12 +18,14 @@ import {
   FormValidation,
   focusInvalid,
   Loading,
-  PageHead,
+  PageBar,
   Pager,
-  ReachSelect,
+  ReachContext,
 } from "../ui";
 import { CatalogTabs } from "./catalog-tabs";
 import { CatalogRefresh } from "./catalog-refresh";
+import { PurchasesOverview } from "./purchases-overview";
+import { PublishedAtasOverview } from "./published-atas-overview";
 import { useReach } from "@/lib/session";
 export function CatalogList({ records = false }: { records?: boolean }) {
   const [search, setSearch] = useState(""),
@@ -86,13 +88,12 @@ export function CatalogList({ records = false }: { records?: boolean }) {
   }
   return (
     <>
-      <PageHead
-        section={records ? "Atas & documentos" : "Pregões"}
-        title={records ? "Atas publicadas" : "Pregões"}
-        description={
-          records
-            ? "Consulte o acervo público salvo e prepare documentos por fornecedor."
-            : "Processos, resultados e atas em uma visão de trabalho."
+      <PageBar
+        context={
+          <>
+            {records && <CatalogTabs published />}
+            <ReachContext reach={reach} onChange={() => setPage(1)} />
+          </>
         }
       >
         <button
@@ -104,8 +105,7 @@ export function CatalogList({ records = false }: { records?: boolean }) {
           <RefreshCw size={16} />
           Atualizar do Compras.gov
         </button>
-      </PageHead>
-      {records && <CatalogTabs published />}
+      </PageBar>
       {refreshing && (
         <CatalogRefresh
           records={records}
@@ -116,50 +116,12 @@ export function CatalogList({ records = false }: { records?: boolean }) {
           }}
         />
       )}
-      <section className="stats-strip">
-        <div>
-          <span>{records ? "ATAS SALVAS" : "PREGÕES SALVOS"}</span>
-          <strong>
-            {data?.stats.count ?? "—"}
-            <small>registros</small>
-          </strong>
-        </div>
-        <div>
-          <span>
-            {records ? "VALOR CONHECIDO" : "VALOR ESTIMADO CONHECIDO"}
-          </span>
-          <strong className="money">
-            {data
-              ? currency(
-                  records ? data.stats.totalValue : data.stats.estimatedValue,
-                )
-              : "—"}
-          </strong>
-        </div>
-        <div>
-          <span>{records ? "FONTE DOS REGISTROS" : "REGISTRO DE PREÇOS"}</span>
-          {records ? (
-            <p className="stat-source">Compras.gov.br</p>
-          ) : (
-            <strong>
-              {data?.stats.srpCount ?? "—"}
-              <small>com SRP confirmado</small>
-            </strong>
-          )}
-        </div>
-      </section>
+      {records ? (
+        <PublishedAtasOverview stats={data?.stats ?? null} />
+      ) : (
+        <PurchasesOverview stats={data?.stats ?? null} />
+      )}
       <section className="registry">
-        <div className="registry-top">
-          <div>
-            <div className="eyebrow">CATÁLOGO PÚBLICO · ARQUIVO LOCAL</div>
-            <h2>{records ? "Atas disponíveis" : "Processos disponíveis"}</h2>
-          </div>
-          <span className="archive-note">
-            {data
-              ? `${data.total} registros encontrados`
-              : "Consulta ao arquivo"}
-          </span>
-        </div>
         <div className="filters">
           <div className="search-field">
             <Search size={18} />
@@ -173,7 +135,6 @@ export function CatalogList({ records = false }: { records?: boolean }) {
               }}
             />
           </div>
-          <ReachSelect reach={reach} onChange={() => setPage(1)} />
         </div>
         <FormValidation.Provider
           value={{

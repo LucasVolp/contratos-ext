@@ -7,7 +7,7 @@ import {
   Field,
   FormValidation,
   Loading,
-  PageHead,
+  PageBar,
   focusInvalid,
 } from "../ui";
 import { AdminTabs } from "./tabs";
@@ -52,11 +52,7 @@ export function InstitutionsAdmin() {
   }, [rows, filter]);
   return (
     <>
-      <PageHead
-        section="Administração"
-        title="Instituições"
-        description="Cada instituição corresponde a uma UASG. Usuários fora do gestor geral só veem as UASGs vinculadas."
-      >
+      <PageBar context={<AdminTabs />}>
         <button
           type="button"
           className="button secondary"
@@ -81,8 +77,7 @@ export function InstitutionsAdmin() {
           <Plus size={17} />
           Nova instituição
         </button>
-      </PageHead>
-      <AdminTabs />
+      </PageBar>
       {importing && (
         <PublicImport
           onImported={(text) => {

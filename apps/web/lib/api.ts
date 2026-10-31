@@ -54,6 +54,19 @@ export type PageData<T> = {
     totalValue: string;
     expiringCount?: number;
     exportsCount?: number;
+    /** Documents with no missing field for export. */
+    ready?: number;
+    /** Documents with at least one DOCX/PDF generated. */
+    exported?: number;
+    /** Contracts split by vigency over the whole filter; `active` excludes the 30-day window. */
+    vigency?: {
+      active: number;
+      expiring: number;
+      ended: number;
+      upcoming: number;
+      unknown: number;
+      activeValue: string | null;
+    };
   };
 };
 export class ApiError extends Error {
@@ -102,6 +115,19 @@ export const currency = (value: unknown) =>
   value === null || value === undefined || value === ""
     ? "Não informado"
     : formatDecimal(String(value), true);
+/** Short money for summaries ("R$ 80,7 mi"); pair it with `currency` where the exact value matters. */
+export function compactCurrency(value: unknown) {
+  const amount = Number(value);
+  if (value === null || value === undefined || value === "" || !Number.isFinite(amount))
+    return "Não informado";
+  const size = Math.abs(amount);
+  const [divisor, suffix] =
+    size >= 1e9 ? [1e9, " bi"] : size >= 1e6 ? [1e6, " mi"] : size >= 1e3 ? [1e3, " mil"] : [1, ""];
+  return `R$ ${(amount / divisor).toLocaleString("pt-BR", {
+    minimumFractionDigits: divisor === 1 ? 2 : 0,
+    maximumFractionDigits: divisor === 1 ? 2 : 1,
+  })}${suffix}`;
+}
 export const date = (value: unknown) =>
   value
     ? new Date(String(value).slice(0, 10) + "T12:00:00").toLocaleDateString(

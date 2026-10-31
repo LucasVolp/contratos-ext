@@ -2,19 +2,54 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import {
-  ArrowUpRight,
-  Building2,
-  Files,
-  FileText,
-  ListChecks,
-  LogOut,
-  UserRound,
-  UsersRound,
-} from "lucide-react";
+import { Building2, LogOut, UserRound, UsersRound } from "lucide-react";
 import { api } from "@/lib/api";
 import { institutionLabel, SessionProvider, useSession } from "@/lib/session";
 import { Loading } from "./ui";
+const publishedAtas = (path: string) => path.startsWith("/atas/publicadas");
+/** The procurement phases in order: dispute, registered prices, actual purchase. */
+const PHASES: Array<{
+  step: number;
+  label: string;
+  hint: string;
+  href: string;
+  match: (path: string) => boolean;
+  children?: Array<{
+    label: string;
+    href: string;
+    match: (path: string) => boolean;
+  }>;
+}> = [
+  {
+    step: 1,
+    label: "Pregão",
+    hint: "Disputa e vencedores",
+    href: "/pregoes",
+    match: (path) => path.startsWith("/pregoes"),
+  },
+  {
+    step: 2,
+    label: "Ata de registro de preços",
+    hint: "Preços registrados por até 1 ano",
+    href: "/atas/publicadas",
+    match: (path) => path.startsWith("/atas"),
+    children: [
+      { label: "Atas publicadas", href: "/atas/publicadas", match: publishedAtas },
+      {
+        label: "Documentos para assinatura",
+        href: "/atas",
+        match: (path) => path.startsWith("/atas") && !publishedAtas(path),
+      },
+    ],
+  },
+  {
+    step: 3,
+    label: "Contrato",
+    hint: "Compra efetiva e vigência",
+    href: "/contratos",
+    match: (path) => path.startsWith("/contratos"),
+  },
+];
 export function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   // The login screen renders alone; every other page requires a confirmed session.
@@ -46,50 +81,72 @@ function Workspace({
         Ir para o conteúdo
       </a>
       <aside className="sidebar">
-        <Link href="/contratos" className="brand">
+        <Link href="/pregoes" className="brand">
           contratos<span>EXT</span>
         </Link>
-        <div className="sidebar-label">ÁREA DE TRABALHO</div>
-        <nav aria-label="Navegação principal">
-          <Link
-            className={path.startsWith("/contratos") ? "active" : ""}
-            href="/contratos"
-          >
-            <span className="nav-index">01</span>
-            <FileText size={17} />
-            Contratos
-            <ArrowUpRight size={15} />
-          </Link>
-          <Link
-            className={path.startsWith("/pregoes") ? "active" : ""}
-            href="/pregoes"
-          >
-            <span className="nav-index">02</span>
-            <ListChecks size={17} />
-            Pregões
-            <ArrowUpRight size={15} />
-          </Link>
-          <Link
-            className={path.startsWith("/atas") ? "active" : ""}
-            href="/atas"
-          >
-            <span className="nav-index">03</span>
-            <Files size={17} />
-            Atas & documentos
-            <ArrowUpRight size={15} />
-          </Link>
-          {manager && (
-            <Link
-              className={path.startsWith("/administracao") ? "active" : ""}
-              href="/administracao/usuarios"
-            >
-              <span className="nav-index">04</span>
-              <UsersRound size={17} />
-              Administração
-              <ArrowUpRight size={15} />
-            </Link>
-          )}
+        <div className="sidebar-label">COMPRAR</div>
+        <nav aria-label="Fases da compra">
+          <ol className="phases">
+            {PHASES.map((phase) => {
+              const active = phase.match(path);
+              return (
+                <li key={phase.href} className={active ? "active" : ""}>
+                  <Link
+                    href={phase.href}
+                    className={`phase ${active ? "active" : ""}`}
+                    aria-current={
+                      active && !phase.children ? "page" : undefined
+                    }
+                  >
+                    <span className="phase-step" aria-hidden="true">
+                      {phase.step}
+                    </span>
+                    <span className="phase-text">
+                      <span className="sr-only">Fase {phase.step}: </span>
+                      <strong>{phase.label}</strong>
+                      <small>{phase.hint}</small>
+                    </span>
+                  </Link>
+                  {phase.children && (
+                    <ul className="phase-links">
+                      {phase.children.map((child) => {
+                        const current = child.match(path);
+                        return (
+                          <li key={child.href}>
+                            <Link
+                              href={child.href}
+                              className={current ? "active" : ""}
+                              aria-current={current ? "page" : undefined}
+                            >
+                              {child.label}
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
         </nav>
+        {manager && (
+          <>
+            <div className="sidebar-label">GESTÃO</div>
+            <nav aria-label="Gestão">
+              <Link
+                className={path.startsWith("/administracao") ? "active" : ""}
+                aria-current={
+                  path.startsWith("/administracao") ? "page" : undefined
+                }
+                href="/administracao/usuarios"
+              >
+                <UsersRound size={17} />
+                Administração
+              </Link>
+            </nav>
+          </>
+        )}
         <section className="account" aria-label="Sua conta">
           <div className="account-name">{viewer.name}</div>
           <div className="account-role">{viewer.roleLabel}</div>

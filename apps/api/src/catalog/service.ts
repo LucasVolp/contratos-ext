@@ -74,7 +74,7 @@ export class CatalogService {
     const where: Prisma.PublicPurchaseWhereInput = {
       AND: [uasgWhere(narrowScope(scope, query.uasgs)), filter],
     };
-    const [rows, stats, srpCount] = await Promise.all([
+    const [rows, stats, srpCount, homologated] = await Promise.all([
       this.db.publicPurchase.findMany({
         where,
         skip: (page - 1) * limit,
@@ -87,6 +87,18 @@ export class CatalogService {
         _sum: { estimatedValue: true, awardedValue: true },
       }),
       this.db.publicPurchase.count({ where: { AND: [where, { srp: true }] } }),
+      // Savings only make sense where both values are known; open pregões would inflate the gap.
+      this.db.publicPurchase.aggregate({
+        where: {
+          AND: [
+            where,
+            { estimatedValue: { not: null } },
+            { awardedValue: { not: null } },
+          ],
+        },
+        _count: { _all: true },
+        _sum: { estimatedValue: true, awardedValue: true },
+      }),
     ]);
     return plain({
       data: rows.map((row) => this.purchaseSummary(row)),
@@ -98,6 +110,11 @@ export class CatalogService {
         srpCount,
         estimatedValue: stats._sum.estimatedValue?.toString() ?? null,
         awardedValue: stats._sum.awardedValue?.toString() ?? null,
+        homologated: {
+          count: homologated._count._all,
+          estimatedValue: homologated._sum.estimatedValue?.toString() ?? null,
+          awardedValue: homologated._sum.awardedValue?.toString() ?? null,
+        },
       },
     });
   }
@@ -275,7 +292,24 @@ export class CatalogService {
     const where: Prisma.PublicRecordWhereInput = {
       AND: [uasgWhere(narrowScope(scope, query.uasgs)), filter],
     };
-    const [rows, stats] = await Promise.all([
+    // An ata only serves while in force: split the selection by vigency, with a 90-day warning.
+    const today = new Date().toISOString().slice(0, 10);
+    const horizon = new Date(`${today}T00:00:00Z`);
+    horizon.setUTCDate(horizon.getUTCDate() + 90);
+    const active: Prisma.PublicRecordWhereInput = {
+      AND: [
+        where,
+        { startDate: { lte: today } },
+        { endDate: { gte: today } },
+      ],
+    };
+    const prepared = await this.db.priceRecord.findMany({
+      where: { sourcePublicRecordId: { not: null } },
+      select: { sourcePublicRecordId: true },
+      distinct: ["sourcePublicRecordId"],
+    });
+    const [rows, stats, activeStats, expiring, ended, withDocuments] =
+      await Promise.all([
       this.db.publicRecord.findMany({
         where,
         skip: (page - 1) * limit,
@@ -287,6 +321,33 @@ export class CatalogService {
         _count: { _all: true },
         _sum: { totalValue: true },
       }),
+      this.db.publicRecord.aggregate({
+        where: active,
+        _count: { _all: true },
+        _sum: { totalValue: true },
+      }),
+      this.db.publicRecord.count({
+        where: {
+          AND: [active, { endDate: { lte: horizon.toISOString().slice(0, 10) } }],
+        },
+      }),
+      this.db.publicRecord.count({
+        where: { AND: [where, { endDate: { lt: today } }] },
+      }),
+      this.db.publicRecord.count({
+        where: {
+          AND: [
+            where,
+            {
+              id: {
+                in: prepared
+                  .map((row) => row.sourcePublicRecordId)
+                  .filter((id): id is string => !!id),
+              },
+            },
+          ],
+        },
+      }),
     ]);
     return plain({
       data: await this.recordSummaries(rows),
@@ -296,6 +357,13 @@ export class CatalogService {
       stats: {
         count: stats._count._all,
         totalValue: stats._sum.totalValue?.toString() ?? null,
+        vigency: {
+          active: activeStats._count._all,
+          expiring,
+          ended,
+          activeValue: activeStats._sum.totalValue?.toString() ?? null,
+        },
+        withDocuments,
       },
     });
   }

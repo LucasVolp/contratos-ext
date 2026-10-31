@@ -12,6 +12,7 @@ import {
   date,
   importRange,
   pagination,
+  readiness,
   recordTotal,
   validateContract,
   validateRecord,
@@ -103,7 +104,10 @@ export class ApplicationService {
     };
     if (query.status) clauses.push(statusFilters[query.status]);
     const where = { AND: clauses };
-    const [rows, stats, expiringCount] = await Promise.all([
+    const count = (status: string) =>
+      this.db.contract.count({ where: { AND: [where, statusFilters[status]] } });
+    const [rows, stats, expiringCount, active, ended, upcoming, unknown, inForce] =
+      await Promise.all([
       this.db.contract.findMany({
         where,
         skip: (page - 1) * limit,
@@ -115,8 +119,16 @@ export class ApplicationService {
         _count: { _all: true },
         _sum: { globalValue: true },
       }),
-      this.db.contract.count({
-        where: { AND: [where, statusFilters.EXPIRING] },
+      count("EXPIRING"),
+      count("ACTIVE"),
+      count("EXPIRED"),
+      count("UPCOMING"),
+      count("UNKNOWN"),
+      this.db.contract.aggregate({
+        where: {
+          AND: [where, { OR: [statusFilters.ACTIVE, statusFilters.EXPIRING] }],
+        },
+        _sum: { globalValue: true },
       }),
     ]);
     return {
@@ -128,6 +140,15 @@ export class ApplicationService {
         count: stats._count._all,
         totalValue: stats._sum.globalValue?.toString() ?? "0",
         expiringCount,
+        // Whole-filter vigency split; "active" excludes the 30-day expiring window.
+        vigency: {
+          active,
+          expiring: expiringCount,
+          ended,
+          upcoming,
+          unknown,
+          activeValue: inForce._sum.globalValue?.toString() ?? null,
+        },
       },
     };
   }
@@ -211,7 +232,7 @@ export class ApplicationService {
       ].map((field) => ({
         [field]: { contains: String(query.search), mode: "insensitive" },
       }));
-    const [rows, count, exportsCount, totals] = await Promise.all([
+    const [rows, count, exportsCount, totals, all, exported] = await Promise.all([
       this.db.priceRecord.findMany({
         where,
         skip: (page - 1) * limit,
@@ -224,6 +245,11 @@ export class ApplicationService {
       this.db.$queryRaw<Array<{ total: string }>>(
         Prisma.sql`SELECT COALESCE(SUM(i.quantity * i."unitPrice"),0)::text AS total FROM "RecordItem" i JOIN "PriceRecord" r ON r.id=i."recordId" WHERE ${scope === null ? Prisma.sql`TRUE` : Prisma.sql`r.uasg = ANY(${scope})`} AND ${query.search ? Prisma.sql`(r.number ILIKE ${"%" + query.search + "%"} OR r.object ILIKE ${"%" + query.search + "%"} OR r."supplierName" ILIKE ${"%" + query.search + "%"} OR r."organizationName" ILIKE ${"%" + query.search + "%"} OR r.uasg ILIKE ${"%" + query.search + "%"})` : Prisma.sql`TRUE`}`,
       ),
+      // Readiness is the same rule used before export; local documents are few, so check each one.
+      this.db.priceRecord.findMany({ where, include: { items: true } }),
+      this.db.priceRecord.count({
+        where: { AND: [where, { exports: { some: {} } }] },
+      }),
     ]);
     return {
       data: rows.map(presentRecord),
@@ -234,6 +260,9 @@ export class ApplicationService {
         count,
         totalValue: new Decimal(totals[0]?.total ?? "0").toFixed(),
         exportsCount,
+        ready: all.filter((row: Data) => readiness(presentRecord(row)).ready)
+          .length,
+        exported,
       },
     };
   }

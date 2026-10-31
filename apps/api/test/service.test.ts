@@ -235,3 +235,85 @@ for (const scenario of ["manual", "importada e enriquecida"]) {
     assert.deepEqual(existing, original);
   });
 }
+test("document listing counts ready and exported documents over the whole filter", async () => {
+  const { validateRecord } = await import("../src/domain");
+  const complete = {
+    ...validateRecord({
+      number: "77/2026",
+      object: "Equipamentos",
+      uasg: "999999",
+      processNumber: "Proc-1",
+      purchaseNumber: "12/2026",
+      organizationName: "Órgão Exemplo",
+      organizationDocument: "11222333000181",
+      organizationStreet: "Rua Exemplo",
+      organizationCity: "Brasília",
+      organizationState: "DF",
+      authorityName: "Ana Silva",
+      authorityRole: "Diretora",
+      supplierName: "Fornecedor Exemplo",
+      supplierDocument: "11222333000181",
+      items: [
+        { number: 1, description: "Cadeira", unit: "UN", quantity: "3", minimumQuantity: "1", unitPrice: "0.10" },
+      ],
+    }),
+    id: "record",
+  };
+  const draft = { ...complete, id: "draft", authorityName: "", items: [] };
+  const calls: any[] = [];
+  const db: any = {
+    priceRecord: {
+      findMany: async (input: any) => {
+        calls.push(input);
+        return input.skip === undefined ? [complete, draft] : [complete];
+      },
+      count: async ({ where }: any) =>
+        JSON.stringify(where).includes('"exports":{"some":{}}') ? 1 : 2,
+    },
+    documentExport: { count: async () => 3 },
+    $queryRaw: async () => [{ total: "0.3" }],
+  };
+  const result = await new ApplicationService(db).records({}, ["999999"]);
+  assert.equal(result.stats.ready, 1);
+  assert.equal(result.stats.exported, 1);
+  assert.equal(result.stats.count, 2);
+  // The readiness pass reads every filtered document, still restricted to the scope.
+  const full = calls.find((c) => c.skip === undefined);
+  assert.deepEqual(full.where.uasg, { in: ["999999"] });
+});
+test("contract stats split the whole filter by vigency status", async () => {
+  const sums: any[] = [];
+  const db: any = {
+    contract: {
+      findMany: async () => [],
+      aggregate: async (input: any) => {
+        sums.push(input.where);
+        return sums.length === 1
+          ? { _count: { _all: 295 }, _sum: { globalValue: "100" } }
+          : { _count: { _all: 183 }, _sum: { globalValue: "80" } };
+      },
+      // Each status filter is recognizable by its date clauses.
+      count: async ({ where }: any) => {
+        const text = JSON.stringify(where);
+        if (text.includes('"startDate":null')) return 2;
+        if (text.includes('"endDate":{"lt"')) return 110;
+        if (text.includes('"startDate":{"gt"')) return 0;
+        if (text.includes('"endDate":{"gte"') && text.includes('"lte"')) return 5;
+        return 178;
+      },
+    },
+  };
+  const result = await new ApplicationService(db).contracts({}, ["158132"]);
+  assert.deepEqual(result.stats.vigency, {
+    active: 178,
+    expiring: 5,
+    ended: 110,
+    upcoming: 0,
+    unknown: 2,
+    activeValue: "80",
+  });
+  assert.equal(result.stats.expiringCount, 5);
+  // The in-force value covers active and expiring contracts, still inside the scope.
+  const inForce = JSON.stringify(sums[1]);
+  assert.ok(inForce.includes('"in":["158132"]'));
+});

@@ -14,7 +14,7 @@ import {
   Field,
   FormValidation,
   Loading,
-  PageHead,
+  PageBar,
   focusInvalid,
 } from "../ui";
 import { AdminTabs } from "./tabs";
@@ -69,18 +69,14 @@ export function UsersAdmin() {
   async function impersonate(user: User) {
     try {
       await api(`/auth/impersonate/${user.id}`, { method: "POST" });
-      window.location.assign("/contratos");
+      window.location.assign("/pregoes");
     } catch (e) {
       setError((e as Error).message);
     }
   }
   return (
     <>
-      <PageHead
-        section="Administração"
-        title="Usuários"
-        description="Perfis, instituições de cada pessoa e acesso para conferir o que cada conta enxerga."
-      >
+      <PageBar context={<AdminTabs />}>
         <button
           type="button"
           className="button"
@@ -93,8 +89,7 @@ export function UsersAdmin() {
           <Plus size={17} />
           Novo usuário
         </button>
-      </PageHead>
-      <AdminTabs />
+      </PageBar>
       {draft && (
         <UserForm
           key={formKey}
