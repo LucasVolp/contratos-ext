@@ -26,8 +26,10 @@ import {
   Pager,
   Status,
   Field,
+  ReachSelect,
 } from "./ui";
 import { validateFilters } from "@contracts/validation";
+import { useReach } from "@/lib/session";
 export function ListPage({ records = false }: { records?: boolean }) {
   const [search, setSearch] = useState(""),
     [status, setStatus] = useState(""),
@@ -41,6 +43,7 @@ export function ListPage({ records = false }: { records?: boolean }) {
     [loading, setLoading] = useState(true),
     [advanced, setAdvanced] = useState(false);
   const root = records ? "/atas" : "/contratos";
+  const reach = useReach();
   useEffect(() => {
     const controller = new AbortController();
     const timer = setTimeout(() => {
@@ -56,6 +59,7 @@ export function ListPage({ records = false }: { records?: boolean }) {
         search,
         page: String(page),
         limit: "12",
+        ...(reach.uasgs ? { uasgs: reach.uasgs } : {}),
         ...(!records ? { status, uasg, from, to } : {}),
       });
       api<PageData<Contract | RecordData>>(
@@ -76,7 +80,7 @@ export function ListPage({ records = false }: { records?: boolean }) {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [search, status, uasg, from, to, page, reload, records]);
+  }, [search, status, uasg, from, to, page, reload, records, reach.uasgs]);
   function filter(setter: (s: string) => void, value: string) {
     setter(value);
     setPage(1);
@@ -156,6 +160,7 @@ export function ListPage({ records = false }: { records?: boolean }) {
               onChange={(e) => filter(setSearch, e.target.value)}
             />
           </div>
+          <ReachSelect reach={reach} onChange={() => setPage(1)} />
           {!records && (
             <>
               <select

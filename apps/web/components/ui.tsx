@@ -27,6 +27,36 @@ export function focusInvalid(errors: FieldErrors) {
 }
 import { ArrowLeft, ArrowRight, Plus, RefreshCw } from "lucide-react";
 import { statusLabels } from "@/lib/api";
+import type { Reach } from "@/lib/session";
+export function ReachSelect({
+  reach,
+  onChange,
+}: {
+  reach: Reach;
+  onChange?: () => void;
+}) {
+  if (reach.options.length < 2) return null;
+  return (
+    <select
+      aria-label="Abrangência da busca"
+      className="reach-select"
+      value={reach.key}
+      onChange={(e) => {
+        reach.setKey(e.target.value);
+        onChange?.();
+      }}
+    >
+      {reach.options.map((option) => (
+        <option key={option.key} value={option.key}>
+          {option.name}
+          {option.uasgs &&
+            ` · ${option.uasgs.length} ${option.uasgs.length === 1 ? "UASG" : "UASGs"}`}
+          {option.isDefault && " (padrão)"}
+        </option>
+      ))}
+    </select>
+  );
+}
 export function PageHead({
   section,
   title,
@@ -57,7 +87,11 @@ export function PageHead({
               ? "01 — GESTÃO CONTRATUAL"
               : section === "Pregões"
                 ? "02 — CATÁLOGO DE COMPRAS"
-                : "03 — ARQUIVO DOCUMENTAL"}
+                : section === "Administração"
+                  ? "04 — ACESSOS E INSTITUIÇÕES"
+                  : section === "Minha conta"
+                    ? "SUA CONTA"
+                    : "03 — ARQUIVO DOCUMENTAL"}
           </div>
           <h1>{title}</h1>
           {description && <p>{description}</p>}
@@ -232,9 +266,13 @@ export function Field({
       { number: "ok", object: "ok", uasg: "000001", [name]: raw },
       "record",
     );
+    // Blur reuses the record rules for format; whether emptiness is an error
+    // depends only on this field's `required`, since filters reuse the same names.
     setLocalError(
-      required && !raw.trim()
-        ? "Preencha este campo obrigatório."
+      !raw.trim()
+        ? required
+          ? "Preencha este campo obrigatório."
+          : ""
         : errors[name] || "",
     );
     context.onBlur?.(key);

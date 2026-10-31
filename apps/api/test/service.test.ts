@@ -34,7 +34,7 @@ test("contract pagination and whole-filter statistics execute in database", asyn
     limit: "1",
     from: "2026-01-01",
     status: "ACTIVE",
-  });
+  }, null);
   assert.equal(args.skip, 1);
   assert.equal(args.take, 1);
   assert.ok(JSON.stringify(args.where).includes("2026-01-01"));
@@ -60,7 +60,7 @@ test("failing import never starts database transaction", async () => {
         uasg: "000123",
         from: "2026-01-01",
         to: "2026-12-31",
-      }),
+      }, null),
     /página 2/,
   );
   assert.equal(writes, 0);
@@ -95,7 +95,7 @@ test("import waits for all data and commits upserts in one transaction", async (
     uasg: "000123",
     from: "2026-01-01",
     to: "2026-12-31",
-  });
+  }, null);
   assert.deepEqual(result, { created: 2, updated: 0, total: 2 });
   assert.equal(transactions, 1);
   assert.equal(store.length, 2);
@@ -116,14 +116,14 @@ test("record replacement updates items atomically while retaining export history
     object: "Objeto",
     uasg: "000123",
     items: [],
-  });
+  }, null);
   assert.deepEqual(update.data.items, { deleteMany: {}, create: [] });
   assert.equal("exports" in update.data, false);
 });
 test("not found maps to HTTP 404", async () => {
   const db: any = { contract: { findUnique: async () => null } };
   await assert.rejects(
-    () => new ApplicationService(db).contract("nope"),
+    () => new ApplicationService(db).contract("nope", null),
     (e: any) => e.getStatus() === 404,
   );
 });
@@ -159,7 +159,7 @@ test("import refuses an existing manual contract before performing any write", a
         uasg: "000123",
         from: "2026-01-01",
         to: "2026-12-31",
-      }),
+      }, null),
     (error: any) =>
       error.getStatus() === 409 &&
       error.message.includes("1") &&
@@ -225,7 +225,7 @@ for (const scenario of ["manual", "importada e enriquecida"]) {
           uasg: "000123",
           from: "2026-01-01",
           to: "2026-12-31",
-        }),
+        }, null),
       (error: any) =>
         error.getStatus() === 409 &&
         error.message.includes("Ata já cadastrada") &&

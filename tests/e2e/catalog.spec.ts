@@ -231,44 +231,53 @@ test("catálogos e navegação cabem no celular com dados carregados", async ({
   ).toBe(true);
 });
 
-test("consultas de catálogo validam os campos e preservam zeros da UASG", async ({
+test("atualização pelo Compras.gov valida o período antes de consultar a abrangência", async ({
   page,
 }) => {
-  let sent: { uasg: string; from: string; to: string } | undefined;
-  await page.route("**/api/purchases/sync", async (route) => {
+  let sent: Record<string, string> | undefined;
+  await page.route("**/api/purchases/sync-reach", async (route) => {
     sent = route.request().postDataJSON();
     await route.fulfill({
       status: 201,
       contentType: "application/json",
-      body: JSON.stringify({ created: 0, updated: 0, total: 0 }),
+      body: JSON.stringify({
+        from: sent!.from,
+        to: sent!.to,
+        created: 1,
+        updated: 0,
+        total: 1,
+        incomplete: 0,
+        failed: 1,
+        results: [
+          { uasg: "158132", name: "Reitoria de teste", created: 1, updated: 0, total: 1, incomplete: 0, error: null },
+          { uasg: "158454", name: "Campus de teste", created: 0, updated: 0, total: 0, incomplete: 0, error: "Fonte indisponível." },
+        ],
+      }),
     });
   });
-  await page.goto("/pregoes/consultar");
-  await page.locator('[name="uasg"]').fill("12");
-  await page.locator('[name="from"]').fill("2026-12-01");
-  await page.locator('[name="to"]').fill("2026-01-01");
-  await page
-    .getByRole("button", { name: "Consultar pregões", exact: true })
-    .click();
-  await expect(page.locator('[name="uasg"]')).toHaveAttribute(
-    "aria-invalid",
-    "true",
-  );
-  await expect(page.locator('[name="to"]')).toHaveAttribute(
-    "aria-invalid",
-    "true",
-  );
-  await expect(page.locator('[name="uasg"]')).toBeFocused();
+  await page.goto("/pregoes");
+  await expect(page).toHaveURL(/\/pregoes$/);
+  await page.getByRole("button", { name: "Atualizar do Compras.gov" }).first().click();
+  const form = page.getByRole("form", { name: "Atualizar do Compras.gov" });
+  await form.locator('[name="from"]').fill("2026-12-01");
+  await form.locator('[name="to"]').fill("2026-01-01");
+  await form.getByRole("button", { name: "Atualizar agora" }).click();
+  await expect(form.locator('[name="to"]')).toHaveAttribute("aria-invalid", "true");
   expect(sent).toBeUndefined();
-  await page.locator('[name="uasg"]').fill("001234");
-  await page.locator('[name="from"]').fill("2026-01-01");
-  await page.locator('[name="to"]').fill("2026-01-31");
-  await page
-    .getByRole("button", { name: "Consultar pregões", exact: true })
-    .click();
-  await expect
-    .poll(() => sent)
-    .toEqual({ uasg: "001234", from: "2026-01-01", to: "2026-01-31" });
+  await form.locator('[name="from"]').fill("2026-01-01");
+  await form.locator('[name="to"]').fill("2026-01-31");
+  await form.getByRole("button", { name: "Atualizar agora" }).click();
+  await expect.poll(() => sent?.from).toBe("2026-01-01");
+  expect(sent?.to).toBe("2026-01-31");
+  // A failing UASG is reported without hiding the ones that worked.
+  await expect(form.getByRole("alert")).toContainText("1 de 2 UASGs");
+  await expect(form).toContainText("Fonte indisponível.");
+  // The standalone consultation pages no longer exist.
+  for (const path of ["/pregoes/consultar", "/atas/publicadas/consultar"]) {
+    await page.goto(path);
+    await expect(page.getByText("Este caminho não está no arquivo.")).toBeVisible();
+    await expect(page.getByText(/uuid is expected/i)).toHaveCount(0);
+  }
 });
 
 test("itens do pregão são paginados após atualização e a busca não consulta novamente a fonte", async ({

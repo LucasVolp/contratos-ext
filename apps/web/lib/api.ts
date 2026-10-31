@@ -81,6 +81,11 @@ export async function api<T>(
     throw new Error("Não foi possível conectar ao servidor. Tente novamente.");
   }
   if (!response.ok) {
+    // An expired session sends the user back to sign in and return to this page.
+    if (response.status === 401 && !path.startsWith("/auth/")) {
+      const next = window.location.pathname + window.location.search;
+      window.location.replace(`/login?next=${encodeURIComponent(next)}`);
+    }
     const data = await response
       .json()
       .catch(() => ({ message: "Não foi possível concluir a solicitação." }));
@@ -156,6 +161,16 @@ export const labels: Record<string, string> = {
   to: "Data final da consulta",
   unitPrice: "Preço unitário",
   items: "Itens",
+  name: "Nome",
+  email: "E-mail",
+  role: "Perfil",
+  password: "Senha",
+  currentPassword: "Senha atual",
+  newPassword: "Nova senha",
+  institutionIds: "Instituições",
+  organization: "Organização",
+  uasgs: "Abrangência",
+  active: "Situação",
 };
 export function fieldLabel(key: string) {
   return key

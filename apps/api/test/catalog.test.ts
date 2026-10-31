@@ -149,7 +149,7 @@ test("catalog synchronization collects all external data before any transaction"
         uasg: "158148",
         from: "2026-01-01",
         to: "2026-12-31",
-      }),
+      }, null),
     /page two/,
   );
   assert.equal(writes, 0);
@@ -179,7 +179,7 @@ test("summary sync never includes details in update and preserves existing item 
       uasg: "158148",
       from: "2026-01-01",
       to: "2026-12-31",
-    }),
+    }, null),
     { created: 0, updated: 1, total: 1 },
   );
   assert.equal("snapshot" in updates[0].update, false);
@@ -662,4 +662,32 @@ test("unrelated incomplete records produce a confirmed empty lookup rather than 
   const result = await f.service.refreshLinkedRecords("local");
   assert.equal(result.total, 0);
   assert.equal(f.writes(), 1);
+});
+test("record sync saves identified atas and reports those without official identifier", async () => {
+  const stored: string[] = [];
+  const tx: any = {
+    publicRecord: {
+      findUnique: async () => null,
+      upsert: async (arg: any) => stored.push(arg.where.externalId),
+    },
+  };
+  const db: any = { $transaction: async (fn: any) => fn(tx) };
+  const client: any = {
+    records: async () => [
+      { numeroControlePncpAta: "ATA-1", numeroAtaRegistroPreco: "1/2026", codigoUnidadeGerenciadora: "158132" },
+      { numeroControlePncpAta: "", numeroAtaRegistroPreco: "2/2026", codigoUnidadeGerenciadora: "158132" },
+      { numeroControlePncpAta: "ATA-3", numeroAtaRegistroPreco: "3/2026", ataExcluido: true },
+    ],
+  };
+  const result = await new CatalogService(db, client).syncRecords(
+    { uasg: "158132", from: "2026-01-01", to: "2026-12-31" },
+    null,
+  );
+  assert.deepEqual(stored, ["ATA-1"]);
+  assert.deepEqual(result, {
+    created: 1,
+    updated: 0,
+    total: 1,
+    incompleteRecords: [{ number: "2/2026" }],
+  });
 });
