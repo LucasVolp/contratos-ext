@@ -1,6 +1,6 @@
 # Contracts Ext
 
-Aplicação independente para acompanhar contratos e preencher atas de registro de preços em modelos Word, com download em DOCX e PDF. Interface em português, sem autenticação.
+Aplicação independente para acompanhar contratos, consultar pregões e atas públicas e preencher documentos de atas de registro de preços em modelos Word, com download em DOCX e PDF. Interface em português, sem autenticação.
 
 ## Iniciar com Docker
 
@@ -19,17 +19,25 @@ O banco inicia vazio. Para carregar exemplos identificados como demonstração:
 docker compose exec api pnpm db:seed
 ```
 
-O seed é opcional e idempotente. Os dados importados e cadastrados ficam no volume `postgres_data`, que é preservado por `docker compose down`. Não use `down -v` se quiser preservar os registros.
+O seed é opcional e idempotente; não substitui exemplos já editados nem seu histórico. Os dados importados e cadastrados ficam no volume `postgres_data`, que é preservado por `docker compose down`. Não use `down -v` se quiser preservar os registros.
 
 ## Usar
 
 **Contratos:** cadastre um contrato ou importe por UASG e período. Consulte fornecedor, objeto, valores e vigência; pesquise e filtre a listagem. A situação é calculada por data, sem necessidade de atualização manual.
 
+**Pregões:** consulte por UASG e período de publicação. A consulta salva os dados no banco local. Abra o pregão para atualizar detalhes, examinar todos os resultados dos itens, identificar cancelamentos e consultar atas vinculadas quando houver registro de preços (SRP). O vínculo usa os identificadores públicos completos da compra.
+
+**Atas publicadas:** consulte por UASG e início da vigência. No detalhe, atualize os itens e consulte participantes, empenhos/saldos e adesões por item. Cada consulta auxiliar informa separadamente seu resultado, erro e última consulta salva. Os dados auxiliares têm o escopo do item da ata quando a fonte não distingue o fornecedor. Para preparar um documento, selecione um fornecedor: a mesma ata oficial pode originar documentos distintos para cada fornecedor.
+
 **Atas e documentos:** crie uma ata ou importe os dados públicos disponíveis. Preencha organização, autoridade signatária, fornecedor e itens. Salve rascunhos e consulte as pendências antes de exportar. Baixe a ata completa ou um item em DOCX/PDF. O histórico registra cada geração concluída.
 
 Contratos importados anteriormente são atualizados sem duplicação; cadastros manuais com a mesma identidade são preservados e geram conflito explícito. Atas existentes não são substituídas por nova importação: use a edição para manter o preenchimento local.
 
-A importação usa somente a API pública Compras.gov.br. Não chama APIs SAGA/DIRAD. Dados indisponíveis externamente devem ser preenchidos no editor. Uma ata corresponde a um fornecedor; respostas com vários fornecedores são rejeitadas para evitar documentos incorretos.
+A importação usa somente a API pública Compras.gov.br. Não chama APIs SAGA/DIRAD. Dados indisponíveis externamente devem ser preenchidos no editor. Cada documento corresponde a um fornecedor. No catálogo público, a seleção do fornecedor separa os itens corretamente; repetir a preparação abre o documento existente sem alterar seu preenchimento ou histórico. A importação direta legada recusa respostas com vários fornecedores e orienta usar o catálogo.
+
+As telas de consulta leem os dados salvos. A atualização no Compras.gov é uma ação explícita; falhas preservam a última consulta local. Campos desconhecidos são identificados como não informados.
+
+**Formulários:** CPF/CNPJ (incluindo CNPJ alfanumérico), UASG, UF, datas e valores possuem validação também no backend. Documentos recebem máscara, UASG mantém zeros à esquerda e valores usam formato brasileiro sem perder casas decimais. O envio mostra um resumo das pendências, mensagens junto aos campos e foco no primeiro erro. Números institucionais livres, como processo e ata, conservam seu formato original.
 
 ## Arquitetura
 
@@ -70,7 +78,7 @@ pnpm exec playwright install chromium
 pnpm test:e2e
 ```
 
-Os testes de importação usam respostas simuladas, sem depender de disponibilidade de serviços públicos. A suíte ponta a ponta verifica persistência, edição, validações, DOCX/PDF reais, navegação e apresentação móvel.
+Os testes de importação e de integração com os catálogos usam respostas simuladas, sem depender da disponibilidade de serviços públicos. Os testes de navegador de catálogo criam registros isolados e os removem ao final. Para outro banco local, configure `E2E_DATABASE_URL` (padrão: a conexão local do Compose na porta 5540). A suíte ponta a ponta verifica persistência, edição, validações, DOCX/PDF reais, navegação e apresentação móvel.
 
 ## Modelo Word
 
