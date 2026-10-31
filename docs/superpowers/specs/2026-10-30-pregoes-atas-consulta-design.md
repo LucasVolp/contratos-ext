@@ -1,6 +1,6 @@
 # Ampliação: pregões e consulta de atas publicadas
 
-Estado: proposta de ampliação solicitada em 30/10/2026, aguardando confirmação do recorte.
+Estado: recorte completo aprovado pelo usuário em31/10/2026, incluindo validações e máscaras dos formulários.
 
 ## Base existente
 
@@ -41,3 +41,7 @@ Mesmos quatro serviços Docker. Adaptadores oficiais na API NestJS, novos modelo
 ## Verificação
 
 Testes de mapeamento e vínculo exato entre compra/ata; paginação completa; ausência de resultados; múltiplos fornecedores; indisponibilidade pública sem perda dos dados locais. Integração PostgreSQL e navegação real em Docker, mantendo as regressões atuais de CRUD e documentos. Conferir dados de uma consulta real e layout desktop/móvel.
+
+## Validações e máscaras aprovadas
+
+CPF e CNPJ com validação de dígitos verificadores, incluindo CNPJ alfanumérico conforme Receita Federal; UASG de6 dígitos; UF pertencente ao catálogo brasileiro; valores/quantidades não negativos e com até6 casas decimais; datas reais e intervalos coerentes. Máscaras de apresentação preservam valores canônicos enviados ao backend, sem truncar ou arredondar silenciosamente. Campos opcionais de rascunho continuam opcionais, mas valores preenchidos precisam ser válidos. Número de processo, ata e compra preservam formatos institucionais variados em vez de impor uma máscara única incorreta. Validação ao sair do campo e no envio, erro associado por aria-describedby, foco no primeiro erro, resumo útil, controles acessíveis e bloqueio de gravação inválida. Backend aplica as mesmas regras independentemente do frontend.
