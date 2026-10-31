@@ -1,39 +1,72 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { PublicRecordDetail, document, known, stamp } from "@/lib/catalog-api";
 import { ErrorState, Loading, PageHead } from "../ui";
 export function PrepareDocument({ id }: { id: string }) {
+  return <PrepareDocumentContent key={id} id={id} />;
+}
+function PrepareDocumentContent({ id }: { id: string }) {
   const [data, setData] = useState<PublicRecordDetail | null>(null),
     [error, setError] = useState(""),
     [reload, setReload] = useState(0),
     [selected, setSelected] = useState(""),
     [selectionError, setSelectionError] = useState(""),
     [actionError, setActionError] = useState(""),
+    [metadataError, setMetadataError] = useState(""),
     [busy, setBusy] = useState(false);
   const router = useRouter();
+  const lifecycle = useRef<AbortController | null>(null);
+  const [updating, setUpdating] = useState(true);
   useEffect(() => {
     const c = new AbortController();
-    api<PublicRecordDetail>(`/public-records/${id}`, { signal: c.signal })
-      .then((v) => {
+    lifecycle.current = c;
+    async function load() {
+      let cached = false;
+      try {
+        const value = await api<PublicRecordDetail>(`/public-records/${id}`, { signal: c.signal });
+        if (c.signal.aborted) return;
+        cached = true;
+        setData(value);
+        setError("");
+      } catch (e) {
+        if (!c.signal.aborted) setError((e as Error).message);
+      }
+      if (c.signal.aborted) return;
+      try {
+        const result = await api<{ data: PublicRecordDetail; errors: { details?: string; records?: string } }>(
+          `/public-records/${id}/ensure-details`,
+          { method: "POST", body: "{}", signal: c.signal },
+        );
+        if (c.signal.aborted) return;
+        cached = true;
+        setData(result.data);
+        setError("");
+        setMetadataError(result.errors.details || "");
+      } catch (e) {
         if (!c.signal.aborted) {
-          setData(v);
-          setError("");
+          if (cached) setMetadataError((e as Error).message);
+          else setError((e as Error).message);
         }
-      })
-      .catch((e) => {
-        if (!c.signal.aborted) setError(e.message);
-      });
+      } finally {
+        if (!c.signal.aborted) setUpdating(false);
+      }
+    }
+    void load();
     return () => c.abort();
+    // The keyed page owns one request lifecycle per record and explicit retry.
   }, [id, reload]);
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (updating || busy) return;
     if (!selected) {
       setSelectionError("Selecione o fornecedor para preparar o documento.");
       window.document.getElementById("supplierDocument")?.focus();
       return;
     }
+    const signal = lifecycle.current?.signal;
+    if (!signal || signal.aborted) return;
     setBusy(true);
     setActionError("");
     setSelectionError("");
@@ -42,19 +75,22 @@ export function PrepareDocument({ id }: { id: string }) {
         `/public-records/${id}/draft`,
         {
           method: "POST",
+          signal,
           body: JSON.stringify({ supplierDocument: selected }),
         },
       );
+      if (signal.aborted) return;
       router.push(`/atas/${draft.id}/editar`);
     } catch (e) {
+      if (signal.aborted) return;
       setActionError((e as Error).message);
       if (e instanceof ApiError)
         setSelectionError(e.fieldErrors.supplierDocument || "");
     } finally {
-      setBusy(false);
+      if (!signal.aborted) setBusy(false);
     }
   }
-  if (error)
+  if (error && !data)
     return <ErrorState message={error} retry={() => setReload((n) => n + 1)} />;
   if (!data) return <Loading />;
   return (
@@ -79,6 +115,7 @@ export function PrepareDocument({ id }: { id: string }) {
               id="supplierDocument"
               name="supplierDocument"
               required
+              disabled={updating || busy}
               value={selected}
               aria-invalid={!!selectionError}
               aria-describedby={
@@ -116,17 +153,18 @@ export function PrepareDocument({ id }: { id: string }) {
           </div>
           {!data.detailsSyncedAt && (
             <p className="catalog-notice">
-              Atualize os detalhes da ata para carregar os fornecedores antes de
-              preparar um documento.
+              Os fornecedores serão carregados automaticamente antes de preparar o documento.
             </p>
           )}
-          {data.detailsSyncedAt && !data.suppliers.length && (
+          {data.detailsSyncedAt && !data.suppliers.length && !updating && !metadataError && (
             <p className="catalog-notice">
               A última consulta não informou fornecedores. Atualize os detalhes
               na ficha da ata para tentar novamente.
             </p>
           )}
           <div aria-live="polite">
+            {updating && <p className="catalog-notice" role="status">Atualizando fornecedores automaticamente…</p>}
+            {metadataError && <ErrorState message={metadataError} retry={() => { setUpdating(true); setReload((n) => n + 1); }} />}
             {actionError && (
               <ErrorState
                 message={actionError}
@@ -139,7 +177,7 @@ export function PrepareDocument({ id }: { id: string }) {
           <button
             type="submit"
             className="button"
-            disabled={busy || !data.detailsSyncedAt || !data.suppliers.length}
+            disabled={busy || updating || !data.detailsSyncedAt || !data.suppliers.length}
           >
             {busy ? "Preparando…" : "Preparar documento"}
           </button>

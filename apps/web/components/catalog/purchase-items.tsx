@@ -7,9 +7,13 @@ import { Pager } from "../ui";
 export function PurchaseItems({
   items,
   detailsSyncedAt,
+  updating = false,
+  error = false,
 }: {
   items: PurchaseItem[];
   detailsSyncedAt: string | null;
+  updating?: boolean;
+  error?: boolean;
 }) {
   const [page, setPage] = useState(1),
     [size, setSize] = useState(5),
@@ -48,11 +52,10 @@ export function PurchaseItems({
       </div>
       {!detailsSyncedAt && (
         <p className="catalog-notice">
-          Detalhes ainda não consultados. Use “Atualizar detalhes” para
-          consultar a fonte pública.
+          Os detalhes serão carregados automaticamente. Se a consulta falhar, tente atualizar os detalhes novamente.
         </p>
       )}
-      {detailsSyncedAt && !items.length && (
+      {detailsSyncedAt && !items.length && !updating && !error && (
         <p className="muted">
           Nenhum item informado na última consulta bem sucedida.
         </p>

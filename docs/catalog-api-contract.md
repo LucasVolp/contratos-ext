@@ -1,6 +1,6 @@
 # API dos catálogos públicos — ampliação aprovada
 
-Todos endpoints sob `/api`. IDs locais UUID; identificadores externos são strings opacas. Valores monetários/quantidades retornam strings decimais ou null (null não é zero). Datas de negócio YYYY-MM-DD; timestamps ISO. Sem autenticação. Reutilizar validação compartilhada e erros `{message,fieldErrors?}`. GETs leem PostgreSQL, nunca consultam governo silenciosamente. POSTs explícitos atualizam snapshots; falha externa preserva a última consulta local. Não transformar erro ou detalhe ainda não consultado em “nenhum registro”.
+Todos endpoints sob `/api`. IDs locais UUID; identificadores externos são strings opacas. Valores monetários/quantidades retornam strings decimais ou null (null não é zero). Datas de negócio YYYY-MM-DD; timestamps ISO. Sem autenticação. Reutilizar validação compartilhada e erros `{message,fieldErrors?}`. GETs leem PostgreSQL, nunca consultam governo silenciosamente. POSTs de atualização, inclusive os acionados automaticamente ao abrir os detalhes, atualizam snapshots; falha externa preserva a última consulta local. Não transformar erro ou detalhe ainda não consultado em “nenhum registro”.
 
 ## Pregões
 
@@ -42,3 +42,14 @@ PriceRecord ganha `sourcePublicRecordId` e `sourceSupplierDocument` opcionais co
 ## Fonte oficial
 
 OpenAPI https://dadosabertos.compras.gov.br/v3/api-docs, conferida31/10/2026. Endpoint de contratação/itens/resultados direto por `tipo=idCompra&codigo=...`; ARPs por `numeroControlePncpAta`. Participantes: /modulo-arp/3_consultarUnidadesItem (numeroAta,unidadeGerenciadora,numeroItem). Empenhos: /modulo-arp/4_consultarEmpenhosSaldoItem (numeroAta,unidadeGerenciadora), filtrar numeroItem depois. Adesões: /modulo-arp/5_consultarAdesoesItem (numeroAta,unidadeGerenciadora,numeroItem). Página entre10 e500, respeitar todas as páginas; nenhuma UASG/órgão fixos em código.
+
+
+## Atualização automática ao abrir detalhes
+
+GETs continuam lendo o PostgreSQL. A interface mostra o cache e aciona automaticamente os POSTs abaixo, com `force` opcional booleano. Dados consultados com sucesso há menos de cinco minutos são reaproveitados; requisições simultâneas da mesma etapa compartilham o trabalho em andamento. Falhas têm intervalo de 30 segundos antes de uma nova tentativa automática. Ações manuais permitem forçar uma consulta.
+
+- `POST /purchases/:id/ensure-details` → `{data:PurchaseDetail,errors:{details?:string,records?:string}}`. Garante detalhes e consulta de atas vinculadas quando SRP confirmado. Falhas de uma etapa preservam os dados anteriores e são informadas separadamente.
+- `POST /public-records/:id/ensure-details` → `{data:PublicRecordDetail,errors:{details?:string}}`. Garante os metadados públicos usados tanto no detalhe como na preparação de documento.
+- `POST /public-records/:id/supplements/refresh` → `{data:PublicRecordDetail,errors:{supplements?:string},summary:{items:number,loaded:number,failed:number}}`. Consulta em lote todos os itens numéricos únicos da ata, reaproveitando partes recentes. `items` conta itens únicos; `loaded` exige as três partes carregadas; `failed` indica pelo menos uma parte em erro. Empenhos são consultados uma única vez por ata; unidades e adesões, por item. Itens numericamente equivalentes, inclusive de fornecedores distintos, compartilham o resultado. Dados anteriores de partes com falha permanecem disponíveis.
+
+O carregamento da ata é progressivo: cabeçalho/itens primeiro, lote complementar depois. O cliente de catálogo limita a quatro consultas de paginação simultâneas à fonte. Nenhuma dessas operações substitui documentos locais já preparados ou seus campos editados.

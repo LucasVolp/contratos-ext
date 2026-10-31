@@ -7,6 +7,14 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   if (fixture) await fixture.cleanup();
 });
+// Existing catalogue scenarios isolate the new automatic bulk transport from
+// the public government service; automatic-loading behavior has its own suite.
+test.beforeEach(async ({page,request})=>{
+  await page.route(`**/api/public-records/${fixture.recordId}/supplements/refresh`,async route=>{
+    const data=await(await request.get(`/api/public-records/${fixture.recordId}`)).json();
+    return route.fulfill({json:{data,errors:{},summary:{items:1,loaded:0,failed:0}}});
+  });
+});
 
 test("pregões listam dados salvos, todos resultados e atas ligadas pelo identificador exato", async ({
   page,

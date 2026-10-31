@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
 import { api, ApiError, currency, date } from "@/lib/api";
@@ -15,47 +15,81 @@ import {
 import { ErrorState, Loading, PageHead } from "../ui";
 import { PurchaseItems } from "./purchase-items";
 export function PurchaseDetailPage({ id }: { id: string }) {
+  return <PurchaseDetailPageContent key={id} id={id} />;
+}
+function PurchaseDetailPageContent({ id }: { id: string }) {
   const [data, setData] = useState<PurchaseDetail | null>(null),
     [error, setError] = useState(""),
     [reload, setReload] = useState(0),
     [actionError, setActionError] = useState(""),
     [linkedError, setLinkedError] = useState(""),
     [busy, setBusy] = useState("");
+  const lifecycle = useRef<AbortController | null>(null);
+  const [updating, setUpdating] = useState(true);
   useEffect(() => {
     const c = new AbortController();
-    api<PurchaseDetail>(`/purchases/${id}`, { signal: c.signal })
-      .then((v) => {
+    lifecycle.current = c;
+    async function load() {
+      let cached = false;
+      try {
+        const value = await api<PurchaseDetail>(`/purchases/${id}`, { signal: c.signal });
+        if (c.signal.aborted) return;
+        cached = true;
+        setData(value);
+        setError("");
+      } catch (e) {
+        if (!c.signal.aborted) setError((e as Error).message);
+      }
+      if (c.signal.aborted) return;
+      try {
+        const result = await api<{ data: PurchaseDetail; errors: { details?: string; records?: string } }>(
+          `/purchases/${id}/ensure-details`,
+          { method: "POST", body: "{}", signal: c.signal },
+        );
+        if (c.signal.aborted) return;
+        cached = true;
+        setData(result.data);
+        setError("");
+        setActionError(result.errors.details || "");
+        setLinkedError(result.errors.records || "");
+      } catch (e) {
         if (!c.signal.aborted) {
-          setData(v);
-          setError("");
+          if (cached) setActionError((e as Error).message);
+          else setError((e as Error).message);
         }
-      })
-      .catch((e) => {
-        if (!c.signal.aborted) setError(e.message);
-      });
+      } finally {
+        if (!c.signal.aborted) setUpdating(false);
+      }
+    }
+    void load();
     return () => c.abort();
+    // The keyed page owns one request lifecycle per record and explicit retry.
   }, [id, reload]);
   async function refresh() {
+    const signal = lifecycle.current?.signal;
+    if (!signal || signal.aborted) return;
     setBusy("details");
     setActionError("");
     try {
-      setData(
-        await api(`/purchases/${id}/refresh`, { method: "POST", body: "{}" }),
-      );
+      const value = await api<PurchaseDetail>(`/purchases/${id}/refresh`, { method: "POST", body: "{}", signal });
+      if (!signal.aborted) setData(value);
     } catch (e) {
-      setActionError((e as Error).message);
+      if (!signal.aborted) setActionError((e as Error).message);
     } finally {
-      setBusy("");
+      if (!signal.aborted) setBusy("");
     }
   }
   async function linked() {
+    const signal = lifecycle.current?.signal;
+    if (!signal || signal.aborted) return;
     setBusy("records");
     setLinkedError("");
     try {
       const value = await api<{
         records: PublicRecordSummary[];
         recordsLookup?: RecordsLookup;
-      }>(`/purchases/${id}/records/refresh`, { method: "POST", body: "{}" });
+      }>(`/purchases/${id}/records/refresh`, { method: "POST", body: "{}", signal });
+      if (signal.aborted) return;
       setData((old) =>
         old
           ? {
@@ -67,13 +101,14 @@ export function PurchaseDetailPage({ id }: { id: string }) {
           : old,
       );
     } catch (e) {
+      if (signal.aborted) return;
       setLinkedError(
         e instanceof ApiError && e.status > 0 && e.status < 500
           ? e.message
           : "Não conseguimos concluir a consulta no Compras.gov.br. Tente novamente em instantes. As atas já salvas continuam disponíveis.",
       );
     } finally {
-      setBusy("");
+      if (!signal.aborted) setBusy("");
     }
   }
   if (error && !data)
@@ -90,13 +125,14 @@ export function PurchaseDetailPage({ id }: { id: string }) {
         <button
           className="button secondary"
           onClick={refresh}
-          disabled={!!busy}
+          disabled={!!busy || updating}
         >
           <RefreshCw size={16} />
           {busy === "details" ? "Atualizando…" : "Atualizar detalhes"}
         </button>
       </PageHead>
       <div aria-live="polite">
+        {updating && <p className="catalog-notice" role="status">Atualizando dados públicos automaticamente…</p>}
         {actionError && <ErrorState message={actionError} retry={refresh} />}
       </div>
       <div className="catalog-detail">
@@ -171,9 +207,11 @@ export function PurchaseDetailPage({ id }: { id: string }) {
           </dl>
         </section>
         <PurchaseItems
-          key={`${id}:${data.detailsSyncedAt}`}
+          key={id}
           items={data.items}
           detailsSyncedAt={data.detailsSyncedAt}
+          updating={updating}
+          error={!!actionError}
         />
         <section className="detail-section">
           <div className="section-heading">
@@ -187,7 +225,7 @@ export function PurchaseDetailPage({ id }: { id: string }) {
               <button
                 className="button secondary"
                 onClick={linked}
-                disabled={!!busy}
+                disabled={!!busy || updating}
               >
                 <RefreshCw size={15} />
                 {busy === "records"
@@ -239,6 +277,7 @@ export function PurchaseDetailPage({ id }: { id: string }) {
             </div>
           )}
           {data.recordsSyncedAt &&
+            !updating &&
             !data.linkedRecords.length &&
             !data.recordsLookup?.incompleteRecords.length &&
             !linkedError && (

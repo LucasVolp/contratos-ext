@@ -325,7 +325,7 @@ export function CatalogList({ records = false }: { records?: boolean }) {
       </section>
       <p className="catalog-footnote">
         As buscas acima consultam apenas os registros já salvos. A fonte pública
-        é consultada pelas ações de consulta e atualização.
+        é consultada ao abrir os detalhes e pelas ações de consulta e atualização.
       </p>
     </>
   );

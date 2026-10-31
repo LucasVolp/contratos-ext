@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, date } from "@/lib/api";
 import {
   ItemSupplement,
@@ -58,29 +58,39 @@ function Part<T>({
 export function ItemSupplementPanel({
   recordId,
   itemKey,
-  initial,
+  data,
+  onUpdate,
+  disabled = false,
 }: {
   recordId: string;
   itemKey: string;
-  initial?: ItemSupplement;
+  data?: ItemSupplement;
+  onUpdate: (value: ItemSupplement) => void;
+  disabled?: boolean;
 }) {
-  const [data, setData] = useState(initial),
-    [error, setError] = useState(""),
+  const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const lifecycle = useRef<AbortController | null>(null);
+  useEffect(() => {
+    const c = new AbortController();
+    lifecycle.current = c;
+    return () => c.abort();
+  }, []);
   async function refresh() {
+    const signal = lifecycle.current?.signal;
+    if (!signal || signal.aborted || disabled || busy) return;
     setBusy(true);
     setError("");
     try {
-      setData(
-        await api<ItemSupplement>(
-          `/public-records/${recordId}/items/${encodeURIComponent(itemKey)}/refresh`,
-          { method: "POST", body: "{}" },
-        ),
+      const value = await api<ItemSupplement>(
+        `/public-records/${recordId}/items/${encodeURIComponent(itemKey)}/refresh`,
+        { method: "POST", body: "{}", signal },
       );
+      if (!signal.aborted) onUpdate(value);
     } catch (e) {
-      setError((e as Error).message);
+      if (!signal.aborted) setError((e as Error).message);
     } finally {
-      setBusy(false);
+      if (!signal.aborted) setBusy(false);
     }
   }
   return (
@@ -93,7 +103,7 @@ export function ItemSupplementPanel({
             de um fornecedor.
           </p>
         </div>
-        <button className="button secondary" onClick={refresh} disabled={busy}>
+        <button className="button secondary" onClick={refresh} disabled={busy || disabled}>
           {busy ? "Consultando…" : "Consultar participantes e saldos"}
         </button>
       </div>
