@@ -54,7 +54,9 @@ function parseDecimal(value) {
   return /^\d{1,18}(?:\.\d{1,6})?$/.test(s) ? s : null;
 }
 function formatDecimal(value, currency = false) {
-  const parsed = parseDecimal(value);
+  // Calculated totals can exceed the precision accepted for individual inputs.
+  const parsed = parseDecimal(value) ??
+    (typeof value === "string" && /^\d+(?:\.\d+)?$/.test(value) ? value : null);
   if (parsed === null) return String(value ?? "");
   const [integer, fraction = ""] = parsed.split(".");
   return `${currency ? "R$ " : ""}${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ".")},${fraction.padEnd(currency ? 2 : 1, "0")}`;

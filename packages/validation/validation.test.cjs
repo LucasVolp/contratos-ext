@@ -125,3 +125,12 @@ test("blur refreshes related date and item errors without revealing unrelated re
     {},
   );
 });
+
+test("calculated totals retain twelve decimal places and Brazilian formatting without relaxing input limits", () => {
+  assert.equal(v.formatDecimal("0.015241383936", true), "R$ 0,015241383936");
+  assert.equal(v.formatDecimal("123456789012345678901234567890123456.123456789012", true), "R$ 123.456.789.012.345.678.901.234.567.890.123.456,123456789012");
+  assert.equal(v.parseDecimal("0.015241383936"), null);
+  assert.equal(v.parseDecimal("123456789012345678901234567890123456.123456789012"), null);
+  assert.equal(v.formatDecimal("-1", true), "-1");
+  assert.equal(v.formatDecimal("1.2.3", true), "1.2.3");
+});
