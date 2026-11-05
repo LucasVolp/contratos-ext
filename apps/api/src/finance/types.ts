@@ -57,3 +57,43 @@ export interface CommitmentHeader {
   updatedAt: string;
 }
 export interface CommitmentDetail extends CommitmentSummary { header: CommitmentHeader | null }
+
+export interface ExecutionFilters extends Pagination {
+  managementCode: string;
+  fiscalYear: number;
+  managementUnitCode?: string;
+  expenseNature?: string;
+  actionCode?: string;
+  fromMonth: number;
+  toMonth: number;
+}
+export interface ExecutionAmounts {
+  committedValue: string | null;
+  liquidatedValue: string | null;
+  paidValue: string | null;
+  registeredPayablesValue: string | null;
+  canceledPayablesValue: string | null;
+  priorYearPaidValue: string | null;
+}
+export interface ExecutionSummary extends ExecutionAmounts {
+  sourceRowCount: number;
+  observedMonthCount: number;
+  firstMonth: string | null;
+  lastMonth: string | null;
+  lastImportedAt: string | null;
+}
+export interface ExecutionRow extends ExecutionSummary {
+  managementCode: string;
+  managementUnitCode: string;
+  unitName: string | null;
+  expenseNature: string | null;
+  economicCategoryCode: string;
+  economicCategoryName: string | null;
+  expenseGroupCode: string;
+  expenseGroupName: string | null;
+  applicationModalityCode: string | null;
+  applicationModalityName: string | null;
+  expenseElementCode: string;
+  expenseElementName: string | null;
+}
+export interface ReportPage<Row, Summary> extends Page<Row> { summary: Summary }

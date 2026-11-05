@@ -52,8 +52,9 @@ across worker processes. Local-file mode still requires only the foundation sche
 Fastify now exposes the first read-only financial slice through
 `src/finance/`: validated filters, explicit SQL repositories and paginated
 commitments with their related documents. See [Financial read API](finance-api-contract.md).
-Internal budget distribution endpoints and source-specific execution/budget reports
-are future work.
+The separate `src/finance/reports.ts` repository provides monthly execution by
+unit/classification without mixing daily facts. See [Financial reports](finance-reports-contract.md).
+Internal budget distribution endpoints and annual budget reports are future work.
 
 Persistence and financial migration tests now create temporary databases instead
 of temporary schemas. A fixed schema name such as `finance` cannot be isolated by

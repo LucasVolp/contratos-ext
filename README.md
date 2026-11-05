@@ -50,7 +50,9 @@ execution and annual budgets. Omit `-file` to download automatically, with share
 request pacing and cooldowns; date ranges are supported. The first
 [financial read API](docs/finance-api-contract.md)
 provides management units, commitment list/detail and paginated related items,
-history, liquidations and payments. Financial dashboards and budget reports are next.
+history, liquidations and payments. [Financial reports](docs/finance-reports-contract.md)
+include monthly execution by management unit and expense classification. Financial
+dashboards and annual budget reports are next.
 
 | Serviço | Tecnologia | Acesso local padrão |
 |---|---|---|

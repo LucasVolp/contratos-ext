@@ -33,7 +33,7 @@ export async function createApplication(options: ApplicationOptions = {}) {
   const service = new ApplicationService(repositories);
   const documents = new DocumentService(repositories, service);
   const catalog = new CatalogService(repositories, catalogClient);
-  const finance = new FinanceService(repositories.finance);
+  const finance = new FinanceService(repositories.finance, repositories.financeReports);
   const app = Fastify({
     logger: false,
     bodyLimit: 1024 * 1024,

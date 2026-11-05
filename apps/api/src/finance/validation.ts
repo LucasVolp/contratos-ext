@@ -1,6 +1,6 @@
 import { isDate } from "@contracts/validation";
 import { BadRequestException } from "../errors";
-import { CommitmentFilters, FinanceQuery, Pagination, UnitFilters } from "./types";
+import { CommitmentFilters, ExecutionFilters, FinanceQuery, Pagination, UnitFilters } from "./types";
 
 function invalid(field: string, message: string): never {
   throw new BadRequestException({ message, fieldErrors: { [field]: message } });
@@ -73,3 +73,25 @@ export function collectionFilters(query: FinanceQuery, history = false) {
   return { ...pagination(query), itemSequential: history && query.itemSequential !== undefined ? positive(query, "itemSequential", 1, 2147483647) : undefined };
 }
 export function detailFilters(query: FinanceQuery) { known(query, []); }
+
+function fiscalYear(query: FinanceQuery): number {
+  const year = code(query, "fiscalYear", /^[0-9]{4}$/);
+  if (!year || Number(year) < 1900 || Number(year) > 9999) invalid("fiscalYear", "Informe um exercício entre 1900 e 9999.");
+  return Number(year);
+}
+function managementCode(query: FinanceQuery): string {
+  const value = code(query, "managementCode", /^[0-9]{5}$/);
+  if (!value) invalid("managementCode", "Informe o código da gestão.");
+  return value;
+}
+export function executionFilters(query: FinanceQuery): ExecutionFilters {
+  known(query, ["managementCode", "managementUnitCode", "fiscalYear", "expenseNature", "actionCode", "fromMonth", "toMonth", "page", "limit"]);
+  const fromMonth = positive(query, "fromMonth", 1, 12), toMonth = positive(query, "toMonth", 12, 12);
+  if (fromMonth > toMonth) invalid("toMonth", "O mês final deve ser posterior ou igual ao inicial.");
+  return {
+    ...pagination(query), managementCode: managementCode(query), fiscalYear: fiscalYear(query), fromMonth, toMonth,
+    managementUnitCode: code(query, "managementUnitCode", /^[0-9]{6}$/),
+    expenseNature: code(query, "expenseNature", /^[0-9]{6}$/),
+    actionCode: code(query, "actionCode", /^[A-Za-z0-9]{1,20}$/),
+  };
+}
