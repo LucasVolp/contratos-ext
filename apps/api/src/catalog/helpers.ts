@@ -1,9 +1,8 @@
-import { BadRequestException } from "@nestjs/common";
+import { BadRequestException } from "../errors";
 import { validateFilters } from "@contracts/validation";
-import { Prisma } from "../generated/prisma/client";
 import { importRange } from "../domain";
 import { Raw } from "./types";
-export const asJson = (value: unknown): Prisma.InputJsonValue =>
+export const asJson = (value: unknown): unknown =>
   JSON.parse(JSON.stringify(value));
 export const plain = <T = Raw>(value: unknown): T =>
   JSON.parse(JSON.stringify(value));
@@ -26,17 +25,4 @@ export function syncRange(body: Raw, maxDays?: number) {
       fieldErrors: { to: `O intervalo máximo é de ${maxDays} dias.` },
     });
   return range;
-}
-export function linkedWhere(purchase: {
-  externalId: string;
-  pncpId: string | null;
-}): Prisma.PublicRecordWhereInput {
-  return purchase.pncpId
-    ? {
-        OR: [
-          { purchaseExternalId: purchase.externalId },
-          { purchaseExternalId: null, purchasePncpId: purchase.pncpId },
-        ],
-      }
-    : { purchaseExternalId: purchase.externalId };
 }

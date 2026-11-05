@@ -1,15 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createApplication } from "../../src/app";
-import { ServiceUnavailableException } from "@nestjs/common";
+import { ServiceUnavailableException } from "../../src/errors";
 import { CatalogClient } from "../../src/catalog/client";
 import { Database } from "../../src/database";
-
 test("catalog HTTP snapshots, cross-year links, supplements and supplier drafts preserve local data", async () => {
   const app = await createApplication();
-  await app.listen(0, "127.0.0.1");
-  const base = await app.getUrl();
-  const db = app.get(Database);
+  const base = await app.listen({ port: 0, host: "127.0.0.1" });
+  const db = app.db,
+    repos = app.repositories;
   const marker = `CAT-${Date.now()}`;
   const req = async (path: string, method = "GET", body?: unknown) =>
     fetch(base + "/api" + path, {
@@ -94,7 +93,7 @@ test("catalog HTTP snapshots, cross-year links, supplements and supplier drafts 
   try {
     // This assertion was RED before the catalog controllers were registered.
     assert.equal((await req("/purchases?uasg=999999")).status, 200);
-    const client = app.get(CatalogClient);
+    const client = app.catalogClient;
     Object.assign(client, {
       purchases: async () => [header],
       purchase: async () => {
@@ -199,9 +198,7 @@ test("catalog HTTP snapshots, cross-year links, supplements and supplier drafts 
     );
     const list = await call(`/purchases?search=${marker}`);
     assert.equal(list.total, 0); // Search uses public number/object, not opaque technical identity.
-    const saved = await db.publicPurchase.findUniqueOrThrow({
-        where: { externalId: marker },
-      }),
+    const saved = (await repos.purchases.byExternalId(marker))!,
       id = saved.id;
     let purchase = await call(`/purchases/${id}/refresh`, "POST");
     assert.equal(purchase.items[0].results.length, 3);
@@ -228,7 +225,14 @@ test("catalog HTTP snapshots, cross-year links, supplements and supplier drafts 
     assert.equal(readPurchase.items[0].results.length, 3);
     assert.deepEqual(readPurchase.recordsLookup, linked.recordsLookup);
     assert.equal(
-      await db.publicRecord.count({ where: { externalId: `OTHER-${marker}` } }),
+      (
+        await db.query<{
+          count: number;
+        }>(
+          'SELECT COUNT(*)::int AS count FROM "PublicRecord" WHERE "externalId"=$1',
+          [`OTHER-${marker}`],
+        )
+      )[0].count,
       0,
     );
     const recordId = linked.records[0].id;
@@ -262,9 +266,7 @@ test("catalog HTTP snapshots, cross-year links, supplements and supplier drafts 
     failDetail = true;
     await call(`/public-records/${recordId}/refresh`, "POST");
     assert.equal((await cancelledDraft()).status, 422);
-    const savedRecord = await db.publicRecord.findUniqueOrThrow({
-      where: { id: recordId },
-    });
+    const savedRecord = (await repos.publicRecords.get(recordId))!;
     assert.ok(
       (savedRecord.snapshot as any).purchaseResultStates.some(
         (state: any) =>
@@ -306,13 +308,11 @@ test("catalog HTTP snapshots, cross-year links, supplements and supplier drafts 
         warranty: "36 meses",
       })),
     });
-    await db.documentExport.create({
-      data: {
-        recordId: first.id,
-        format: "docx",
-        templateVersion: "test",
-        snapshot: { immutable: true },
-      },
+    await repos.exports.create({
+      recordId: first.id,
+      format: "docx",
+      templateVersion: "test",
+      snapshot: { immutable: true },
     });
     assert.deepEqual(
       await call(`/public-records/${recordId}/draft`, "POST", {
@@ -330,29 +330,30 @@ test("catalog HTTP snapshots, cross-year links, supplements and supplier drafts 
       sourcePublicRecordId: null,
       sourceSupplierDocument: null,
     });
-    const protectedRow = await db.priceRecord.findUniqueOrThrow({
-      where: { id: first.id },
-    });
+    const protectedRow = (await repos.records.get(first.id))!;
     assert.equal(protectedRow.sourcePublicRecordId, recordId);
     assert.equal(protectedRow.sourceSupplierDocument, supplierA);
   } finally {
-    await db.priceRecord.deleteMany({
-      where: { number: marker, uasg: "999999" },
-    });
-    await db.publicRecord.deleteMany({
-      where: { externalId: { contains: marker } },
-    });
-    await db.publicPurchase.deleteMany({ where: { externalId: marker } });
+    await db.query('DELETE FROM "PriceRecord" WHERE number=$1 AND uasg=$2', [
+      marker,
+      "999999",
+    ]);
+    await db.query(
+      'DELETE FROM "PublicRecord" WHERE strpos("externalId",$1)>0',
+      [marker],
+    );
+    await db.query('DELETE FROM "PublicPurchase" WHERE "externalId"=$1', [
+      marker,
+    ]);
     await app.close();
   }
 });
-
 test("automatic public endpoints share requests, retain partial cache, and bulk refresh every unique item", async () => {
   const app = await createApplication();
-  await app.listen(0, "127.0.0.1");
-  const base = await app.getUrl(),
-    db = app.get(Database),
-    client = app.get(CatalogClient);
+  const base = await app.listen({ port: 0, host: "127.0.0.1" }),
+    db = app.db,
+    repos = app.repositories,
+    client = app.catalogClient;
   const marker = `AUTO-${Date.now()}`;
   const call = async (path: string, body: unknown = {}) => {
     const response = await fetch(`${base}/api${path}`, {
@@ -362,31 +363,27 @@ test("automatic public endpoints share requests, retain partial cache, and bulk 
     });
     return { status: response.status, body: await response.json() };
   };
-  const purchase = await db.publicPurchase.create({
-    data: {
-      externalId: marker,
-      uasg: "999998",
-      number: marker,
-      srp: true,
-      year: 2026,
-      summary: {},
-      snapshot: { items: [{ number: "cached" }] },
-    },
+  const purchase = await repos.purchases.upsert({
+    externalId: marker,
+    uasg: "999998",
+    number: marker,
+    srp: true,
+    year: 2026,
+    summary: {},
+    snapshot: { items: [{ number: "cached" }] },
   });
-  const record = await db.publicRecord.create({
-    data: {
-      externalId: `ATA-${marker}`,
-      uasg: "999998",
-      number: marker,
-      summary: {},
-      detailsSyncedAt: new Date(),
-      snapshot: {
-        items: [
-          { key: "00001", supplierDocument: "a" },
-          { key: "1", supplierDocument: "b" },
-          { key: "2", supplierDocument: "c" },
-        ],
-      },
+  const record = await repos.publicRecords.upsert({
+    externalId: `ATA-${marker}`,
+    uasg: "999998",
+    number: marker,
+    summary: {},
+    detailsSyncedAt: new Date(),
+    snapshot: {
+      items: [
+        { key: "00001", supplierDocument: "a" },
+        { key: "1", supplierDocument: "b" },
+        { key: "2", supplierDocument: "c" },
+      ],
     },
   });
   let purchaseCalls = 0,
@@ -476,10 +473,7 @@ test("automatic public endpoints share requests, retain partial cache, and bulk 
     );
     await call(`/public-records/${record.id}/supplements/refresh`);
     assert.equal(adhesions, 4);
-    await db.publicRecord.update({
-      where: { id: record.id },
-      data: { detailsSyncedAt: null },
-    });
+    await repos.publicRecords.update(record.id, { detailsSyncedAt: null });
     assert.equal(
       (await call(`/public-records/${record.id}/supplements/refresh`)).status,
       422,
@@ -493,8 +487,10 @@ test("automatic public endpoints share requests, retain partial cache, and bulk 
       404,
     );
   } finally {
-    await db.publicRecord.delete({ where: { id: record.id } });
-    await db.publicPurchase.delete({ where: { id: purchase.id } });
+    await db.query('DELETE FROM "PublicRecord" WHERE id=$1::uuid', [record.id]);
+    await db.query('DELETE FROM "PublicPurchase" WHERE id=$1::uuid', [
+      purchase.id,
+    ]);
     await app.close();
   }
 });

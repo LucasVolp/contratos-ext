@@ -6,12 +6,13 @@ import {
   InternalServerErrorException,
   ServiceUnavailableException,
   UnprocessableEntityException,
-} from "@nestjs/common";
+} from "./errors";
 import Docxtemplater from "docxtemplater";
 import PizZip from "pizzip";
 import Decimal from "decimal.js";
 import { Data, readiness } from "./domain";
 import { ApplicationService } from "./service";
+import { Repositories } from "./repositories";
 export const TEMPLATE_VERSION = "arp-ata-14133-standalone-v2";
 const brDate = (value: string | null) =>
   value ? value.split("-").reverse().join("/") : " ";
@@ -137,7 +138,7 @@ export async function convertPdf(
 }
 export class DocumentService {
   constructor(
-    private readonly db: any,
+    private readonly db: Pick<Repositories, "exports">,
     private readonly app: ApplicationService,
     private readonly converter: (docx: Buffer) => Promise<Buffer> = convertPdf,
   ) {}
@@ -162,21 +163,19 @@ export class DocumentService {
     // Persist only a successful result; snapshots are JSON copies and have no update endpoint.
     // Avoid a local `exports` binding: CommonJS uses it for exported constants.
     const { exports: exportHistory, ...snapshotRecord } = record;
-    await this.db.documentExport.create({
-      data: {
-        recordId: id,
-        format,
-        templateVersion: TEMPLATE_VERSION,
-        itemNumber: itemId ? selected.items[0].number : null,
-        snapshot: JSON.parse(
-          JSON.stringify({
-            record: snapshotRecord,
-            itemId: itemId ?? null,
-            format,
-            templateVersion: TEMPLATE_VERSION,
-          }),
-        ),
-      },
+    await this.db.exports.create({
+      recordId: id,
+      format,
+      templateVersion: TEMPLATE_VERSION,
+      itemNumber: itemId ? selected.items[0].number : null,
+      snapshot: JSON.parse(
+        JSON.stringify({
+          record: snapshotRecord,
+          itemId: itemId ?? null,
+          format,
+          templateVersion: TEMPLATE_VERSION,
+        }),
+      ),
     });
     return {
       buffer,

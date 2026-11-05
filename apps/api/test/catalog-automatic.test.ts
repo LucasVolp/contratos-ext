@@ -97,17 +97,15 @@ test("bulk supplements deduplicate numeric provider keys, fetch commitments once
     snapshot: { items: [{ key: "00001" }, { key: "1" }, { key: "2" }] },
   };
   const db: any = {
-    publicRecord: { findUnique: async () => record },
-    catalogSupplement: {
-      findMany: async () => rows,
-      upsert: async ({ where, create, update }: any) => {
+    publicRecords: { get: async () => record },
+    supplements: {
+      list: async () => rows,
+      store: async (identity: any, update: any) => {
         const found = rows.find((r) =>
-          Object.entries(where.publicRecordId_itemNumber_kind).every(
-            ([k, v]) => r[k] === v,
-          ),
+          Object.entries(identity).every(([k, v]) => r[k] === v),
         );
         if (found) Object.assign(found, update);
-        else rows.push(create);
+        else rows.push({ ...identity, data: [], ...update });
       },
     },
   };
@@ -191,18 +189,18 @@ test("unknown SRP never queries linked records even after detail source fails", 
 test("bulk reports useful 422 for items without numeric identities", async () => {
   const supplements = new CatalogSupplements(
     {
-      publicRecord: {
-        findUnique: async () => ({
+      publicRecords: {
+        get: async () => ({
           detailsSyncedAt: new Date(),
           snapshot: { items: [{ key: "opaque" }] },
         }),
       },
-      catalogSupplement: { findMany: async () => [] },
+      supplements: { list: async () => [] },
     } as any,
     {} as any,
   );
   await assert.rejects(
     () => supplements.refreshAll("r"),
-    (error: any) => error.getStatus() === 422,
+    (error: any) => error.statusCode === 422,
   );
 });

@@ -134,7 +134,7 @@ test("catalog client divides linked record windows across years without unoffici
 test("catalog synchronization collects all external data before any transaction", async () => {
   let writes = 0;
   const db: any = {
-    $transaction: async () => {
+    transaction: async () => {
       writes++;
     },
   };
@@ -157,18 +157,18 @@ test("catalog synchronization collects all external data before any transaction"
 test("summary sync never includes details in update and preserves existing item snapshots", async () => {
   const updates: any[] = [];
   const tx: any = {
-    publicPurchase: {
-      findUnique: async () => ({
+    purchases: {
+      byExternalId: async () => ({
         id: "old",
         snapshot: { items: [{ description: "saved" }] },
       }),
       upsert: async (arg: any) => {
         updates.push(arg);
-        return arg.update;
+        return arg;
       },
     },
   };
-  const db: any = { $transaction: async (fn: any) => fn(tx) };
+  const db: any = { transaction: async (fn: any) => fn(tx) };
   const client: any = {
     purchases: async () => [
       { idCompra: "a", numeroCompra: "1", unidadeOrgaoCodigoUnidade: "158148" },
@@ -182,26 +182,26 @@ test("summary sync never includes details in update and preserves existing item 
     }),
     { created: 0, updated: 1, total: 1 },
   );
-  assert.equal("snapshot" in updates[0].update, false);
-  assert.equal("detailsSyncedAt" in updates[0].update, false);
+  assert.equal("snapshot" in updates[0], false);
+  assert.equal("detailsSyncedAt" in updates[0], false);
 });
 test("existing source supplier draft is returned without touching any local data", async () => {
   let writes = 0;
   const db: any = {
-    publicRecord: {
-      findUnique: async () => ({
+    publicRecords: {
+      get: async () => ({
         id: "ata",
         detailsSyncedAt: new Date(),
         snapshot: {},
       }),
     },
-    priceRecord: {
-      findUnique: async () => ({
+    records: {
+      bySource: async () => ({
         id: "draft",
         object: "Edited",
         exports: [{}],
       }),
-      create: async () => {
+      save: async () => {
         writes++;
       },
     },
@@ -320,26 +320,26 @@ test("draft excludes a supplier item whose exact purchase results are all confir
   };
   let writes = 0;
   const tx: any = {
-    priceRecord: {
-      findUnique: async () => null,
-      findMany: async () => [],
-      create: async () => {
+    records: {
+      bySource: async () => null,
+      byIdentity: async () => [],
+      save: async () => {
         writes++;
         return { id: "new" };
       },
     },
   };
   const db: any = {
-    publicRecord: { findUnique: async () => source },
-    priceRecord: { findUnique: async () => null },
-    $transaction: async (fn: any) => fn(tx),
+    publicRecords: { get: async () => source },
+    records: { bySource: async () => null },
+    transaction: async (fn: any) => fn(tx),
   };
   await assert.rejects(
     () =>
       new CatalogService(db, {} as any).draft("ata", {
         supplierDocument: supplier,
       }),
-    (error: any) => error.getStatus() === 422,
+    (error: any) => error.statusCode === 422,
   );
   assert.equal(writes, 0);
 });
@@ -432,15 +432,15 @@ for (const pncpOnly of [false, true]) {
         },
       };
       const db: any = {
-        publicRecord: {
-          findUnique: async () => source,
-          update: async ({ data }: any) => {
+        publicRecords: {
+          get: async () => source,
+          update: async (_id: string, data: any) => {
             source.snapshot = data.snapshot;
           },
         },
-        publicPurchase: {
-          findUnique: async () => cached,
-          findFirst: async () => cached,
+        purchases: {
+          byExternalId: async () => cached,
+          byPncpId: async () => cached,
         },
       };
       const client: any = {
@@ -483,16 +483,16 @@ test("draft uses newer local purchase cancellation without refreshing the record
     },
   };
   const db: any = {
-    publicRecord: { findUnique: async () => source },
-    publicPurchase: { findUnique: async () => cached },
-    priceRecord: { findUnique: async () => null },
+    publicRecords: { get: async () => source },
+    purchases: { byExternalId: async () => cached },
+    records: { bySource: async () => null },
   };
   await assert.rejects(
     () =>
       new CatalogService(db, {} as any).draft("ata", {
         supplierDocument: supplier,
       }),
-    (error: any) => error.getStatus?.() === 422,
+    (error: any) => error.statusCode === 422,
   );
 });
 
@@ -559,15 +559,15 @@ test("padded record item cannot bypass cancellation for the same numeric PNCP it
     },
   };
   const db: any = {
-    publicRecord: { findUnique: async () => source },
-    priceRecord: { findUnique: async () => null },
+    publicRecords: { get: async () => source },
+    records: { bySource: async () => null },
   };
   await assert.rejects(
     () =>
       new CatalogService(db, {} as any).draft("ata", {
         supplierDocument: supplier,
       }),
-    (error: any) => error.getStatus?.() === 422,
+    (error: any) => error.statusCode === 422,
   );
 });
 
@@ -583,26 +583,26 @@ function linkedLookupFixture(rows: any[]) {
     uasg: "158148",
   };
   const tx: any = {
-    publicRecord: {
-      findUnique: async () => null,
-      upsert: async ({ create }: any) => {
+    publicRecords: {
+      byExternalId: async () => null,
+      upsert: async (create: any) => {
         saved.push({ id: "ata-local", ...create });
       },
     },
-    publicPurchase: {
+    purchases: {
       update: async () => {
         writes++;
       },
+      mergeSnapshot: async () => {},
     },
-    $executeRaw: async () => 1,
   };
   const db: any = {
-    publicPurchase: {
-      findUnique: async () => purchase,
-      findMany: async () => [],
+    purchases: {
+      get: async () => purchase,
+      links: async () => [],
     },
-    publicRecord: { findMany: async () => saved },
-    $transaction: async (fn: any) => fn(tx),
+    publicRecords: { byExternalIds: async () => saved },
+    transaction: async (fn: any) => fn(tx),
   };
   return {
     service: new CatalogService(db, { records: async () => rows } as any),

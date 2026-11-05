@@ -3,13 +3,9 @@ import {
   BadGatewayException,
   NotFoundException,
   UnprocessableEntityException,
-} from "@nestjs/common";
-import {
-  PrismaClient,
-  Prisma,
-  PublicPurchase,
-  PublicRecord,
-} from "../generated/prisma/client";
+} from "../errors";
+import { Repositories } from "../repositories";
+import { PublicPurchase, PublicRecord } from "../models";
 import { pagination } from "../domain";
 import { CatalogClient } from "./client";
 import { Raw, PurchaseSnapshot, RecordSnapshot } from "./types";
@@ -23,7 +19,7 @@ import {
   requireIdentity,
   string,
 } from "./mappers";
-import { asJson, plain, filters, syncRange, linkedWhere } from "./helpers";
+import { asJson, plain, filters, syncRange } from "./helpers";
 import {
   linkedPurchaseCache,
   purchaseResultEvidence,
@@ -31,12 +27,11 @@ import {
 import { AutomaticRefresh, fresh } from "./automatic";
 import { CatalogDrafts } from "./drafts";
 import { CatalogSupplements, presentSupplement } from "./supplements";
-
 export class CatalogService {
   private readonly automatic = new AutomaticRefresh();
   private readonly supplements: CatalogSupplements;
   constructor(
-    readonly db: PrismaClient,
+    readonly db: Repositories,
     readonly client: CatalogClient = new CatalogClient(),
   ) {
     this.supplements = new CatalogSupplements(db, client);
@@ -44,49 +39,16 @@ export class CatalogService {
   async purchases(query: Raw) {
     filters(query);
     const { page, limit } = pagination(query);
-    const where: Prisma.PublicPurchaseWhereInput = {};
-    if (query.uasg) where.uasg = String(query.uasg);
-    if (query.from || query.to)
-      where.publishedAt = {
-        not: null,
-        ...(query.from ? { gte: query.from } : {}),
-        ...(query.to ? { lte: query.to } : {}),
-      };
-    if (query.search)
-      where.OR = [
-        "number",
-        "object",
-        "processNumber",
-        "organizationName",
-        "unitName",
-      ].map((key) => ({
-        [key]: { contains: String(query.search), mode: "insensitive" },
-      }));
-    const [rows, stats, srpCount] = await Promise.all([
-      this.db.publicPurchase.findMany({
-        where,
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: [{ publishedAt: "desc" }, { id: "asc" }],
-      }),
-      this.db.publicPurchase.aggregate({
-        where,
-        _count: { _all: true },
-        _sum: { estimatedValue: true, awardedValue: true },
-      }),
-      this.db.publicPurchase.count({ where: { AND: [where, { srp: true }] } }),
+    const [rows, stats] = await Promise.all([
+      this.db.purchases.list(query, page, limit),
+      this.db.purchases.stats(query),
     ]);
     return plain({
       data: rows.map((row) => this.purchaseSummary(row)),
-      total: stats._count._all,
+      total: stats.count,
       page,
       limit,
-      stats: {
-        count: stats._count._all,
-        srpCount,
-        estimatedValue: stats._sum.estimatedValue?.toString() ?? null,
-        awardedValue: stats._sum.awardedValue?.toString() ?? null,
-      },
+      stats,
     });
   }
   purchaseSummary(row: PublicPurchase) {
@@ -97,7 +59,7 @@ export class CatalogService {
     };
   }
   async purchaseRow(id: string) {
-    const row = await this.db.publicPurchase.findUnique({ where: { id } });
+    const row = await this.db.purchases.get(id);
     if (!row)
       throw new NotFoundException(
         "Pregão não encontrado no catálogo local. Consulte a UASG e o período para importar.",
@@ -106,10 +68,7 @@ export class CatalogService {
   }
   async purchase(id: string) {
     const row = await this.purchaseRow(id);
-    const linked = await this.db.publicRecord.findMany({
-      where: linkedWhere(row),
-      orderBy: { startDate: "desc" },
-    });
+    const linked = await this.db.publicRecords.linkedTo(row);
     const linkedRecords = await this.recordSummaries(linked);
     return plain({
       ...this.purchaseSummary(row),
@@ -131,24 +90,18 @@ export class CatalogService {
           }),
       ).values(),
     ];
-    return this.db.$transaction(
+    return this.db.transaction(
       async (tx) => {
         let created = 0,
           updated = 0;
         for (const row of rows) {
-          const existing = await tx.publicPurchase.findUnique({
-            where: { externalId: row.data.externalId },
-          });
+          const existing = await tx.purchases.byExternalId(row.data.externalId);
           const data = {
             ...row.data,
             lastSyncedAt: new Date(),
             summary: asJson(row.raw),
           };
-          await tx.publicPurchase.upsert({
-            where: { externalId: row.data.externalId },
-            create: data,
-            update: data,
-          });
+          await tx.purchases.upsert(data);
           existing ? updated++ : created++;
         }
         return { created, updated, total: rows.length };
@@ -177,19 +130,16 @@ export class CatalogService {
       rawItems: items,
       rawResults: results,
     };
-    await this.db.$transaction(async (tx) => {
-      await tx.publicPurchase.update({
-        where: { id },
-        data: {
-          ...mapPurchase(header),
-          summary: asJson(header),
-          lastSyncedAt: new Date(),
-          detailsSyncedAt: new Date(),
-        },
+    await this.db.transaction(async (tx) => {
+      await tx.purchases.update(id, {
+        ...mapPurchase(header),
+        summary: asJson(header),
+        lastSyncedAt: new Date(),
+        detailsSyncedAt: new Date(),
       });
       // Merge independent snapshot sections so detail refresh cannot erase
       // the result of a concurrent linked-record lookup.
-      await tx.$executeRaw`UPDATE "PublicPurchase" SET "snapshot" = "snapshot" || ${JSON.stringify(snapshot)}::jsonb WHERE "id" = ${id}::uuid`;
+      await tx.purchases.mergeSnapshot(id, snapshot);
     });
     return this.purchase(id);
   }
@@ -202,15 +152,7 @@ export class CatalogService {
         .map((row) => row.purchasePncpId)
         .filter((id): id is string => !!id);
     const purchases = rows.length
-      ? await this.db.publicPurchase.findMany({
-          where: {
-            OR: [
-              { externalId: { in: externalIds } },
-              { pncpId: { in: pncpIds } },
-            ],
-          },
-          select: { id: true, externalId: true, pncpId: true },
-        })
+      ? await this.db.purchases.links(externalIds, pncpIds)
       : [];
     return rows.map((row) => {
       const { summary, snapshot, ...result } = row;
@@ -221,51 +163,20 @@ export class CatalogService {
   async records(query: Raw) {
     filters(query);
     const { page, limit } = pagination(query);
-    const where: Prisma.PublicRecordWhereInput = {};
-    if (query.uasg) where.uasg = String(query.uasg);
-    if (query.from || query.to)
-      where.AND = [
-        { startDate: { not: null } },
-        { endDate: { not: null } },
-        ...(query.from ? [{ endDate: { gte: String(query.from) } }] : []),
-        ...(query.to ? [{ startDate: { lte: String(query.to) } }] : []),
-      ];
-    if (query.search)
-      where.OR = [
-        "number",
-        "object",
-        "organizationName",
-        "unitName",
-        "purchaseNumber",
-      ].map((key) => ({
-        [key]: { contains: String(query.search), mode: "insensitive" },
-      }));
     const [rows, stats] = await Promise.all([
-      this.db.publicRecord.findMany({
-        where,
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: [{ startDate: "desc" }, { id: "asc" }],
-      }),
-      this.db.publicRecord.aggregate({
-        where,
-        _count: { _all: true },
-        _sum: { totalValue: true },
-      }),
+      this.db.publicRecords.list(query, page, limit),
+      this.db.publicRecords.stats(query),
     ]);
     return plain({
       data: await this.recordSummaries(rows),
-      total: stats._count._all,
+      total: stats.count,
       page,
       limit,
-      stats: {
-        count: stats._count._all,
-        totalValue: stats._sum.totalValue?.toString() ?? null,
-      },
+      stats,
     });
   }
   async recordRow(id: string) {
-    const row = await this.db.publicRecord.findUnique({ where: { id } });
+    const row = await this.db.publicRecords.get(id);
     if (!row)
       throw new NotFoundException(
         "Ata publicada não encontrada no catálogo local.",
@@ -276,9 +187,7 @@ export class CatalogService {
     const row = await this.recordRow(id),
       snapshot = row.snapshot as Raw;
     const summaries = await this.recordSummaries([row]);
-    const supplements = await this.db.catalogSupplement.findMany({
-      where: { publicRecordId: id },
-    });
+    const supplements = await this.db.supplements.list(id);
     const items = (snapshot.items ?? []).map((item: Raw) => ({
       ...item,
       supplement: presentSupplement(supplements, item.key),
@@ -303,24 +212,18 @@ export class CatalogService {
       state: snapshot.state ?? "",
     });
   }
-  private async storeRecords(tx: Prisma.TransactionClient, rows: Raw[]) {
+  private async storeRecords(tx: Repositories, rows: Raw[]) {
     let created = 0,
       updated = 0;
     for (const raw of rows) {
       const mapped = mapPublicRecord(raw);
-      const existing = await tx.publicRecord.findUnique({
-        where: { externalId: mapped.externalId },
-      });
+      const existing = await tx.publicRecords.byExternalId(mapped.externalId);
       const data = {
         ...mapped,
         summary: asJson(raw),
         lastSyncedAt: new Date(),
       };
-      await tx.publicRecord.upsert({
-        where: { externalId: mapped.externalId },
-        create: data,
-        update: data,
-      });
+      await tx.publicRecords.upsert(data);
       existing ? updated++ : created++;
     }
     return { created, updated, total: rows.length };
@@ -341,7 +244,7 @@ export class CatalogService {
   async syncRecords(body: Raw) {
     const { uasg, from, to } = syncRange(body);
     const rows = this.uniqueRecords(await this.client.records(uasg, from, to));
-    return this.db.$transaction((tx) => this.storeRecords(tx, rows), {
+    return this.db.transaction((tx) => this.storeRecords(tx, rows), {
       timeout: 60000,
     });
   }
@@ -380,22 +283,17 @@ export class CatalogService {
     const rows = this.uniqueRecords(
       matching.filter((raw) => string(raw.numeroControlePncpAta).trim()),
     );
-    await this.db.$transaction(
+    await this.db.transaction(
       async (tx) => {
         await this.storeRecords(tx, rows);
-        await tx.publicPurchase.update({
-          where: { id },
-          data: { recordsSyncedAt: new Date() },
-        });
-        await tx.$executeRaw`UPDATE "PublicPurchase" SET "snapshot" = "snapshot" || ${JSON.stringify({ recordsLookup })}::jsonb WHERE "id" = ${id}::uuid`;
+        await tx.purchases.update(id, { recordsSyncedAt: new Date() });
+        await tx.purchases.mergeSnapshot(id, { recordsLookup });
       },
       { timeout: 60000 },
     );
-    const records = await this.db.publicRecord.findMany({
-      where: {
-        externalId: { in: rows.map((raw) => mapPublicRecord(raw).externalId) },
-      },
-    });
+    const records = await this.db.publicRecords.byExternalIds(
+      rows.map((raw) => mapPublicRecord(raw).externalId),
+    );
     return plain({
       total: records.length,
       records: await this.recordSummaries(records),
@@ -499,23 +397,23 @@ export class CatalogService {
       modality: modality ?? old.modality ?? null,
       purchaseSrp: purchase?.srp ?? old.purchaseSrp ?? null,
     };
-    await this.db.publicRecord.update({
-      where: { id },
-      data: {
-        ...mapped,
-        organizationName: purchase?.organizationName || mapped.organizationName,
-        summary: asJson(header),
-        snapshot: asJson(snapshot),
-        lastSyncedAt: new Date(),
-        detailsSyncedAt: new Date(),
-      },
+    await this.db.publicRecords.update(id, {
+      ...mapped,
+      organizationName: purchase?.organizationName || mapped.organizationName,
+      summary: asJson(header),
+      snapshot: asJson(snapshot),
+      lastSyncedAt: new Date(),
+      detailsSyncedAt: new Date(),
     });
     return this.record(id);
   }
   ensurePurchase(id: string, body: Raw = {}) {
     return this.automatic.run(`purchase:${id}`, async () => {
       let row = await this.purchaseRow(id);
-      const errors: { details?: string; records?: string } = {};
+      const errors: {
+        details?: string;
+        records?: string;
+      } = {};
       if (body.force === true || !fresh(row.detailsSyncedAt)) {
         const error = await this.automatic.stage(
           `purchase-details:${id}`,
@@ -544,7 +442,9 @@ export class CatalogService {
   ensureRecord(id: string, body: Raw = {}) {
     return this.automatic.run(`record:${id}`, async () => {
       const row = await this.recordRow(id);
-      const errors: { details?: string } = {};
+      const errors: {
+        details?: string;
+      } = {};
       if (body.force === true || !fresh(row.detailsSyncedAt)) {
         const error = await this.automatic.stage(
           `record-details:${id}`,

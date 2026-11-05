@@ -7,3 +7,6 @@
 **/*.tsbuildinfo
 playwright-report
 test-results
+
+# Obsolete generated ORM client from pre-migration local checkouts.
+**/src/generated

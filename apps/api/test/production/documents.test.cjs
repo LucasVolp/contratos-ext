@@ -38,8 +38,8 @@ for (const format of ["docx", "pdf"]) {
     };
     let saved;
     const db = {
-      documentExport: {
-        create: async ({ data }) => {
+      exports: {
+        create: async (data) => {
           assert.equal(data.templateVersion, TEMPLATE_VERSION);
           assert.equal(data.snapshot.templateVersion, TEMPLATE_VERSION);
           saved = structuredClone(data);

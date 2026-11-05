@@ -4,7 +4,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
   UnprocessableEntityException,
-} from "@nestjs/common";
+} from "./errors";
 import {
   Data,
   date,

@@ -1,7 +1,9 @@
 import "../src/env";
 import { Database } from "../src/database";
+import { Repositories } from "../src/repositories";
 import { validateRecord } from "../src/domain";
 const db = new Database();
+const repos = new Repositories(db);
 function day(offset: number) {
   const result = new Date();
   result.setUTCHours(0, 0, 0, 0);
@@ -56,11 +58,12 @@ async function seed() {
       initialValue: sample.globalValue,
       source: "MANUAL",
     };
-    await db.contract.upsert({
-      where: { id: data.id },
-      create: data,
-      update: {},
-    });
+    await repos.transaction(
+      async (tx) => {
+        if (!(await tx.contracts.get(data.id))) await tx.contracts.create(data);
+      },
+      { serializable: true },
+    );
   }
   const { items, ...data } = validateRecord({
     number: "DEMO-ARP-001",
@@ -109,15 +112,14 @@ async function seed() {
       },
     ],
   });
-  await db.priceRecord.upsert({
-    where: { id: "20000000-0000-4000-8000-000000000001" },
-    create: {
-      id: "20000000-0000-4000-8000-000000000001",
-      ...(data as any),
-      items: { create: items },
+  await repos.transaction(
+    async (tx) => {
+      const id = "20000000-0000-4000-8000-000000000001";
+      if (!(await tx.records.get(id)))
+        await tx.records.save(null, { id, ...data }, items);
     },
-    update: {},
-  });
+    { serializable: true },
+  );
   console.log(
     "Demonstração pronta: 4 contratos e 1 ata. Os dados são fictícios; nenhum outro registro foi removido.",
   );
@@ -127,4 +129,4 @@ seed()
     console.error(error);
     process.exitCode = 1;
   })
-  .finally(() => db.$disconnect());
+  .finally(() => db.close());

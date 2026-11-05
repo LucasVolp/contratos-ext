@@ -4,7 +4,7 @@ import {
   parseDecimal,
   isDate,
 } from "@contracts/validation";
-import { BadRequestException, NotFoundException } from "@nestjs/common";
+import { BadRequestException, NotFoundException } from "./errors";
 import Decimal from "decimal.js";
 Decimal.set({ precision: 60 });
 export type Data = Record<string, any>;

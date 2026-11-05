@@ -148,8 +148,8 @@ test("shared server validation returns every exact field error and canonical ide
         globalValue: "-1",
       }),
     (error: any) => {
-      assert.equal(error.getStatus(), 400);
-      const { fieldErrors } = error.getResponse();
+      assert.equal(error.statusCode, 400);
+      const { fieldErrors } = error.body;
       assert.ok(fieldErrors.uasg);
       assert.ok(fieldErrors.supplierDocument);
       assert.ok(fieldErrors.globalValue);

@@ -1,15 +1,15 @@
-import { PrismaClient } from "../generated/prisma/client";
+import { Repositories } from "../repositories";
 import { mapPurchaseResultStates, string } from "./mappers";
 import { Raw, RecordSnapshot } from "./types";
 
 export function linkedPurchaseCache(
-  db: PrismaClient,
+  db: Repositories,
   identity: { purchaseExternalId?: string | null; purchasePncpId?: string | null },
 ) {
   if (identity.purchaseExternalId)
-    return db.publicPurchase.findUnique({ where: { externalId: identity.purchaseExternalId } });
+    return db.purchases.byExternalId(identity.purchaseExternalId);
   if (identity.purchasePncpId)
-    return db.publicPurchase.findFirst({ where: { pncpId: identity.purchasePncpId } });
+    return db.purchases.byPncpId(identity.purchasePncpId);
   return Promise.resolve(null);
 }
 

@@ -161,7 +161,7 @@ test("unsupported named modalities cannot silently become a pregão document", (
         "000123",
       ),
     (error: any) =>
-      error.getStatus() === 422 && /modalidade/i.test(error.message),
+      error.statusCode === 422 && /modalidade/i.test(error.message),
   );
 });
 test("imported contracts retain and validate alphanumeric supplier documents", () => {

@@ -53,3 +53,20 @@ Caso real informado pelo usuário: UUID local `d932468e-3d4a-4c5c-95a1-1e12f4572
 Os 223 itens salvos do pregão são apresentados com 5 por página por padrão, opções 5/10/25, busca por número/descrição/fornecedor e controles no início e no fim. Mudar página ou buscar não consulta novamente o governo. Resultados e cancelamentos continuam completos por item. Mensagens diferenciam ausência confirmada, consulta parcial e indisponibilidade, com nova tentativa e preservação do cache.
 
 Verificação: 4 novas regressões unitárias, integração PostgreSQL/HTTP ampliada e 2 novos fluxos de navegador, com RED observado antes das correções. Suíte final: 9 validações + 57 unitários API + 2 CommonJS + 2 integrações + 23 E2E = 93 testes. Build Docker e lint passando. Consulta real em Docker retornou 29 atas e 15 incompletas; GET e recarregamento preservaram os dados. Inspeção visual desktop e móvel: apenas 5 itens renderizados; viewport e scrollWidth de 390px no celular.
+
+## Migração para Fastify e SQL — 04/11/2026
+
+Backend convertido de NestJS/Prisma para Fastify 5 e PostgreSQL pelo driver `pg`. O esquema de negócio e os contratos HTTP foram preservados. SQL foi isolado em repositórios; tipos de persistência e erros HTTP não dependem mais de código gerado ou de framework de injeção. As duas migrações SQL originais foram movidas preservando seus bytes e checksums.
+
+Verificações desta etapa:
+
+- 9 testes de validação compartilhada, 65 testes unitários/HTTP da API e 2 regressões do CommonJS compilado aprovados.
+- 7 integrações com PostgreSQL real aprovadas localmente e na imagem final com Node.js 22, incluindo inicialização de banco vazio, adoção do histórico anterior, checksums, rollback de cabeçalho/itens, precisão decimal, timestamps UTC, mescla concorrente de JSON e criação simultânea do mesmo rascunho.
+- 27 testes de navegador aprovados, incluindo DOCX/PDF reais, edição, catálogo, recuperação de falhas e navegação móvel. O teardown das rotas simuladas do catálogo agora aguarda requisições em andamento antes de encerrar a fixture HTTP.
+- `pnpm lint` aprovado. TypeScript dos testes de integração e dos scripts verificado separadamente.
+- API compilada com limpeza de artefatos antigos; imagem Docker final construída com Node.js 22, instalação pelo lockfile e sem cliente gerado de ORM no artefato.
+- Frontend compilado com `next build --webpack`. O build padrão com Turbopack encontrou `Operation not permitted` ao abrir uma porta durante o processamento de CSS neste ambiente, inclusive na tentativa com execução ampliada. Nenhuma alteração de configuração do frontend foi necessária para validar os fluxos.
+- Seed executado duas vezes com sucesso no banco separado `contracts_fastify_test`. O banco original da aplicação não foi alterado. Servidores temporários de API/web foram encerrados após os testes.
+- `docker compose config --quiet` e `git diff --check` aprovados.
+
+Total desta etapa: **110 testes automatizados aprovados** (9 + 65 + 2 + 7 + 27). A mudança do modelo de dados continua reservada para a próxima etapa. Detalhes de organização e operação em [Backend](backend.md).

@@ -4,8 +4,7 @@ import { createApplication } from "../../src/app";
 
 test("PostgreSQL-backed HTTP CRUD, conflicts, decimals, atomic replacement and immutable exports", async () => {
   const app = await createApplication();
-  await app.listen(0, "127.0.0.1");
-  const base = await app.getUrl();
+  const base = await app.listen({ port: 0, host: "127.0.0.1" });
   const req = async (path: string, method = "GET", body?: any) =>
     fetch(base + path, {
       method,

@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 import { normalizeDocument, isDate } from "@contracts/validation";
-import { BadGatewayException } from "@nestjs/common";
+import { BadGatewayException } from "../errors";
 import {
   Raw,
   PurchaseItem,

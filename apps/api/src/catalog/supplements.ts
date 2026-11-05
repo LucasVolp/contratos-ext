@@ -1,8 +1,6 @@
-import {
-  NotFoundException,
-  UnprocessableEntityException,
-} from "@nestjs/common";
-import { PrismaClient, CatalogSupplement } from "../generated/prisma/client";
+import { NotFoundException, UnprocessableEntityException } from "../errors";
+import { Repositories } from "../repositories";
+import { CatalogSupplement } from "../models";
 import { CatalogClient } from "./client";
 import { ItemSupplement, Raw, SupplementKind, SupplementPart } from "./types";
 import { mapUnits, mapCommitments, mapAdhesions } from "./mappers";
@@ -52,11 +50,11 @@ export function presentSupplement(
 export class CatalogSupplements {
   private readonly automatic = new AutomaticRefresh();
   constructor(
-    private readonly db: PrismaClient,
+    private readonly db: Repositories,
     private readonly client: CatalogClient,
   ) {}
   private async record(id: string) {
-    const record = await this.db.publicRecord.findUnique({ where: { id } });
+    const record = await this.db.publicRecords.get(id);
     if (!record) throw new NotFoundException("Ata publicada não encontrada.");
     if (
       !record.detailsSyncedAt ||
@@ -69,7 +67,10 @@ export class CatalogSupplements {
   }
   private async load(
     id: string,
-    record: { number: string; uasg: string },
+    record: {
+      number: string;
+      uasg: string;
+    },
     item: string,
     kind: SupplementKind,
     rows: CatalogSupplement[],
@@ -135,11 +136,7 @@ export class CatalogSupplements {
       existing.length ? existing.map((r) => r.itemNumber) : [itemNumber],
     )) {
       const identity = { publicRecordId: id, itemNumber: key, kind };
-      await this.db.catalogSupplement.upsert({
-        where: { publicRecordId_itemNumber_kind: identity },
-        create: { ...identity, data: [], ...update },
-        update,
-      });
+      await this.db.supplements.store(identity, update);
     }
   }
   async refreshAll(id: string, force = false) {
@@ -159,9 +156,7 @@ export class CatalogSupplements {
         throw new UnprocessableEntityException(
           "A fonte não informou números de item válidos para consultar os dados complementares.",
         );
-      const rows = await this.db.catalogSupplement.findMany({
-        where: { publicRecordId: id },
-      });
+      const rows = await this.db.supplements.list(id);
       if (items.length)
         await Promise.all([
           this.load(id, record, items[0], "commitments", rows, force),
@@ -170,9 +165,7 @@ export class CatalogSupplements {
             this.load(id, record, item, "adhesions", rows, force),
           ]),
         ]);
-      const updated = await this.db.catalogSupplement.findMany({
-        where: { publicRecordId: id },
-      });
+      const updated = await this.db.supplements.list(id);
       const states = items.map((item) => presentSupplement(updated, item));
       return {
         items: items.length,
@@ -189,19 +182,12 @@ export class CatalogSupplements {
     const record = await this.record(id);
     if (!(record.snapshot as Raw).items.some((row: Raw) => row.key === item))
       throw new NotFoundException("Item não encontrado nesta ata.");
-    const rows = await this.db.catalogSupplement.findMany({
-      where: { publicRecordId: id },
-    });
+    const rows = await this.db.supplements.list(id);
     await Promise.all(
       kinds.map((kind) => this.load(id, record, item, kind, rows, true)),
     );
     return plain<ItemSupplement>(
-      presentSupplement(
-        await this.db.catalogSupplement.findMany({
-          where: { publicRecordId: id },
-        }),
-        item,
-      ),
+      presentSupplement(await this.db.supplements.list(id), item),
     );
   }
 }

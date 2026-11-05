@@ -41,12 +41,16 @@ Listagens e buscas leem os dados salvos. Ao abrir pregões, atas públicas ou a 
 
 ## Arquitetura
 
+O [Diagrama Entidade-Relacionamento](docs/diagrama-entidade-relacionamento.md) documenta as sete entidades, seus atributos, chaves e cardinalidades, incluindo os vínculos lógicos do catálogo.
+
 | Serviço | Tecnologia | Acesso local padrão |
 |---|---|---|
 | Web | Next.js 16, React 19, Tailwind 4 | http://localhost:3100 |
-| API | NestJS 11, Prisma 7 | http://localhost:4100 |
+| API | Fastify 5, SQL com `pg` | http://localhost:4100 |
 | Banco | PostgreSQL 16 | localhost:5540 |
 | PDF | Gotenberg 8 / LibreOffice | http://localhost:3055 |
+
+A organização do backend e a transição das migrações estão descritas em [Backend](docs/backend.md).
 
 O frontend encaminha `/api/*` para o backend na rede interna. A API gera DOCX com docxtemplater/PizZip e envia o Word para o Gotenberg somente quando o formato solicitado é PDF. Falha do conversor não impede DOCX. As portas são publicadas apenas em loopback por padrão.
 

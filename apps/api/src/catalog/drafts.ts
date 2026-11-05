@@ -3,16 +3,18 @@ import {
   ConflictException,
   NotFoundException,
   UnprocessableEntityException,
-} from "@nestjs/common";
+} from "../errors";
 import { isCPF, isCNPJ, normalizeDocument } from "@contracts/validation";
-import { PrismaClient, Prisma } from "../generated/prisma/client";
+import { Repositories } from "../repositories";
 import { validateRecord } from "../domain";
 import { itemNumberIdentity } from "./mappers";
-import { linkedPurchaseCache, purchaseResultEvidence } from "./purchase-evidence";
+import {
+  linkedPurchaseCache,
+  purchaseResultEvidence,
+} from "./purchase-evidence";
 import { Raw, RecordSnapshot } from "./types";
-
 export class CatalogDrafts {
-  constructor(private readonly db: PrismaClient) {}
+  constructor(private readonly db: Repositories) {}
   async create(id: string, body: Raw) {
     const supplierDocument = normalizeDocument(body?.supplierDocument);
     if (!isCPF(supplierDocument) && !isCNPJ(supplierDocument))
@@ -20,15 +22,13 @@ export class CatalogDrafts {
         message: "Informe CPF ou CNPJ válido do fornecedor.",
         fieldErrors: { supplierDocument: "CPF ou CNPJ inválido." },
       });
-    const source = await this.db.publicRecord.findUnique({ where: { id } });
+    const source = await this.db.publicRecords.get(id);
     if (!source) throw new NotFoundException("Ata publicada não encontrada.");
     const identity = {
       sourcePublicRecordId: id,
       sourceSupplierDocument: supplierDocument,
     };
-    const existing = await this.db.priceRecord.findUnique({
-      where: { sourcePublicRecordId_sourceSupplierDocument: identity },
-    });
+    const existing = await this.db.records.bySource(id, supplierDocument);
     if (existing) return { id: existing.id, created: false };
     if (!source.detailsSyncedAt)
       throw new UnprocessableEntityException(
@@ -44,7 +44,11 @@ export class CatalogDrafts {
         "A modalidade da ata não está confirmada como pregão ou dispensa. Confira os dados oficiais antes de preparar o documento.",
       );
     const cached = await linkedPurchaseCache(this.db, source);
-    const evidence = purchaseResultEvidence(snapshot, source.detailsSyncedAt, cached);
+    const evidence = purchaseResultEvidence(
+      snapshot,
+      source.detailsSyncedAt,
+      cached,
+    );
     const items = (snapshot.items ?? []).filter(
       (item, index) =>
         item.supplierDocument === supplierDocument &&
@@ -53,7 +57,8 @@ export class CatalogDrafts {
         !snapshot.rawItems[index]?.dataCancelamentoPncp &&
         !evidence.states.some(
           (state) =>
-            itemNumberIdentity(state.itemNumber) === itemNumberIdentity(item.number) &&
+            itemNumberIdentity(state.itemNumber) ===
+              itemNumberIdentity(item.number) &&
             normalizeDocument(state.supplierDocument) === supplierDocument &&
             state.cancelled,
         ),
@@ -107,17 +112,15 @@ export class CatalogDrafts {
       })),
     });
     try {
-      return await this.db.$transaction(
-        async (tx: Prisma.TransactionClient) => {
-          const repeated = await tx.priceRecord.findUnique({
-            where: { sourcePublicRecordId_sourceSupplierDocument: identity },
-          });
+      return await this.db.transaction(
+        async (tx: Repositories) => {
+          const repeated = await tx.records.bySource(id, supplierDocument);
           if (repeated) return { id: repeated.id, created: false };
           // Old records can contain masked documents. Compare canonical values without rewriting them.
-          const collisions = await tx.priceRecord.findMany({
-            where: { number: source.number, uasg: source.uasg },
-            select: { id: true, supplierDocument: true },
-          });
+          const collisions = await tx.records.byIdentity(
+            source.number,
+            source.uasg,
+          );
           const collision = collisions.find(
             (row) =>
               normalizeDocument(row.supplierDocument) === supplierDocument,
@@ -126,25 +129,29 @@ export class CatalogDrafts {
             throw new ConflictException(
               `Já existe documento local desta ata para o fornecedor selecionado (${collision.id}). Abra e edite o cadastro existente; seus dados foram preservados.`,
             );
-          const record = await tx.priceRecord.create({
-            data: {
-              ...(fields as Prisma.PriceRecordCreateInput),
-              ...identity,
-              items: { create: validatedItems },
-            },
-          });
+          const record = await tx.records.save(
+            null,
+            { ...fields, ...identity },
+            validatedItems,
+          );
           return { id: record.id, created: true };
         },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        { serializable: true },
       );
     } catch (error) {
       if (
-        (error as { code?: string }).code === "P2002" ||
-        (error as { code?: string }).code === "P2034"
+        (
+          error as {
+            code?: string;
+          }
+        ).code === "23505" ||
+        (
+          error as {
+            code?: string;
+          }
+        ).code === "40001"
       ) {
-        const repeated = await this.db.priceRecord.findUnique({
-          where: { sourcePublicRecordId_sourceSupplierDocument: identity },
-        });
+        const repeated = await this.db.records.bySource(id, supplierDocument);
         if (repeated) return { id: repeated.id, created: false };
         throw new ConflictException(
           "Já existe um documento desta ata para o fornecedor. Abra o cadastro existente.",

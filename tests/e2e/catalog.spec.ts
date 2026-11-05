@@ -15,6 +15,10 @@ test.beforeEach(async ({page,request})=>{
     return route.fulfill({json:{data,errors:{},summary:{items:1,loaded:0,failed:0}}});
   });
 });
+test.afterEach(async ({ page }) => {
+  // Finish route handlers before Playwright disposes their request fixture.
+  await page.unrouteAll({ behavior: "wait" });
+});
 
 test("pregões listam dados salvos, todos resultados e atas ligadas pelo identificador exato", async ({
   page,

@@ -17,16 +17,12 @@ const base = {
 test("contract pagination and whole-filter statistics execute in database", async () => {
   let args: any;
   const db: any = {
-    contract: {
-      findMany: async (input: any) => {
-        args = input;
+    contracts: {
+      list: async (filter: any, page: number, limit: number) => {
+        args = { filter, page, limit };
         return [{ ...base, id: "2", globalValue: "0.1" }];
       },
-      aggregate: async () => ({
-        _count: { _all: 2 },
-        _sum: { globalValue: "0.3" },
-      }),
-      count: async () => 0,
+      stats: async () => ({ count: 2, totalValue: "0.3", expiringCount: 0 }),
     },
   };
   const result = await new ApplicationService(db).contracts({
@@ -35,9 +31,9 @@ test("contract pagination and whole-filter statistics execute in database", asyn
     from: "2026-01-01",
     status: "ACTIVE",
   });
-  assert.equal(args.skip, 1);
-  assert.equal(args.take, 1);
-  assert.ok(JSON.stringify(args.where).includes("2026-01-01"));
+  assert.equal(args.page, 2);
+  assert.equal(args.limit, 1);
+  assert.ok(JSON.stringify(args.filter).includes("2026-01-01"));
   assert.equal(result.data.length, 1);
   assert.equal(result.total, 2);
   assert.equal(result.stats.totalValue, "0.3");
@@ -45,7 +41,7 @@ test("contract pagination and whole-filter statistics execute in database", asyn
 test("failing import never starts database transaction", async () => {
   let writes = 0;
   const db: any = {
-    $transaction: async () => {
+    transaction: async () => {
       writes++;
     },
   };
@@ -70,9 +66,9 @@ test("import waits for all data and commits upserts in one transaction", async (
     transactions = 0;
   const store: any[] = [];
   const tx: any = {
-    contract: {
-      findUnique: async () => null,
-      upsert: async ({ create }: any) => {
+    contracts: {
+      byIdentity: async () => null,
+      upsert: async (create: any) => {
         assert.equal(fetchComplete, true);
         store.push(create);
         return create;
@@ -80,7 +76,7 @@ test("import waits for all data and commits upserts in one transaction", async (
     },
   };
   const db: any = {
-    $transaction: async (fn: any) => {
+    transaction: async (fn: any) => {
       transactions++;
       return fn(tx);
     },
@@ -100,14 +96,14 @@ test("import waits for all data and commits upserts in one transaction", async (
   assert.equal(transactions, 1);
   assert.equal(store.length, 2);
 });
-test("record replacement updates items atomically while retaining export history", async () => {
+test("record replacement sends validated items to the repository without modifying exports", async () => {
   let update: any;
   const db: any = {
-    priceRecord: {
-      findUnique: async () => ({ id: "id" }),
-      update: async (arg: any) => {
-        update = arg;
-        return { ...arg.data, items: [] };
+    records: {
+      get: async () => ({ id: "id", items: [] }),
+      save: async (id: string, fields: any, items: any[]) => {
+        update = { id, fields, items };
+        return { ...fields, items };
       },
     },
   };
@@ -117,14 +113,15 @@ test("record replacement updates items atomically while retaining export history
     uasg: "000123",
     items: [],
   });
-  assert.deepEqual(update.data.items, { deleteMany: {}, create: [] });
-  assert.equal("exports" in update.data, false);
+  assert.equal(update.id, "id");
+  assert.deepEqual(update.items, []);
+  assert.equal("exports" in update.fields, false);
 });
 test("not found maps to HTTP 404", async () => {
-  const db: any = { contract: { findUnique: async () => null } };
+  const db: any = { contracts: { get: async () => null } };
   await assert.rejects(
     () => new ApplicationService(db).contract("nope"),
-    (e: any) => e.getStatus() === 404,
+    (e: any) => e.statusCode === 404,
   );
 });
 
@@ -137,16 +134,16 @@ test("import refuses an existing manual contract before performing any write", a
   const original = structuredClone(manual);
   let writes = 0;
   const tx: any = {
-    contract: {
-      findUnique: async ({ where }: any) =>
-        where.number_uasg.number === manual.number ? manual : null,
-      upsert: async ({ update }: any) => {
+    contracts: {
+      byIdentity: async (number: string) =>
+        number === manual.number ? manual : null,
+      upsert: async (update: any) => {
         writes++;
         Object.assign(manual, update);
       },
     },
   };
-  const db: any = { $transaction: async (run: any) => run(tx) };
+  const db: any = { transaction: async (run: any) => run(tx) };
   const external: any = {
     contracts: async () => [
       { ...base, number: "NEW", source: "COMPRAS_GOV" },
@@ -161,7 +158,7 @@ test("import refuses an existing manual contract before performing any write", a
         to: "2026-12-31",
       }),
     (error: any) =>
-      error.getStatus() === 409 &&
+      error.statusCode === 409 &&
       error.message.includes("1") &&
       error.message.includes("123"),
   );
@@ -196,9 +193,9 @@ for (const scenario of ["manual", "importada e enriquecida"]) {
     const original = structuredClone(existing);
     let writes = 0;
     const db: any = {
-      priceRecord: {
-        findUnique: async () => existing,
-        findFirst: async () => existing,
+      records: {
+        get: async () => existing,
+        byIdentity: async () => [existing],
         update: async ({ data }: any) => {
           writes++;
           Object.assign(existing, data, { items: data.items.create });
@@ -227,7 +224,7 @@ for (const scenario of ["manual", "importada e enriquecida"]) {
           to: "2026-12-31",
         }),
       (error: any) =>
-        error.getStatus() === 409 &&
+        error.statusCode === 409 &&
         error.message.includes("Ata já cadastrada") &&
         error.message.includes("77/2026"),
     );

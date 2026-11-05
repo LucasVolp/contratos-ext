@@ -63,7 +63,7 @@ test("original styled Word template fills identifying fields, supplier document 
 test("export failure never persists history", async () => {
   let writes = 0;
   const db: any = {
-    documentExport: {
+    exports: {
       create: async () => {
         writes++;
       },
@@ -82,8 +82,8 @@ test("export failure never persists history", async () => {
 test("successful export stores immutable full snapshot with version and selected item", async () => {
   let saved: any;
   const db: any = {
-    documentExport: {
-      create: async ({ data }: any) => {
+    exports: {
+      create: async (data: any) => {
         saved = data;
       },
     },
@@ -107,10 +107,19 @@ test("incomplete export returns the exact same readiness fields", async () => {
       validateRecord({ number: "1", object: "Objeto", uasg: "000123" }),
   };
   await assert.rejects(
-    () => new DocumentService({}, app).generate("x", "docx"),
+    () =>
+      new DocumentService(
+        {
+          exports: {
+            create: async () => {
+              throw new Error("Unexpected write");
+            },
+          },
+        } as any,
+        app,
+      ).generate("x", "docx"),
     (e: any) =>
-      e.getStatus() === 422 &&
-      e.getResponse().missingFields.includes("supplierDocument"),
+      e.statusCode === 422 && e.body.missingFields.includes("supplierDocument"),
   );
 });
 
