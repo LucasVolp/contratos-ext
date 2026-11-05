@@ -45,8 +45,8 @@ The [contract and catalog ER diagram](docs/diagrama-entidade-relacionamento.md)
 documents the seven existing public tables. The [financial data model](docs/finance-data-model.md)
 documents the fourteen tables in the new `finance` schema, the Go ETL ownership
 boundary and the import contract. The [Go Finance ETL](apps/etl/README.md) imports
-complete daily ZIPs containing commitments, liquidations and payments. Automatic
-downloads, annual/monthly imports, financial API endpoints and screens are next.
+complete ZIPs containing daily commitments, liquidations and payments, monthly
+execution and annual budgets. Automatic downloads, financial API endpoints and screens are next.
 
 | Serviço | Tecnologia | Acesso local padrão |
 |---|---|---|

@@ -1,8 +1,8 @@
 # Financial data model
 
-Status: the database foundation and manual daily ZIP importer in Go are implemented.
+Status: the database foundation and manual daily, monthly and annual ZIP importers in Go are implemented.
 See [Finance ETL](../apps/etl/README.md) for commands and verification. Automatic
-downloads, annual/monthly imports, API endpoints, financial calculations and UI are
+downloads, API endpoints, financial calculations and UI are
 subsequent phases.
 
 ## Architecture and ownership
@@ -226,10 +226,15 @@ out-of-order documents, cross-year links, partial payments, null-aware reimport,
 classification integrity, exact decimals, transactional rollback, independent annual
 budgets/internal distributions, monthly dimensions and existing persistence behavior.
 
-The Go daily importer has separate unit and PostgreSQL integration tests covering
+The Go importers have separate unit and PostgreSQL integration tests covering
 the load contract, including stale-child removal, failed/overlapping imports and
 older snapshots. A cached real Portal ZIP dated 2026-09-30 was loaded and replayed
 in an isolated database for management 26421: 255 fact rows per attempt, without
 replay duplication. The reference headers include multiple/unknown classifications,
 which are retained in raw data instead of manufactured into numeric nature codes.
-Annual/monthly import and download scheduling remain future work.
+The real September 2026 monthly archive was also loaded and replayed: 404 grouped
+facts per attempt. Annual mapping is verified with source-shaped fixtures and
+database tests; a real annual ZIP was not available in the local cache. Snapshot
+cleanup is limited to represented agency/year or management-unit/month scopes.
+Internal planning remains untouched. Automatic downloads and scheduling remain
+future work.

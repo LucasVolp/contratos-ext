@@ -52,18 +52,40 @@ type DailyData struct {
 	Checksum string
 }
 
-func ReadDaily(ctx context.Context, opts Options) (*DailyData, error) {
-	file, err := os.Open(opts.File)
+type sourceArchive struct {
+	file     *os.File
+	members  map[string]*zip.File
+	checksum string
+}
+
+type contextReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r contextReader) Read(buffer []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.reader.Read(buffer)
+}
+
+func openSourceArchive(ctx context.Context, filename string) (_ *sourceArchive, failure error) {
+	file, err := os.Open(filename)
 	if err != nil {
 		return nil, fmt.Errorf("open archive: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if failure != nil {
+			file.Close()
+		}
+	}()
 	stat, err := file.Stat()
 	if err != nil {
 		return nil, err
 	}
 	hash := sha256.New()
-	if _, err = io.Copy(hash, file); err != nil {
+	if _, err = io.Copy(hash, contextReader{ctx, file}); err != nil {
 		return nil, err
 	}
 	archive, err := zip.NewReader(file, stat.Size())
@@ -78,11 +100,20 @@ func ReadDaily(ctx context.Context, opts Options) (*DailyData, error) {
 		}
 		files[name] = member
 	}
-	data := &DailyData{Rows: map[Kind][]Row{}, Checksum: hex.EncodeToString(hash.Sum(nil))}
+	return &sourceArchive{file: file, members: files, checksum: hex.EncodeToString(hash.Sum(nil))}, nil
+}
+
+func ReadDaily(ctx context.Context, opts Options) (*DailyData, error) {
+	archive, err := openSourceArchive(ctx, opts.File)
+	if err != nil {
+		return nil, err
+	}
+	defer archive.file.Close()
+	data := &DailyData{Rows: map[Kind][]Row{}, Checksum: archive.checksum}
 	documents := map[Kind]map[string]bool{Commitments: {}, Liquidations: {}, Payments: {}}
 	for _, spec := range dailyFiles {
 		name := opts.Date.Format("20060102") + spec.suffix
-		member := files[name]
+		member := archive.members[name]
 		if member == nil {
 			return nil, fmt.Errorf("incomplete daily archive: missing %s", name)
 		}

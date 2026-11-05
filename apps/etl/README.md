@@ -1,13 +1,13 @@
 # Finance ETL
 
-Independent Go CLI for importing a **complete daily expenses ZIP** from the
+Independent Go CLI for importing **complete source ZIPs** from the
 Transparency Portal into the Contracts Ext `finance` schema. It has no dependency
 on SAGA or a running envelopa service. The public CSV column names remain in their
 original language; all program and database identifiers use English.
 
 This delivery covers commitments, current items, item history, liquidations,
-payments and their impacted commitments. Automatic downloads, date-range scheduling,
-annual budgets and monthly aggregates are subsequent steps. Input ZIPs can be
+payments and their impacted commitments, annual institutional budgets and monthly
+execution aggregates. Automatic downloads and date-range scheduling are subsequent steps. Input ZIPs can be
 downloaded manually or reused from an existing envelopa download cache.
 
 ## Run from the repository root
@@ -34,6 +34,24 @@ To select individual units rather than an entire management scope:
 pnpm finance:import -file ./data/finance/despesas_20260930.zip -date 2026-09-30 -scope MANAGEMENT_UNIT -codes 158148,158635
 ```
 
+To import monthly execution or annual institutional budget:
+
+```sh
+pnpm finance:import -kind MONTHLY_EXECUTION -file ./data/finance/202609_Despesas.zip -date 2026-09-01 -scope MANAGEMENT -codes 26421
+pnpm finance:import -kind ANNUAL_BUDGET -file ./data/finance/2026_OrcamentoDespesa.zip -date 2026-01-01 -scope SUBORDINATE_AGENCY -codes 26421,26415
+```
+
+| Kind | Required CSV member | Reference date | Supported scope |
+|---|---|---|---|
+| `DAILY_EXPENSES` (default) | Seven `YYYYMMDD_Despesas_*.csv` files | Day of the archive | `MANAGEMENT` / `MANAGEMENT_UNIT` |
+| `MONTHLY_EXECUTION` | `YYYYMM_Despesas.csv` | First day of the month | `MANAGEMENT` / `MANAGEMENT_UNIT` |
+| `ANNUAL_BUDGET` | `YYYY_OrcamentoDespesa.csv` | January 1 of the fiscal year | `SUBORDINATE_AGENCY` |
+
+If omitted, scope defaults to `SUBORDINATE_AGENCY` for annual budget and
+`MANAGEMENT` otherwise. Annual agency codes identify institutions, not campuses.
+Rows from a different reference period cause failure. The audit records the full
+month/year interval, not just the first day supplied to the CLI.
+
 To build a standalone binary without Node:
 
 ```sh
@@ -52,7 +70,8 @@ matching facts produce `NO_DATA` and do not delete existing records.
 
 ## Import behavior
 
-- Requires all seven expected CSVs for the reference date. Duplicate ZIP members,
+- Daily imports require all seven expected CSVs for the reference date; aggregate
+  imports require their expected annual/monthly member. Duplicate ZIP members,
   missing required columns and malformed rows abort the import. Members are streamed
   directly from ZIP without filesystem extraction. Each CSV is limited to 1 GiB.
 - Supports Windows-1252 source data and UTF-8 exports. It filters documents by
@@ -80,6 +99,31 @@ matching facts produce `NO_DATA` and do not delete existing records.
   maintenance. A nonempty archive containing only older snapshots may succeed with
   zero writes. Status and fact updates commit together. Ctrl-C/SIGTERM rolls back
   open fact transactions and attempts to record failure with a separate cleanup context.
+
+## Aggregate snapshot behavior
+
+Annual and monthly source rows are summed at their complete stored classification
+key using exact decimals before upsert. Null classification dimensions are part of
+that key. Categories, agencies, action codes, locations and amendment authors are
+kept separate where the source supports them; alphanumeric action codes remain text.
+All contributing source rows are retained in `source_data`.
+
+A successful nonempty refresh removes obsolete classifications only for represented
+agency/year or management-unit/month scopes. Data outside those scope boundaries
+is preserved. A requested agency/unit with no matching rows retains its previous
+snapshot. An empty file is not evidence that the previous budget should be erased.
+The whole selected snapshot, cleanup and successful audit status commit atomically.
+
+Annual budget has no management-unit/campus allocation or application modality.
+The importer preserves the actual category/group/element dimensions, without
+manufacturing expense-nature codes or internal allocations. Monthly execution
+never creates daily financial documents. Neither source writes `budget_distributions`.
+
+Unlike daily documents, the aggregate period is not the source snapshot's publication
+time: an annual/monthly file can be regenerated. A manually supplied file is treated
+as the authoritative replacement for that period. No publication timestamp is inferred
+from its filename, modification time or import time; an older version of the same
+period can therefore replace a newer one if supplied manually.
 
 Grant the import role read access to `public._sql_migrations`, schema usage, and
 `SELECT/INSERT/UPDATE/DELETE` plus sequence usage only on ETL-owned finance tables.
@@ -110,3 +154,12 @@ go test ./internal/etl -run TestCachedPortalArchiveIntegration -count=1 -v
 
 The real-file smoke test uses management code `26421` as a test fixture scope; the
 CLI always requires an explicit scope. No test downloads from the Portal.
+
+For a real monthly archive smoke test, set `ETL_TEST_MONTHLY_ARCHIVE` to the cached
+ZIP and `ETL_TEST_MONTHLY_DATE` to its month start, then run
+`go test ./internal/etl -run TestCachedMonthlyArchiveIntegration -count=1 -v` with
+`ETL_TEST_DATABASE_URL`. Monthly source validation was exercised against the real
+September 2026 ZIP (404 grouped facts for management 26421, loaded and replayed).
+Annual source mapping follows envelopa's CSV mapper and is currently verified with
+source-shaped fixtures and PostgreSQL integration tests; no real annual ZIP was
+available in the local cache.

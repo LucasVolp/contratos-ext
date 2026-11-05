@@ -37,7 +37,8 @@ The financial module adds the `finance` schema through a new SQL migration, with
 altering existing contract/catalog tables. Its complete model, ownership boundary,
 ETL load contract and relationship diagram are documented in
 [Financial data model](finance-data-model.md). The independent
-[Go ETL](../apps/etl/README.md) now imports daily ZIP files into this schema.
+[Go ETL](../apps/etl/README.md) imports daily documents, monthly execution and annual
+budget ZIP files into this schema, using separate dataset types and import scopes.
 Fastify financial queries and internal budget distribution endpoints are future work.
 
 Persistence and financial migration tests now create temporary databases instead

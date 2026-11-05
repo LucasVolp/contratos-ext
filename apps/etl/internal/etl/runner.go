@@ -46,11 +46,11 @@ func Run(ctx context.Context, db *sql.DB, opts Options) (result Result, failure 
 			failure = errors.Join(failure, fmt.Errorf("release import lock: %w", unlockErr))
 		}
 	}()
-	date := opts.Date.Format("2006-01-02")
+	start, end := opts.period()
 	err = conn.QueryRowContext(ctx, `INSERT INTO finance.ingestion_runs
         (type, source, source_file, period_start, period_end, scope_type, scope_codes, trigger_type, status, etl_version)
-        VALUES ('DAILY_EXPENSES',$1,$2,$3,$3,$4,$5,$6,'IN_PROGRESS',$7) RETURNING id`,
-		Source, filepath.Base(opts.File), date, opts.ScopeType, pq.Array(opts.Codes), opts.Trigger, Version).Scan(&result.RunID)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'IN_PROGRESS',$9) RETURNING id`,
+		opts.dataset(), Source, filepath.Base(opts.File), start.Format("2006-01-02"), end.Format("2006-01-02"), opts.ScopeType, pq.Array(opts.Codes), opts.Trigger, Version).Scan(&result.RunID)
 	if err != nil {
 		return result, err
 	}
@@ -66,12 +66,24 @@ func Run(ctx context.Context, db *sql.DB, opts Options) (result Result, failure 
 			failure = errors.Join(failure, fmt.Errorf("record failed import: %w", auditErr))
 		}
 	}()
-	data, err := ReadDaily(ctx, opts)
+	var daily *DailyData
+	var aggregate *AggregateData
+	var empty bool
+	if opts.dataset() == DailyExpenses {
+		daily, err = ReadDaily(ctx, opts)
+		if err == nil {
+			result.Checksum, empty = daily.Checksum, len(daily.Rows) == 0
+		}
+	} else {
+		aggregate, err = ReadAggregate(ctx, opts)
+		if err == nil {
+			result.Checksum, empty = aggregate.Checksum, len(aggregate.Rows) == 0
+		}
+	}
 	if err != nil {
 		return result, err
 	}
-	result.Checksum = data.Checksum
-	if _, err = conn.ExecContext(ctx, "UPDATE finance.ingestion_runs SET checksum_sha256 = $2 WHERE id = $1", result.RunID, data.Checksum); err != nil {
+	if _, err = conn.ExecContext(ctx, "UPDATE finance.ingestion_runs SET checksum_sha256 = $2 WHERE id = $1", result.RunID, result.Checksum); err != nil {
 		return result, err
 	}
 	tx, err := conn.BeginTx(ctx, nil)
@@ -79,12 +91,17 @@ func Run(ctx context.Context, db *sql.DB, opts Options) (result Result, failure 
 		return result, err
 	}
 	defer tx.Rollback()
-	count, err := writeDaily(ctx, tx, data, result.RunID)
+	var count int64
+	if opts.dataset() == DailyExpenses {
+		count, err = writeDaily(ctx, tx, daily, result.RunID)
+	} else {
+		count, err = writeAggregates(ctx, tx, opts, aggregate, result.RunID)
+	}
 	if err != nil {
 		return result, err
 	}
 	result.Status = "SUCCESS"
-	if len(data.Rows) == 0 {
+	if empty {
 		result.Status = "NO_DATA"
 	}
 	if _, err = tx.ExecContext(ctx, `UPDATE finance.ingestion_runs SET status = $2, processed_records = $3, finished_at = now() WHERE id = $1`, result.RunID, result.Status, count); err != nil {
