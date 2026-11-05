@@ -13,6 +13,8 @@ import {
   ServiceUnavailableException,
 } from "./errors";
 import { registerCatalogRoutes } from "./catalog/controller";
+import { registerFinanceRoutes } from "./finance/controller";
+import { FinanceService } from "./finance/service";
 declare module "fastify" {
   interface FastifyInstance {
     db: Database;
@@ -31,6 +33,7 @@ export async function createApplication(options: ApplicationOptions = {}) {
   const service = new ApplicationService(repositories);
   const documents = new DocumentService(repositories, service);
   const catalog = new CatalogService(repositories, catalogClient);
+  const finance = new FinanceService(repositories.finance);
   const app = Fastify({
     logger: false,
     bodyLimit: 1024 * 1024,
@@ -195,6 +198,7 @@ export async function createApplication(options: ApplicationOptions = {}) {
         service.deleteRecord(request.params.id),
       );
       registerCatalogRoutes(api, catalog);
+      registerFinanceRoutes(api, finance);
     },
     { prefix: "/api" },
   );

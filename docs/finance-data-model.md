@@ -2,8 +2,10 @@
 
 Status: the database foundation, daily/monthly/annual Go importers and automatic
 downloads with persistent pacing are implemented.
-See [Finance ETL](../apps/etl/README.md) for commands and verification. Financial
-API endpoints, calculations and UI are subsequent phases.
+See [Finance ETL](../apps/etl/README.md) for commands and verification. The financial
+read API for commitments and related documents is described in
+[Financial read API](finance-api-contract.md). Budget/execution reports, accounts
+payable calculations and UI are subsequent phases.
 
 ## Architecture and ownership
 

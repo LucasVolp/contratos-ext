@@ -47,8 +47,10 @@ documents the fourteen domain tables and shared download-control table in the `f
 boundary and the import contract. The [Go Finance ETL](apps/etl/README.md) imports
 complete ZIPs containing daily commitments, liquidations and payments, monthly
 execution and annual budgets. Omit `-file` to download automatically, with shared
-request pacing and cooldowns; date ranges are supported. Financial API endpoints
-and screens are next.
+request pacing and cooldowns; date ranges are supported. The first
+[financial read API](docs/finance-api-contract.md)
+provides management units, commitment list/detail and paginated related items,
+history, liquidations and payments. Financial dashboards and budget reports are next.
 
 | Serviço | Tecnologia | Acesso local padrão |
 |---|---|---|

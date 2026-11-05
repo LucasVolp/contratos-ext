@@ -1,4 +1,5 @@
 import { Database } from "../database";
+import { FinanceRepository } from "../finance/repository";
 import { ContractRepository } from "./contracts";
 import { RecordRepository, ExportRepository } from "./records";
 import {
@@ -13,6 +14,7 @@ export class Repositories {
   readonly purchases;
   readonly publicRecords;
   readonly supplements;
+  readonly finance;
   constructor(private readonly db: Database) {
     this.contracts = new ContractRepository(db);
     this.records = new RecordRepository(db);
@@ -20,6 +22,7 @@ export class Repositories {
     this.purchases = new PurchaseRepository(db);
     this.publicRecords = new PublicRecordRepository(db);
     this.supplements = new SupplementRepository(db);
+    this.finance = new FinanceRepository(db);
   }
   transaction<T>(
     run: (repos: Repositories) => Promise<T>,

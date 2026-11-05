@@ -1,0 +1,59 @@
+export type FinanceQuery = Record<string, unknown>;
+export interface Pagination { page: number; limit: number; offset: number }
+export interface Page<T> { data: T[]; total: number; page: number; limit: number }
+export interface CommitmentFilters extends Pagination {
+  managementCode: string;
+  managementUnitCode?: string;
+  fiscalYear?: number;
+  expenseNature?: string;
+  favoredCode?: string;
+  search?: string;
+  from?: string;
+  to?: string;
+}
+export interface UnitFilters extends Pagination { managementCode?: string; search?: string }
+export interface FinanceUnit {
+  managementCode: string;
+  code: string;
+  name: string | null;
+  managementName: string | null;
+}
+export interface CommitmentSummary {
+  id: string;
+  source: string;
+  documentCode: string;
+  resumedCode: string | null;
+  headerAvailable: boolean;
+  fiscalYear: number | null;
+  managementCode: string | null;
+  managementUnitCode: string | null;
+  unitName: string | null;
+  emissionDate: string | null;
+  favoredCode: string | null;
+  favoredName: string | null;
+  processNumber: string | null;
+  expenseNature: string | null;
+  itemCount: number;
+  historyCount: number;
+  liquidationCount: number;
+  paymentCount: number;
+  committedValue: string | null;
+  liquidatedValue: string | null;
+  liquidationPriorYearMovementValue: string | null;
+  paidValue: string | null;
+  priorYearPaidValue: string | null;
+}
+export interface CommitmentHeader {
+  type: string | null;
+  documentTypeCode: string | null;
+  documentType: string | null;
+  budgetPlanCode: string | null;
+  budgetPlanName: string | null;
+  observation: string | null;
+  originalValue: string | null;
+  valueBrl: string | null;
+  conversionRate: string | null;
+  ingestionRunId: string;
+  updatedAt: string;
+}
+export interface CommitmentDetail extends CommitmentSummary { header: CommitmentHeader | null }
