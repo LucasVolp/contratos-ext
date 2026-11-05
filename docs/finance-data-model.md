@@ -4,9 +4,9 @@ Status: the database foundation, daily/monthly/annual Go importers and automatic
 downloads with persistent pacing are implemented.
 See [Finance ETL](../apps/etl/README.md) for commands and verification. The financial
 read API for commitments and related documents is described in
-[Financial read API](finance-api-contract.md). The [monthly execution report](finance-reports-contract.md)
-is available separately. Annual budget reports, accounts payable calculations and
-UI are subsequent phases.
+[Financial read API](finance-api-contract.md). Separate [monthly execution and annual
+budget reports](finance-reports-contract.md) are available. Accounts payable
+calculations, internal planning endpoints and UI are subsequent phases.
 
 ## Architecture and ownership
 

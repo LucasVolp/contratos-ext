@@ -60,6 +60,41 @@ If no source rows match, `data` is empty, counts are zero and amount/date summar
 are null. This distinguishes missing imported data from a recorded zero amount.
 Ordering is unit, economic category, group, modality (unknown last), and element.
 
+## Annual institutional budget (LOA)
+
+```http
+GET /api/finance/budgets?subordinateAgencyCode=26421&fiscalYear=2026
+```
+
+| Filter | Meaning |
+|---|---|
+| `subordinateAgencyCode` | Required five-digit institutional agency code |
+| `fiscalYear` | Required fiscal year, 1900–9999 |
+| `budgetaryUnitCode` | Optional five-digit budgetary-unit code; not a campus UG |
+| `actionCode` | Optional exact alphanumeric source action code |
+| `economicCategoryCode`, `expenseGroupCode` | Optional exact one-digit source components |
+| `expenseElementCode` | Optional exact two-digit element, preserving codes such as `04` |
+| `page`, `limit` | Pagination |
+
+The source is exclusively Portal records in `finance.annual_budgets`. Rows are
+grouped by year, superior organ, subordinate agency, budgetary unit, action,
+economic category, expense group and element. Function, subfunction and program
+rows at this grouping level are summed; `sourceRowCount` records how many imported
+annual rows contributed. Display names remain optional labels, never grouping keys.
+
+Each row and whole-filter summary includes `initialBudget`, `updatedBudget`,
+`committedBudget`, `executedBudget`, `sourceRowCount` and `lastImportedAt`. Money
+uses the same exact and null-propagating rules as monthly execution. Empty source
+coverage produces null amounts, not a declared zero budget. Filtering or paging
+does not change the distinction between initial and updated allocation.
+
+The response context identifies `ANNUAL_BUDGET`, Portal source, agency and fiscal
+year. No `managementUnitCode`, campus allocation, application modality or full
+expense-nature code is inferred: those dimensions are absent from the annual file.
+Such query fields are rejected rather than silently ignored. This report works
+without a management-unit directory and does not join internal campus planning.
+Ordering is superior organ, agency, budgetary unit, action and source classification.
+
 ## Boundaries and validation
 
 The report does not calculate accounts payable, financial availability or an
@@ -75,3 +110,13 @@ Tests use real Fastify routes and isolated PostgreSQL databases. They cover exac
 large decimal sums, whole-filter summary with pagination, source/year/unit/month/
 nature/action filters, unknown classifications, null amounts, signed corrections,
 empty periods and separation from detailed documents and internal planning.
+Annual tests also cover rollups across source function rows, institutions and years,
+unknown values, exact large totals, out-of-range pages, classification filters and
+operation without any imported management units.
+
+A manual source-to-report check also imported the cached September 2026 monthly
+ZIP and 2026 annual ZIP through the Go CLI into a temporary database, then queried
+the compiled Fastify API. Its 404 monthly source rows produced 166 unit/classification
+groups; the 100 annual source rows produced 100 budget groups. Whole-filter report
+totals matched exact SQL sums of their respective source tables. No Portal downloads
+or writes to the application database were needed for that check.

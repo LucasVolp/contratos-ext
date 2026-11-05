@@ -1,6 +1,6 @@
 import { SqlConnection } from "../database";
 import { Conditions } from "../repositories/sql";
-import { ExecutionFilters, ExecutionRow, ExecutionSummary, Pagination, ReportPage } from "./types";
+import { BudgetFilters, BudgetRow, BudgetSummary, ExecutionFilters, ExecutionRow, ExecutionSummary, Pagination, ReportPage } from "./types";
 
 // SQL identifiers come from these repository constants, never HTTP parameters.
 const executionAmounts = {
@@ -10,6 +10,10 @@ const executionAmounts = {
   registeredPayablesValue: "registered_payables_value_brl",
   canceledPayablesValue: "canceled_payables_value_brl",
   priorYearPaidValue: "outstanding_value_paid_brl",
+};
+const budgetAmounts = {
+  initialBudget: "initial_budget", updatedBudget: "updated_budget",
+  committedBudget: "committed_budget", executedBudget: "executed_budget",
 };
 
 function moneySums(fields: Record<string, string>): string {
@@ -64,5 +68,32 @@ export class FinanceReportsRepository {
       GROUP BY management_code, management_unit_code, expense_nature, economic_category_code, expense_group_code, application_modality_code, expense_element_code`;
     return this.report(selection, where, grouping, `SELECT ${executionCoverage}, ${sums} FROM filtered`,
       `"managementCode" ASC, "managementUnitCode" ASC, "economicCategoryCode" ASC, "expenseGroupCode" ASC, "applicationModalityCode" ASC NULLS LAST, "expenseElementCode" ASC`, filters);
+  }
+
+  budgets(filters: BudgetFilters): Promise<ReportPage<BudgetRow, BudgetSummary>> {
+    const where = new Conditions();
+    where.add(`s.source = 'TRANSPARENCY_PORTAL'`);
+    where.add(`s.subordinate_agency_code = ${where.param(filters.subordinateAgencyCode)}`);
+    where.add(`s.fiscal_year = ${where.param(filters.fiscalYear)}`);
+    // Each optional field maps to a fixed repository column, not an input identifier.
+    for (const [field, column] of [
+      ["budgetaryUnitCode", "budgetary_unit_code"], ["actionCode", "action_code"],
+      ["economicCategoryCode", "economic_category_code"], ["expenseGroupCode", "expense_group_code"],
+      ["expenseElementCode", "expense_element_code"],
+    ] as const) {
+      if (filters[field]) where.add(`s.${column} = ${where.param(filters[field])}`);
+    }
+    const sums = moneySums(budgetAmounts);
+    const coverage = `count(*)::int AS "sourceRowCount", max(updated_at) AS "lastImportedAt"`;
+    const grouping = `SELECT fiscal_year AS "fiscalYear", superior_organ_code AS "superiorOrganCode", min(superior_organ_name) AS "superiorOrganName",
+      subordinate_agency_code AS "subordinateAgencyCode", min(subordinate_agency_name) AS "subordinateAgencyName",
+      budgetary_unit_code AS "budgetaryUnitCode", min(budgetary_unit_name) AS "budgetaryUnitName",
+      action_code AS "actionCode", min(action_name) AS "actionName", economic_category_code AS "economicCategoryCode", min(economic_category_name) AS "economicCategoryName",
+      expense_group_code AS "expenseGroupCode", min(expense_group_name) AS "expenseGroupName",
+      expense_element_code AS "expenseElementCode", min(expense_element_name) AS "expenseElementName",
+      ${coverage}, ${sums} FROM filtered
+      GROUP BY fiscal_year, superior_organ_code, subordinate_agency_code, budgetary_unit_code, action_code, economic_category_code, expense_group_code, expense_element_code`;
+    return this.report(`SELECT * FROM finance.annual_budgets`, where, grouping, `SELECT ${coverage}, ${sums} FROM filtered`,
+      `"superiorOrganCode" ASC, "subordinateAgencyCode" ASC, "budgetaryUnitCode" ASC, "actionCode" ASC, "economicCategoryCode" ASC, "expenseGroupCode" ASC, "expenseElementCode" ASC`, filters);
   }
 }

@@ -2,7 +2,7 @@ import { NotFoundException } from "../errors";
 import { FinanceRepository } from "./repository";
 import { FinanceReportsRepository } from "./reports";
 import { FinanceQuery } from "./types";
-import { collectionFilters, commitmentFilters, commitmentId, detailFilters, executionFilters, unitFilters } from "./validation";
+import { budgetFilters, collectionFilters, commitmentFilters, commitmentId, detailFilters, executionFilters, unitFilters } from "./validation";
 
 export type CommitmentCollection = "items" | "history" | "liquidations" | "payments";
 
@@ -15,6 +15,12 @@ export class FinanceService {
     const result = await this.reports.execution(filters);
     return { ...result, context: { dataset: "MONTHLY_EXECUTION", source: "TRANSPARENCY_PORTAL", managementCode: filters.managementCode,
       fiscalYear: filters.fiscalYear, fromMonth: filters.fromMonth, toMonth: filters.toMonth } };
+  }
+  async budgets(query: FinanceQuery) {
+    const filters = budgetFilters(query);
+    const result = await this.reports.budgets(filters);
+    return { ...result, context: { dataset: "ANNUAL_BUDGET", source: "TRANSPARENCY_PORTAL",
+      subordinateAgencyCode: filters.subordinateAgencyCode, fiscalYear: filters.fiscalYear } };
   }
   async commitment(value: string, query: FinanceQuery) {
     const id = commitmentId(value);

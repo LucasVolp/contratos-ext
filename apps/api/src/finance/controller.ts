@@ -12,6 +12,7 @@ export function registerFinanceRoutes(api: FastifyInstance, finance: FinanceServ
     });
     routes.get<Query>("/units", (request) => finance.units(request.query));
     routes.get<Query>("/execution", (request) => finance.execution(request.query));
+    routes.get<Query>("/budgets", (request) => finance.budgets(request.query));
     routes.get<Query>("/commitments", (request) => finance.commitments(request.query));
     // Financial identity columns are bigint, unlike UUIDs in the contract/catalog module.
     routes.get<Commitment>("/commitments/:commitmentId", (request) => finance.commitment(request.params.commitmentId, request.query));

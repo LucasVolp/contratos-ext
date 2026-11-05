@@ -97,3 +97,38 @@ export interface ExecutionRow extends ExecutionSummary {
   expenseElementName: string | null;
 }
 export interface ReportPage<Row, Summary> extends Page<Row> { summary: Summary }
+
+export interface BudgetFilters extends Pagination {
+  subordinateAgencyCode: string;
+  fiscalYear: number;
+  budgetaryUnitCode?: string;
+  actionCode?: string;
+  economicCategoryCode?: string;
+  expenseGroupCode?: string;
+  expenseElementCode?: string;
+}
+export interface BudgetSummary {
+  sourceRowCount: number;
+  initialBudget: string | null;
+  updatedBudget: string | null;
+  committedBudget: string | null;
+  executedBudget: string | null;
+  lastImportedAt: string | null;
+}
+export interface BudgetRow extends BudgetSummary {
+  fiscalYear: number;
+  superiorOrganCode: string;
+  superiorOrganName: string | null;
+  subordinateAgencyCode: string;
+  subordinateAgencyName: string | null;
+  budgetaryUnitCode: string;
+  budgetaryUnitName: string | null;
+  actionCode: string;
+  actionName: string | null;
+  economicCategoryCode: string;
+  economicCategoryName: string | null;
+  expenseGroupCode: string;
+  expenseGroupName: string | null;
+  expenseElementCode: string;
+  expenseElementName: string | null;
+}

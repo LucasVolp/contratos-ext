@@ -19,6 +19,7 @@ existing public-read model. They do not trigger imports or modify financial fact
 | GET | `/commitments/:commitmentId/liquidations` | Paginated liquidation allocations affecting the commitment |
 | GET | `/commitments/:commitmentId/payments` | Paginated payment allocations affecting the commitment |
 | GET | `/execution` | Monthly execution report by unit and classification; see [Financial reports](finance-reports-contract.md) |
+| GET | `/budgets` | Annual institutional budget by agency/action/source classification; see [Financial reports](finance-reports-contract.md) |
 
 All successful responses use `Cache-Control: no-store`. A list response is:
 
@@ -153,10 +154,9 @@ page. Read routes do not accept POST/PUT/DELETE.
 ## Boundaries and verification
 
 This slice does not calculate accounts payable, join official LOA to campuses,
-combine monthly aggregates with daily documents, or expose annual budget reports.
-The separate [monthly execution report](finance-reports-contract.md) uses only its
-own aggregate source. Remaining features need source-specific queries and agreed
-business rules.
+or combine monthly aggregates with daily documents. The separate
+[execution and budget reports](finance-reports-contract.md) each use their own
+source. Remaining features need source-specific queries and agreed business rules.
 
 ```sh
 pnpm --filter @contracts/api lint

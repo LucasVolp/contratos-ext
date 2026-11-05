@@ -120,3 +120,67 @@ test("monthly execution never adds detailed documents or internal planning to it
     assert.equal((await db.query("SELECT count(*)::int AS count FROM finance.expense_natures"))[0].count, 1);
   } finally { await app.close(); }
 });
+
+interface AnnualRow {
+  year?: number; source?: string; agency?: string; budgetaryUnit?: string; action?: string;
+  functionCode?: string; category?: string; group?: string; element?: string;
+  initial?: string | null; updated?: string | null; committed?: string | null; executed?: string | null;
+}
+async function annual(db: Database, run: string, row: AnnualRow = {}) {
+  await db.query(`INSERT INTO finance.annual_budgets
+    (source, fiscal_year, superior_organ_code, subordinate_agency_code, budgetary_unit_code, function_code,
+     subfunction_code, program_code, action_code, economic_category_code, expense_group_code, expense_element_code,
+     initial_budget, updated_budget, committed_budget, executed_budget, ingestion_run_id)
+    VALUES ($1,$2,'26000',$3,$4,$5,'363','5012',$6,$7,$8,$9,$10,$11,$12,$13,$14)`, [
+    row.source ?? "TRANSPARENCY_PORTAL", row.year ?? 2026, row.agency ?? "26421", row.budgetaryUnit ?? "26421",
+    row.functionCode ?? "12", row.action ?? "20RL", row.category ?? "3", row.group ?? "3", row.element ?? "30",
+    row.initial === undefined ? "0" : row.initial, row.updated === undefined ? "0" : row.updated,
+    row.committed === undefined ? "0" : row.committed, row.executed === undefined ? "0" : row.executed, run,
+  ]);
+}
+
+test("annual budget rolls up source classifications without inventing campus or modality allocations", async (t) => {
+  const { db, app, get, run } = await setup(t, "ANNUAL_BUDGET");
+  try {
+    // Annual reporting must work without any imported management-unit directory.
+    await db.query("DELETE FROM finance.management_units");
+    await annual(db, run, { initial: "999999999999999999.123456", updated: "20", committed: "0.1" });
+    await annual(db, run, { functionCode: "28", initial: "0.876544", updated: "30", committed: "0.2", executed: null });
+    await annual(db, run, { action: "20RG", category: "4", group: "4", element: "52", initial: "7", updated: "70", committed: "7", executed: "7" });
+    await annual(db, run, { budgetaryUnit: "26422", initial: "11", updated: "110", committed: "11", executed: "11" });
+    await annual(db, run, { agency: "26415", initial: "888" });
+    await annual(db, run, { year: 2025, initial: "777" });
+    await annual(db, run, { source: "OTHER_SOURCE", initial: "999" });
+    const report = await get("/budgets?subordinateAgencyCode=26421&fiscalYear=2026&limit=1");
+    assert.equal(report.total, 3);
+    assert.equal(report.data.length, 1);
+    assert.equal(report.summary.sourceRowCount, 4);
+    assert.equal(report.summary.initialBudget, "1000000000000000018.000000");
+    assert.equal(report.summary.updatedBudget, "230.000000");
+    assert.equal(report.summary.committedBudget, "18.300000");
+    assert.equal(report.summary.executedBudget, null);
+    assert.equal(report.context.dataset, "ANNUAL_BUDGET");
+    assert.equal(report.context.subordinateAgencyCode, "26421");
+    assert.equal("managementUnitCode" in report.data[0], false);
+    assert.equal("expenseNature" in report.data[0], false);
+    assert.equal("applicationModalityCode" in report.data[0], false);
+    const filtered = await get("/budgets?subordinateAgencyCode=26421&fiscalYear=2026&budgetaryUnitCode=26421&actionCode=20RL&economicCategoryCode=3&expenseGroupCode=3&expenseElementCode=30");
+    assert.equal(filtered.total, 1);
+    assert.equal(filtered.data[0].sourceRowCount, 2);
+    assert.equal(filtered.data[0].initialBudget, "1000000000000000000.000000");
+    assert.equal(filtered.data[0].actionCode, "20RL");
+    const beyond = await get("/budgets?subordinateAgencyCode=26421&fiscalYear=2026&page=100&limit=1");
+    assert.deepEqual(beyond.data, []);
+    assert.deepEqual(beyond.summary, report.summary);
+    const otherAgency = await get("/budgets?subordinateAgencyCode=26415&fiscalYear=2026");
+    assert.equal(otherAgency.summary.initialBudget, "888.000000");
+    const previous = await get("/budgets?subordinateAgencyCode=26421&fiscalYear=2025");
+    assert.equal(previous.summary.initialBudget, "777.000000");
+    const empty = await get("/budgets?subordinateAgencyCode=26421&fiscalYear=2024");
+    assert.equal(empty.total, 0);
+    assert.deepEqual(empty.data, []);
+    assert.equal(empty.summary.sourceRowCount, 0);
+    assert.equal(empty.summary.initialBudget, null);
+    assert.equal(empty.summary.lastImportedAt, null);
+  } finally { await app.close(); }
+});

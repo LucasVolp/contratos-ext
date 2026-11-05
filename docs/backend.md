@@ -53,8 +53,9 @@ Fastify now exposes the first read-only financial slice through
 `src/finance/`: validated filters, explicit SQL repositories and paginated
 commitments with their related documents. See [Financial read API](finance-api-contract.md).
 The separate `src/finance/reports.ts` repository provides monthly execution by
-unit/classification without mixing daily facts. See [Financial reports](finance-reports-contract.md).
-Internal budget distribution endpoints and annual budget reports are future work.
+unit/classification and annual institutional budget reports, without mixing their
+sources or inferring campus LOA allocations. See [Financial reports](finance-reports-contract.md).
+Internal budget distribution endpoints and financial screens are future work.
 
 Persistence and financial migration tests now create temporary databases instead
 of temporary schemas. A fixed schema name such as `finance` cannot be isolated by

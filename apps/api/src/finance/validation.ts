@@ -1,6 +1,6 @@
 import { isDate } from "@contracts/validation";
 import { BadRequestException } from "../errors";
-import { CommitmentFilters, ExecutionFilters, FinanceQuery, Pagination, UnitFilters } from "./types";
+import { BudgetFilters, CommitmentFilters, ExecutionFilters, FinanceQuery, Pagination, UnitFilters } from "./types";
 
 function invalid(field: string, message: string): never {
   throw new BadRequestException({ message, fieldErrors: { [field]: message } });
@@ -93,5 +93,18 @@ export function executionFilters(query: FinanceQuery): ExecutionFilters {
     managementUnitCode: code(query, "managementUnitCode", /^[0-9]{6}$/),
     expenseNature: code(query, "expenseNature", /^[0-9]{6}$/),
     actionCode: code(query, "actionCode", /^[A-Za-z0-9]{1,20}$/),
+  };
+}
+export function budgetFilters(query: FinanceQuery): BudgetFilters {
+  known(query, ["subordinateAgencyCode", "fiscalYear", "budgetaryUnitCode", "actionCode", "economicCategoryCode", "expenseGroupCode", "expenseElementCode", "page", "limit"]);
+  const subordinateAgencyCode = code(query, "subordinateAgencyCode", /^[0-9]{5}$/);
+  if (!subordinateAgencyCode) invalid("subordinateAgencyCode", "Informe o código do órgão subordinado.");
+  return {
+    ...pagination(query), subordinateAgencyCode, fiscalYear: fiscalYear(query),
+    budgetaryUnitCode: code(query, "budgetaryUnitCode", /^[0-9]{5}$/),
+    actionCode: code(query, "actionCode", /^[A-Za-z0-9]{1,20}$/),
+    economicCategoryCode: code(query, "economicCategoryCode", /^[0-9]$/),
+    expenseGroupCode: code(query, "expenseGroupCode", /^[0-9]$/),
+    expenseElementCode: code(query, "expenseElementCode", /^[0-9]{2}$/),
   };
 }
