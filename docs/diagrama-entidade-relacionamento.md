@@ -6,6 +6,11 @@ This diagram covers the existing contract and catalog tables in `public`. The
 separate `finance` schema, including all fourteen tables and their relationships,
 is documented in the [Financial data model](finance-data-model.md).
 
+Historical migrations also retain `Institution`, `User`, `UserInstitution`,
+`Session` and the `Role` enum for deployed-database compatibility. These legacy
+tables are outside the active contract/catalog domain shown below; the current
+API does not expose authentication routes.
+
 ## Visão geral
 
 | Entidade | Papel na aplicação |

@@ -23,6 +23,13 @@ Cada criação gera UUID na aplicação. Contratos e atas mantêm `updatedAt` ex
 
 As duas migrações originais mantêm os mesmos nomes e bytes. Em um banco existente, o executor consulta `_prisma_migrations`, verifica o checksum de cada migração concluída e registra sua adoção sem executar novamente o DDL. O journal antigo é preservado. Migrações alteradas, desconhecidas ou anteriores incompletas interrompem a operação com erro explícito. Migrações novas devem ser arquivos novos; nunca edite SQL já aplicado.
 
+The two additional deployed ORM migrations (`202610310002_authentication` and
+`202610310003_institution_organization`) are also retained byte-for-byte from
+commit `87daef7`, with SHA-256 matching the deployed journal. They preserve legacy
+tables and upgrade compatibility; they do not add authentication routes to the
+current API. Their historical enum labels remain unchanged to preserve checksums.
+The migration adoption test covers all four deployed ORM entries.
+
 Não é necessário recriar o banco, executar seed ou remover volumes para atualizar uma instalação. O Compose continua executando as migrações antes de iniciar a API. Faça backup antes de atualizar um ambiente com dados importantes. Como esta etapa preserva o esquema, a versão anterior da API permanece compatível com os dados; o journal novo não interfere no Prisma antigo.
 
 ## Verificação

@@ -49,12 +49,17 @@ test("SQL migrations initialize an empty database and recognize an existing inst
     (await repos.contracts.get(saved.id))!.initialValue,
     contract.initialValue,
   );
-  // Reconstruct the two original ORM entries; new SQL-only migrations stay in their own journal.
+  // Reconstruct deployed ORM history; new SQL-only migrations stay in their own journal.
   await db.query(
     'CREATE TABLE "_prisma_migrations" (migration_name text, checksum text, finished_at timestamptz, rolled_back_at timestamptz)',
   );
   const directory = resolve(__dirname, "../../migrations");
-  const legacyFiles = ["202610300001_initial.sql", "202610310001_public_catalog.sql"];
+  const legacyFiles = [
+    "202610300001_initial.sql",
+    "202610310001_public_catalog.sql",
+    "202610310002_authentication.sql",
+    "202610310003_institution_organization.sql",
+  ];
   for (const file of legacyFiles) {
     const checksum = createHash("sha256")
       .update(await readFile(join(directory, file)))
