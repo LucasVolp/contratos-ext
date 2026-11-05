@@ -178,3 +178,30 @@ func TestCachedMonthlyArchiveIntegration(t *testing.T) {
 	}
 	t.Logf("real monthly archive loaded and replayed: %d aggregate facts per attempt", first.ProcessedRecords)
 }
+
+func TestCachedAnnualArchiveIntegration(t *testing.T) {
+	file, date := os.Getenv("ETL_TEST_ANNUAL_ARCHIVE"), os.Getenv("ETL_TEST_ANNUAL_DATE")
+	if file == "" || date == "" {
+		t.Skip("set ETL_TEST_ANNUAL_ARCHIVE and ETL_TEST_ANNUAL_DATE for the real annual archive smoke test")
+	}
+	opts := aggregateOptions(AnnualBudget)
+	parsed, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts.File, opts.Date = file, parsed
+	db := isolatedDatabase(t, true)
+	first, err := Run(context.Background(), db, opts)
+	if err != nil || first.Status != "SUCCESS" || first.ProcessedRecords == 0 {
+		t.Fatalf("annual source import failed: %v %v", first, err)
+	}
+	total := scalar(t, db, "SELECT sum(updated_budget) FROM finance.annual_budgets")
+	second, err := Run(context.Background(), db, opts)
+	if err != nil || second.ProcessedRecords != first.ProcessedRecords {
+		t.Fatalf("annual replay failed: %v %v", second, err)
+	}
+	if scalar(t, db, "SELECT sum(updated_budget) FROM finance.annual_budgets") != total {
+		t.Fatal("annual replay changed source totals")
+	}
+	t.Logf("real annual archive loaded and replayed: %d aggregate facts per attempt", first.ProcessedRecords)
+}

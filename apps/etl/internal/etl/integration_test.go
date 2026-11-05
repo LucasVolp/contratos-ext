@@ -52,12 +52,14 @@ func isolatedDatabase(t *testing.T, migrate bool) *sql.DB {
 	})
 	if migrate {
 		execSQL(t, db, `CREATE TABLE public._sql_migrations (name text PRIMARY KEY)`)
-		migration, err := os.ReadFile(filepath.Join("..", "..", "..", "api", "migrations", RequiredMigration+".sql"))
-		if err != nil {
-			t.Fatal(err)
+		for _, name := range []string{RequiredMigration, DownloadMigration} {
+			migration, err := os.ReadFile(filepath.Join("..", "..", "..", "api", "migrations", name+".sql"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			execSQL(t, db, string(migration))
+			execSQL(t, db, "INSERT INTO public._sql_migrations VALUES ($1)", name)
 		}
-		execSQL(t, db, string(migration))
-		execSQL(t, db, "INSERT INTO public._sql_migrations VALUES ($1)", RequiredMigration)
 	}
 	return db
 }

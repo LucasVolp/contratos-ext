@@ -23,9 +23,15 @@ func Run(ctx context.Context, db *sql.DB, opts Options) (result Result, failure 
 	if err := opts.Validate(); err != nil {
 		return result, err
 	}
-	var installed bool
-	if err := db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM public._sql_migrations WHERE name = $1)`, RequiredMigration).Scan(&installed); err != nil || !installed {
-		return result, fmt.Errorf("required migration %s is not installed; run pnpm db:migrate before importing", RequiredMigration)
+	migrations := []string{RequiredMigration}
+	if opts.Download != nil {
+		migrations = append(migrations, DownloadMigration)
+	}
+	for _, migration := range migrations {
+		var installed bool
+		if err := db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM public._sql_migrations WHERE name = $1)`, migration).Scan(&installed); err != nil || !installed {
+			return result, fmt.Errorf("required migration %s is not installed; run pnpm db:migrate before importing", migration)
+		}
 	}
 	conn, err := db.Conn(ctx)
 	if err != nil {
@@ -47,10 +53,14 @@ func Run(ctx context.Context, db *sql.DB, opts Options) (result Result, failure 
 		}
 	}()
 	start, end := opts.period()
+	sourceFile := opts.File
+	if opts.Download != nil {
+		sourceFile = archiveName(opts)
+	}
 	err = conn.QueryRowContext(ctx, `INSERT INTO finance.ingestion_runs
         (type, source, source_file, period_start, period_end, scope_type, scope_codes, trigger_type, status, etl_version)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'IN_PROGRESS',$9) RETURNING id`,
-		opts.dataset(), Source, filepath.Base(opts.File), start.Format("2006-01-02"), end.Format("2006-01-02"), opts.ScopeType, pq.Array(opts.Codes), opts.Trigger, Version).Scan(&result.RunID)
+		opts.dataset(), Source, filepath.Base(sourceFile), start.Format("2006-01-02"), end.Format("2006-01-02"), opts.ScopeType, pq.Array(opts.Codes), opts.Trigger, Version).Scan(&result.RunID)
 	if err != nil {
 		return result, err
 	}
@@ -66,6 +76,13 @@ func Run(ctx context.Context, db *sql.DB, opts Options) (result Result, failure 
 			failure = errors.Join(failure, fmt.Errorf("record failed import: %w", auditErr))
 		}
 	}()
+	if opts.Download != nil {
+		downloader := newDownloader(*opts.Download, &postgresGate{db: conn, minimum: opts.Download.Interval, log: opts.Download.Log})
+		opts.File, err = downloader.acquire(ctx, opts)
+		if err != nil {
+			return result, err
+		}
+	}
 	var daily *DailyData
 	var aggregate *AggregateData
 	var empty bool

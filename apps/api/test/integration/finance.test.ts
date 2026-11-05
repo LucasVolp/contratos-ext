@@ -54,8 +54,8 @@ test("financial migration upgrades existing contracts and replay preserves finan
   await migrate(db);
   assert.equal((await db.query('SELECT "globalValue" FROM "Contract" WHERE id = $1', [id]))[0].globalValue, "0.2");
   assert.equal((await db.query("SELECT id FROM finance.commitment_references"))[0].id, ref);
-  assert.equal((await db.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'finance' AND table_type = 'BASE TABLE'")).length, 14);
-  assert.equal((await db.query('SELECT * FROM "_sql_migrations"')).length, 5);
+  assert.equal((await db.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'finance' AND table_type = 'BASE TABLE'")).length, 15);
+  assert.equal((await db.query('SELECT * FROM "_sql_migrations"')).length, 6);
 });
 
 test("payments, liquidations and item history can precede a prior-year commitment header", async (t) => {

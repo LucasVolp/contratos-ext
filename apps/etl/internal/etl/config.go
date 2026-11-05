@@ -9,7 +9,8 @@ import (
 )
 
 const RequiredMigration = "202611050001_financial_foundation"
-const Version = "0.2.0"
+const DownloadMigration = "202611050002_financial_download_control"
+const Version = "0.3.0"
 const Source = "TRANSPARENCY_PORTAL"
 const DailyExpenses = "DAILY_EXPENSES"
 const MonthlyExecution = "MONTHLY_EXECUTION"
@@ -22,6 +23,7 @@ type Options struct {
 	Codes     []string
 	Trigger   string
 	Dataset   string
+	Download  *DownloadOptions
 }
 
 func (o Options) dataset() string {
@@ -43,8 +45,16 @@ func (o Options) period() (time.Time, time.Time) {
 }
 
 func (o Options) Validate() error {
-	if o.File == "" || o.Date.IsZero() {
-		return fmt.Errorf("file and reference date are required")
+	if (o.File == "" && o.Download == nil) || o.Date.IsZero() {
+		return fmt.Errorf("file or download configuration and reference date are required")
+	}
+	if o.File != "" && o.Download != nil {
+		return fmt.Errorf("local file and automatic download are mutually exclusive")
+	}
+	if o.Download != nil {
+		if err := o.Download.validate(); err != nil {
+			return err
+		}
 	}
 	if o.Date.Year() < 1900 || o.Date.Year() > 9999 {
 		return fmt.Errorf("reference year must be between 1900 and 9999")
