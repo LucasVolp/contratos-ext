@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
-	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -16,35 +14,12 @@ import (
 )
 
 func execute(ctx context.Context, args []string) error {
-	flags := flag.NewFlagSet("finance-etl", flag.ContinueOnError)
-	file := flags.String("file", "", "Complete source ZIP file")
-	kind := flags.String("kind", etl.DailyExpenses, "DAILY_EXPENSES, MONTHLY_EXECUTION or ANNUAL_BUDGET")
-	date := flags.String("date", "", "Reference period start (YYYY-MM-DD; month/year imports require their first day)")
-	scope := flags.String("scope", "", "MANAGEMENT, MANAGEMENT_UNIT or SUBORDINATE_AGENCY; defaults according to kind")
-	codes := flags.String("codes", "", "Comma-separated scope codes; leading zeros are preserved")
-	trigger := flags.String("trigger", "MANUAL", "MANUAL or SCHEDULED")
-	if err := flags.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return nil
-		}
-		return err
-	}
-	if flags.NArg() != 0 {
-		return fmt.Errorf("unexpected positional arguments")
-	}
-	parsedDate, err := time.Parse("2006-01-02", *date)
+	plan, err := parsePlan(args)
 	if err != nil {
-		return fmt.Errorf("date must be YYYY-MM-DD")
-	}
-	if *scope == "" {
-		*scope = "MANAGEMENT"
-		if *kind == etl.AnnualBudget {
-			*scope = "SUBORDINATE_AGENCY"
-		}
-	}
-	opts := etl.Options{File: *file, Date: parsedDate, ScopeType: *scope, Codes: etl.NormalizeCodes(*codes), Trigger: *trigger, Dataset: *kind}
-	if err := opts.Validate(); err != nil {
 		return err
+	}
+	if plan.options.Date.IsZero() {
+		return nil
 	}
 	connection := os.Getenv("DATABASE_URL")
 	if connection == "" {
@@ -61,11 +36,18 @@ func execute(ctx context.Context, args []string) error {
 	if err = db.PingContext(ping); err != nil {
 		return fmt.Errorf("connect to PostgreSQL: %w", err)
 	}
-	result, err := etl.Run(ctx, db, opts)
-	if result.RunID != 0 {
-		_ = json.NewEncoder(os.Stdout).Encode(result)
+	for date := plan.options.Date; !date.After(plan.through); date = nextPeriod(date, plan.options.Dataset) {
+		opts := plan.options
+		opts.Date = date
+		result, err := etl.Run(ctx, db, opts)
+		if result.RunID != 0 {
+			_ = json.NewEncoder(os.Stdout).Encode(result)
+		}
+		if err != nil {
+			return err
+		}
 	}
-	return err
+	return nil
 }
 
 func main() {

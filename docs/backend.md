@@ -46,6 +46,9 @@ ETL load contract and relationship diagram are documented in
 [Financial data model](finance-data-model.md). The independent
 [Go ETL](../apps/etl/README.md) imports daily documents, monthly execution and annual
 budget ZIP files into this schema, using separate dataset types and import scopes.
+Automatic downloads use `finance.download_state`, added by migration
+`202611050002_financial_download_control`, to share request spacing and cooldowns
+across worker processes. Local-file mode still requires only the foundation schema.
 Fastify financial queries and internal budget distribution endpoints are future work.
 
 Persistence and financial migration tests now create temporary databases instead

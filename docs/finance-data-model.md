@@ -1,9 +1,9 @@
 # Financial data model
 
-Status: the database foundation and manual daily, monthly and annual ZIP importers in Go are implemented.
-See [Finance ETL](../apps/etl/README.md) for commands and verification. Automatic
-downloads, API endpoints, financial calculations and UI are
-subsequent phases.
+Status: the database foundation, daily/monthly/annual Go importers and automatic
+downloads with persistent pacing are implemented.
+See [Finance ETL](../apps/etl/README.md) for commands and verification. Financial
+API endpoints, calculations and UI are subsequent phases.
 
 ## Architecture and ownership
 
@@ -40,6 +40,7 @@ Role creation and credentials are deployment tasks, not part of this migration.
 | `annual_budgets` | `ExpenseBudget`: annual institutional budget, including initial and updated allocation | ETL |
 | `monthly_execution` | `ExpenseExecution`: monthly execution and outstanding-payables aggregates | ETL |
 | `budget_distributions` | Internal annual estimate/release by unit and nature, corresponding to SAGA's distribution concept | API |
+| `download_state` | Persistent request timestamp, shared cooldowns and adaptive interval across download processes | ETL |
 
 Source models are under `internal/domain/model/` in envelopa; column mapping is in
 `internal/infrastructure/client/portal/mapper.go`. Contracts Ext's schema is not a
@@ -83,6 +84,14 @@ erDiagram
     ingestion_runs ||--o{ payment_commitments : last_loaded
     ingestion_runs ||--o{ annual_budgets : last_loaded
     ingestion_runs ||--o{ monthly_execution : last_loaded
+    download_state {
+        text source PK
+        timestamptz last_request_at
+        timestamptz blocked_until
+        timestamptz rate_limited_until
+        integer interval_seconds
+        timestamptz updated_at
+    }
 ```
 
 There is no payment-to-liquidation FK: the examined source links these documents
@@ -146,8 +155,10 @@ must use a left join to resolve the current item.
    implements this using a session lock held across parsing and loading; a global
    lock also covers overlapping management/unit scopes. It compares archive dates
    before refreshing a document, preventing older snapshots from replacing newer
-   headers/children. When downloads are implemented, share their rate limiting
-   across processes; uniqueness alone does not order competing loads.
+   headers/children. Automatic downloads also use `download_state` with short row
+   locks and database time to coordinate request starts and penalties across
+   processes. A pending server block survives worker restarts and retry exhaustion.
+   Traffic from other databases/services using the same public IP is outside this gate.
 4. In a transaction, upsert dimensions and references, then documents and children.
    Refresh a document's child set only from a complete source snapshot; remove
    obsolete child rows explicitly in that transaction. Preserve history/references.
@@ -206,6 +217,7 @@ and allocation policy are later features. No ETL refresh touches these values.
 ## Verification and rollout
 
 Migration: `apps/api/migrations/202611050001_financial_foundation.sql`.
+Shared download control: `apps/api/migrations/202611050002_financial_download_control.sql`.
 Apply through the existing migration runner (`pnpm db:migrate`), not Go startup.
 The migration is additive; existing catalog/contract tables and historical SQL
 files stay unchanged. This phase does not migrate JSON catalog supplements into
@@ -233,8 +245,10 @@ in an isolated database for management 26421: 255 fact rows per attempt, without
 replay duplication. The reference headers include multiple/unknown classifications,
 which are retained in raw data instead of manufactured into numeric nature codes.
 The real September 2026 monthly archive was also loaded and replayed: 404 grouped
-facts per attempt. Annual mapping is verified with source-shaped fixtures and
-database tests; a real annual ZIP was not available in the local cache. Snapshot
+facts per attempt. A real automatic annual-budget download was imported on
+2026-11-05: 100 grouped facts for agency 26421 and fiscal year 2026. Snapshot
 cleanup is limited to represented agency/year or management-unit/month scopes.
-Internal planning remains untouched. Automatic downloads and scheduling remain
-future work.
+Internal planning remains untouched. Downloader tests simulate HTTP redirects,
+rate limits, server delays, interrupted transfers and invalid files, plus real
+database pacing across independent connections. Scheduling is external; the CLI
+supports one period or an inclusive period-start range.

@@ -3,7 +3,8 @@
 Modelo atual da aplicação Contracts Ext, baseado nos [tipos de persistência](../apps/api/src/models.ts), nas [migrações SQL](../apps/api/migrations/) e nos vínculos implementados no catálogo. Banco: PostgreSQL.
 
 This diagram covers the existing contract and catalog tables in `public`. The
-separate `finance` schema, including all fourteen tables and their relationships,
+separate `finance` schema, including fourteen domain tables, shared download-control
+state and their relationships,
 is documented in the [Financial data model](finance-data-model.md).
 
 Historical migrations also retain `Institution`, `User`, `UserInstitution`,
