@@ -10,6 +10,7 @@
     "dev": "pnpm -r --parallel dev",
     "db:migrate": "pnpm --filter @contracts/api db:migrate",
     "db:seed": "pnpm --filter @contracts/api db:seed",
+    "finance:import": "node scripts/finance-etl.cjs",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

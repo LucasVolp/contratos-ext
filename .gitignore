@@ -9,3 +9,4 @@ playwright-report/
 test-results/
 apps/api/src/generated/
 .DS_Store
+data/finance/

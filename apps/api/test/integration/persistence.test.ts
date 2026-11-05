@@ -1,28 +1,15 @@
 import { test, TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { randomUUID, createHash } from "node:crypto";
+import { createHash } from "node:crypto";
 import { readdir, readFile, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { Database } from "../../src/database";
+import { createTestDatabase } from "../helpers/test-database";
 import { Repositories } from "../../src/repositories";
 import { migrate } from "../../src/migrate";
 import { CatalogDrafts } from "../../src/catalog/drafts";
 async function isolated(t: TestContext) {
-  const admin = new Database();
-  const schema = "test_" + randomUUID().replaceAll("-", "");
-  await admin.query(`CREATE SCHEMA "${schema}"`);
-  const url = new URL(
-    process.env.DATABASE_URL ||
-      "postgresql://contracts:contracts_local@localhost:5540/contracts",
-  );
-  url.searchParams.set("options", `-c search_path=${schema} -c timezone=UTC`);
-  const db = new Database(url.toString());
-  t.after(async () => {
-    await db.close();
-    await admin.query(`DROP SCHEMA "${schema}" CASCADE`);
-    await admin.close();
-  });
+  const db = await createTestDatabase(t);
   await migrate(db);
   return { db, repos: new Repositories(db) };
 }
@@ -62,14 +49,13 @@ test("SQL migrations initialize an empty database and recognize an existing inst
     (await repos.contracts.get(saved.id))!.initialValue,
     contract.initialValue,
   );
-  // Reconstruct the previous installation's journal using the original SQL bytes.
+  // Reconstruct the two original ORM entries; new SQL-only migrations stay in their own journal.
   await db.query(
     'CREATE TABLE "_prisma_migrations" (migration_name text, checksum text, finished_at timestamptz, rolled_back_at timestamptz)',
   );
   const directory = resolve(__dirname, "../../migrations");
-  for (const file of (await readdir(directory)).filter((name) =>
-    name.endsWith(".sql"),
-  )) {
+  const legacyFiles = ["202610300001_initial.sql", "202610310001_public_catalog.sql"];
+  for (const file of legacyFiles) {
     const checksum = createHash("sha256")
       .update(await readFile(join(directory, file)))
       .digest("hex");
@@ -78,13 +64,18 @@ test("SQL migrations initialize an empty database and recognize an existing inst
       [file.slice(0, -4), checksum],
     );
   }
-  await db.query('DROP TABLE "_sql_migrations"');
+  await db.query('DELETE FROM "_sql_migrations" WHERE name = ANY($1::text[])', [
+    legacyFiles.map((file) => file.slice(0, -4)),
+  ]);
   await migrate(db);
   const after = (await repos.records.get(record.id))!;
   assert.equal(after.items[0].id, record.items[0].id);
   assert.equal(after.exports!.length, 1);
   assert.deepEqual(await repos.contracts.get(saved.id), saved);
-  assert.equal((await db.query('SELECT * FROM "_sql_migrations"')).length, 2);
+  assert.equal(
+    (await db.query('SELECT * FROM "_sql_migrations"')).length,
+    (await readdir(directory)).filter((name) => name.endsWith(".sql")).length,
+  );
   const temporary = await mkdtemp(join(tmpdir(), "contracts-migrations-"));
   t.after(() => rm(temporary, { recursive: true, force: true }));
   for (const file of (await readdir(directory)).filter((name) =>

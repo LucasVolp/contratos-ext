@@ -29,4 +29,19 @@ Não é necessário recriar o banco, executar seed ou remover volumes para atual
 
 `pnpm test` executa validações compartilhadas, testes unitários da API, testes HTTP com `Fastify.inject` e regressões do código compilado. `pnpm --filter @contracts/api test:integration` exige PostgreSQL e verifica CRUD, catálogos, transações, concorrência e a transição de migrações.
 
-Para usar um banco separado, exporte `DATABASE_URL` com a conexão de teste antes de `db:migrate` e `test:integration`. Os testes de persistência criam schemas temporários e os removem ao terminar. Para navegador, inicie API e web com esse mesmo banco e configure também `E2E_DATABASE_URL`.
+Para usar um banco separado, exporte `DATABASE_URL` com a conexão de teste antes de `db:migrate` e `test:integration`. Para navegador, inicie API e web com esse mesmo banco e configure também `E2E_DATABASE_URL`.
+
+## Financial database foundation
+
+The financial module adds the `finance` schema through a new SQL migration, without
+altering existing contract/catalog tables. Its complete model, ownership boundary,
+ETL load contract and relationship diagram are documented in
+[Financial data model](finance-data-model.md). The independent
+[Go ETL](../apps/etl/README.md) now imports daily ZIP files into this schema.
+Fastify financial queries and internal budget distribution endpoints are future work.
+
+Persistence and financial migration tests now create temporary databases instead
+of temporary schemas. A fixed schema name such as `finance` cannot be isolated by
+`search_path`. The test role needs `CREATEDB`; each test removes only the database
+it created. Existing HTTP integration tests still use the configured application
+database and clean up their own records.
