@@ -198,6 +198,43 @@ Portal observes the public IP: envelopa, another database or another client on t
 same IP has its own request traffic. Run those downloaders separately or integrate
 them with the same coordinator; this database cannot enforce their pace.
 
+## Public sources replicator
+
+`cmd/replicator` is a second binary in this module. It captures raw public source
+responses into the `public_sources` schema (see
+[Public sources data model](../../docs/public-sources-data-model.md)). The first
+source is Contratos.gov.br; normalization into typed tables comes in later steps.
+The finance importer above is unaffected.
+
+```sh
+pnpm db:migrate
+pnpm sources:sync -source CONTRATOS_GOV_BR -unit 158148
+pnpm sources:sync -source CONTRATOS_GOV_BR -unit 158148 -inactive=false
+pnpm sources:sync -source CONTRATOS_GOV_BR -contract 13847
+```
+
+- A UG sync captures the active and (by default) inactive contract listings, then
+  for each contract: `historico`, `empenhos`, `garantias`, `responsaveis`,
+  `itens`, `faturas` and `arquivos`. A contract sync captures `/api/contrato/id/{id}`
+  plus the same sub-resources. Only public `/api/contrato/...` endpoints are used.
+- Requests start at least **1 second** apart (`-interval`, whole milliseconds,
+  1s–30s). HTTP 429 or an `X-Amzn-Waf-Action` header starts a **5m01s** cooldown
+  and doubles the interval up to 30s; a longer `Retry-After` is honored. State is
+  persisted per source in `public_sources.source_pacing`, so concurrent processes
+  using this database share one pace.
+- At most three retries after the first attempt (`-retries` 0–3) for network
+  errors, HTTP 408/5xx and blocks. HTTP 404 is recorded as `NOT_FOUND`, not
+  retried. A 200 response that is not JSON (for example a WAF challenge page),
+  exceeds 32 MiB or is cut mid-body is recorded as `FAILED` and never stored.
+- A failed active listing fails the run. Any other failed request makes the run
+  `PARTIAL` and the sync continues. Ctrl+C/SIGTERM finishes the run as `FAILED`
+  with error `cancelled`.
+- Output is one JSON line: `runId`, `status`, `requests`, `captured`,
+  `unchanged`, `notFound`, `failed`, `error`. Exit code is 1 for configuration
+  errors and `FAILED` runs, 0 for `SUCCEEDED` and `PARTIAL`.
+- The wrapper uses `SOURCES_DATABASE_URL`, falling back to `FINANCE_DATABASE_URL`
+  and `DATABASE_URL`. Scheduling is external (cron/compose).
+
 ## Tests
 
 ```sh
