@@ -22,6 +22,8 @@ import {
 } from "./errors";
 import { registerCatalogRoutes } from "./catalog/controller";
 import { registerFinanceRoutes } from "./finance/controller";
+import { registerContractSourceRoutes } from "./contract-sources/controller";
+import { ContractSourceService } from "./contract-sources/service";
 import { FinanceService } from "./finance/service";
 declare module "fastify" {
   interface FastifyContextConfig {
@@ -55,6 +57,7 @@ export async function createApplication(options: ApplicationOptions = {}) {
     repositories.finance,
     repositories.financeReports,
   );
+  const contractSources = new ContractSourceService(repositories, service);
   const app = Fastify({
     logger: false,
     bodyLimit: 1024 * 1024,
@@ -245,6 +248,7 @@ export async function createApplication(options: ApplicationOptions = {}) {
       );
       registerCatalogRoutes(api, catalog);
       registerFinanceRoutes(api, finance);
+      registerContractSourceRoutes(api, contractSources);
     },
     { prefix: "/api" },
   );
