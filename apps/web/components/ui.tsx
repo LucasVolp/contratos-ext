@@ -55,9 +55,11 @@ export function PageHead({
           <div className="eyebrow">
             {section === "Contratos"
               ? "01 — GESTÃO CONTRATUAL"
-              : section === "Pregões"
-                ? "02 — CATÁLOGO DE COMPRAS"
-                : "03 — ARQUIVO DOCUMENTAL"}
+              : section === "Financeiro"
+                ? "04 — EXECUÇÃO ORÇAMENTÁRIA"
+                : section === "Pregões"
+                  ? "02 — CATÁLOGO DE COMPRAS"
+                  : "03 — ARQUIVO DOCUMENTAL"}
           </div>
           <h1>{title}</h1>
           {description && <p>{description}</p>}

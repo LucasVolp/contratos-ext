@@ -53,7 +53,9 @@ provides management units, commitment list/detail and paginated related items,
 history, liquidations and payments. [Financial reports](docs/finance-reports-contract.md)
 include monthly execution by management unit and expense classification and annual
 institutional LOA by agency, action and the classification supplied by the source.
-Financial dashboards and internal planning screens are next.
+The [financial workspace](docs/finance-pages.md) exposes commitment list/detail,
+monthly execution and institutional LOA pages at `/financeiro`, with URL filters
+and pagination. Internal planning and the accounts-payable balance remain pending.
 
 | Serviço | Tecnologia | Acesso local padrão |
 |---|---|---|
