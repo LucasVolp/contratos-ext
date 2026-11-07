@@ -1,0 +1,94 @@
+[
+ {
+  "id": 634291,
+  "contrato_id": 13847,
+  "tipo_id": "Serviço",
+  "tipo_material": "Não se aplica",
+  "grupo_id": "GRUPO GENERICO SERVICO",
+  "catmatseritem_id": "ADMINISTRAÇÃO / GERENCIAMENTO-MANUTENÇÃO VEÍCULO AUTOMOTIVO",
+  "descricao_complementar": "ADMINISTRAÇÃO / GERENCIAMENTO-MANUTENÇÃO VEÍCULO AUTOMOTIVO",
+  "quantidade": "750.625",
+  "valorunitario": "1,00",
+  "valortotal": "6.755,63",
+  "numero_item_compra": "00003",
+  "data_inicio_item": {
+   "date": "2021-04-19 15:39:57.000000",
+   "timezone_type": 3,
+   "timezone": "America/Sao_Paulo"
+  },
+  "historico_item": [
+   {
+    "contrato_historico_id": 48728,
+    "tipo_historico": "Contrato",
+    "data_termo": "2017-01-26",
+    "quantidade": "600.5",
+    "periodicidade": 9,
+    "valor_unitario": "1,00",
+    "valor_total": "5.404,50"
+   },
+   {
+    "contrato_historico_id": 48736,
+    "tipo_historico": "Termo Aditivo",
+    "data_termo": "2018-01-30",
+    "quantidade": "600.5",
+    "periodicidade": 9,
+    "valor_unitario": "1,00",
+    "valor_total": "5.404,50"
+   },
+   {
+    "contrato_historico_id": 48748,
+    "tipo_historico": "Termo Aditivo",
+    "data_termo": "2019-01-31",
+    "quantidade": "600.5",
+    "periodicidade": 9,
+    "valor_unitario": "1,00",
+    "valor_total": "5.404,50"
+   },
+   {
+    "contrato_historico_id": 48765,
+    "tipo_historico": "Termo Aditivo",
+    "data_termo": "2020-01-31",
+    "quantidade": "600.5",
+    "periodicidade": 9,
+    "valor_unitario": "1,00",
+    "valor_total": "5.404,50"
+   },
+   {
+    "contrato_historico_id": 216421,
+    "tipo_historico": "Termo Aditivo",
+    "data_termo": "2021-01-29",
+    "quantidade": "0",
+    "periodicidade": 1,
+    "valor_unitario": "101,00",
+    "valor_total": "0,00"
+   },
+   {
+    "contrato_historico_id": 334147,
+    "tipo_historico": "Termo Aditivo",
+    "data_termo": "2021-12-31",
+    "quantidade": "600.5",
+    "periodicidade": 9,
+    "valor_unitario": "1,00",
+    "valor_total": "5.404,50"
+   },
+   {
+    "contrato_historico_id": 334746,
+    "tipo_historico": "Termo Aditivo",
+    "data_termo": "2022-01-31",
+    "quantidade": "600.5",
+    "periodicidade": 9,
+    "valor_unitario": "1,00",
+    "valor_total": "5.404,50"
+   },
+   {
+    "contrato_historico_id": 430378,
+    "tipo_historico": "Termo Aditivo",
+    "data_termo": "2022-11-28",
+    "quantidade": "750.625",
+    "periodicidade": 9,
+    "valor_unitario": "1,00",
+    "valor_total": "6.755,63"
+   }
+  ]
+ }
+]

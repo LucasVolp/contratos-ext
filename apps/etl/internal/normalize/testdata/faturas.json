@@ -1,0 +1,47 @@
+[
+ {
+  "id": 2462785,
+  "contrato_id": 1057026,
+  "tipolistafatura_id": "PRESTAÇÃO DE SERVIÇOS",
+  "tipo_instrumento_cobranca": "Nota Fiscal Eletrônica",
+  "justificativafatura_id": "",
+  "sfadrao_id": "",
+  "numero": "28",
+  "numero_serie": null,
+  "fornecedor_contrato": "59.339.070/0001-11",
+  "fornecedor_ic": "59.339.070/0001-11",
+  "contratante": "158148 - IF DE RONDONIA",
+  "codigo_ug_ic": "158533",
+  "emissao": "2026-11-04",
+  "prazo": "2026-11-18",
+  "vencimento": "2026-11-18",
+  "valor": "6.100,00",
+  "juros": "0,00",
+  "multa": "0,00",
+  "glosa": "0,00",
+  "valorliquido": "6.100,00",
+  "base_calculo_inss": null,
+  "aliquota_inss": null,
+  "optante_cprb": null,
+  "optante_simples": "Não",
+  "valor_inss": null,
+  "data_liquidacao": null,
+  "nota_cancelada": "Não",
+  "processo": "23243.013900/2026-15",
+  "protocolo": "2026-11-04",
+  "ateste": "2026-11-04",
+  "repactuacao": "Não",
+  "infcomplementar": null,
+  "mesref": null,
+  "anoref": null,
+  "situacao": "Pendente",
+  "chave_nfe": "11000492259339070000111000000000002826117471479014",
+  "dados_referencia": [
+   {
+    "mesref": "10",
+    "anoref": "2026",
+    "valorref": "6.100,00"
+   }
+  ]
+ }
+]

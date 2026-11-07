@@ -1,0 +1,24 @@
+[
+ {
+  "id": 507047,
+  "contrato_id": 57833,
+  "usuario": "***.123.456-** - RODRIGO EXEMPLO",
+  "funcao_id": "Gestor Substituto",
+  "instalacao_id": "",
+  "portaria": "123",
+  "situacao": "Ativo",
+  "data_inicio": "2024-03-01",
+  "data_fim": null
+ },
+ {
+  "id": 507048,
+  "contrato_id": 57833,
+  "usuario": "123.456.789-01 - MARIA EXEMPLO",
+  "funcao_id": "Fiscal Técnico",
+  "instalacao_id": "",
+  "portaria": "124",
+  "situacao": "Ativo",
+  "data_inicio": "2024-03-01",
+  "data_fim": "2025-03-01"
+ }
+]
