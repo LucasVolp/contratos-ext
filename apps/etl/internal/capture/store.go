@@ -29,6 +29,7 @@ type Result struct {
 // RunStart describes a sync execution.
 type RunStart struct {
 	Source, Trigger, TargetType, TargetCode, Version string
+	DailyRunID                                       int64 // daily cycle that started the run; 0 for none
 }
 
 // RunSummary counts a run's requests by outcome.
@@ -65,8 +66,9 @@ type Store struct {
 // StartRun records a RUNNING execution and returns its id.
 func (s *Store) StartRun(ctx context.Context, start RunStart) (int64, error) {
 	var id int64
-	err := s.DB.QueryRowContext(ctx, `INSERT INTO public_sources.capture_runs (source, trigger, target_type, target_code, etl_version)
-		VALUES ($1, $2, $3, $4, $5) RETURNING id`, start.Source, start.Trigger, start.TargetType, start.TargetCode, start.Version).Scan(&id)
+	daily := sql.NullInt64{Int64: start.DailyRunID, Valid: start.DailyRunID != 0}
+	err := s.DB.QueryRowContext(ctx, `INSERT INTO public_sources.capture_runs (source, trigger, target_type, target_code, etl_version, daily_run_id)
+		VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`, start.Source, start.Trigger, start.TargetType, start.TargetCode, start.Version, daily).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("start capture run: %w", err)
 	}

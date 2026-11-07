@@ -78,7 +78,7 @@ type harness struct {
 
 func newHarness(t *testing.T, f *fixture) *harness {
 	t.Helper()
-	db := testdb.Isolated(t, testdb.Migration)
+	db := testdb.Isolated(t, testdb.Migration, testdb.ContractsMigration, testdb.SyncMigration)
 	server := httptest.NewTLSServer(f)
 	t.Cleanup(server.Close)
 	host, _ := url.Parse(server.URL)
@@ -204,6 +204,33 @@ func TestSyncUnitStopsOnCancellation(t *testing.T) {
 	}
 	if f.count("/api/contrato/13847/empenhos") != 0 {
 		t.Fatal("kept requesting after cancellation")
+	}
+}
+
+func TestSyncUnitWithSkipsNotDueContracts(t *testing.T) {
+	h := newHarness(t, newFixture(`[{"id":1,"numero":"00001/2024"}]`, `[{"id":2,"numero":"00002/2024"}]`))
+	var calls []contratosgovbr.Listed
+	due := func(_ context.Context, c contratosgovbr.Listed) (bool, error) {
+		calls = append(calls, c)
+		return c.Active, nil
+	}
+	summary, err := h.connector.SyncUnitWith(context.Background(), h.run("158148"), "158148", due)
+	if err != nil || summary.Status != "SUCCEEDED" || summary.Requests != 2+7 {
+		t.Fatalf("summary = %+v, err = %v", summary, err)
+	}
+	for _, sub := range contratosgovbr.ContractResources {
+		if got := h.fixture.count("/api/contrato/1/" + sub.Segment); got != 1 {
+			t.Fatalf("contract 1 %s requested %d times", sub.Segment, got)
+		}
+		if got := h.fixture.count("/api/contrato/2/" + sub.Segment); got != 0 {
+			t.Fatalf("contract 2 %s requested %d times", sub.Segment, got)
+		}
+	}
+	if len(calls) != 2 || calls[0].ID != 1 || !calls[0].Active || calls[1].ID != 2 || calls[1].Active {
+		t.Fatalf("due calls = %+v", calls)
+	}
+	if !strings.Contains(string(calls[1].Element), `"00002/2024"`) {
+		t.Fatalf("element = %s", calls[1].Element)
 	}
 }
 

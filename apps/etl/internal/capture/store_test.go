@@ -3,6 +3,7 @@ package capture_test
 import (
 	"context"
 	"errors"
+	"strconv"
 	"testing"
 
 	"contracts-ext/etl/internal/capture"
@@ -19,7 +20,7 @@ func result(t *testing.T, body string) capture.Result {
 }
 
 func TestStoreRecordsOutcomes(t *testing.T) {
-	db := testdb.Isolated(t, testdb.Migration)
+	db := testdb.Isolated(t, testdb.Migration, testdb.ContractsMigration, testdb.SyncMigration)
 	ctx := context.Background()
 	store := &capture.Store{DB: db}
 	run, err := store.StartRun(ctx, capture.RunStart{Source: "CONTRATOS_GOV_BR", Trigger: "MANUAL", TargetType: "CONTRACT", TargetCode: "13847", Version: "test"})
@@ -61,5 +62,30 @@ func TestStoreRecordsOutcomes(t *testing.T) {
 		FROM public_sources.capture_runs WHERE id = $1`, run)
 	if row != "PARTIAL,6,3,1,1,1,t" {
 		t.Fatalf("run row = %s", row)
+	}
+}
+
+func TestStartRunLinksDailyRun(t *testing.T) {
+	db := testdb.Isolated(t, testdb.Migration, testdb.ContractsMigration, testdb.SyncMigration)
+	ctx := context.Background()
+	store := &capture.Store{DB: db}
+	daily := testdb.Scalar(t, db, `INSERT INTO public_sources.daily_runs (source, etl_version) VALUES ('CONTRATOS_GOV_BR', 'test') RETURNING id`)
+	dailyID, err := strconv.ParseInt(daily, 10, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	linked, err := store.StartRun(ctx, capture.RunStart{Source: "CONTRATOS_GOV_BR", Trigger: "SCHEDULED", TargetType: "MANAGEMENT_UNIT", TargetCode: "158148", Version: "test", DailyRunID: dailyID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	manual, err := store.StartRun(ctx, capture.RunStart{Source: "CONTRATOS_GOV_BR", Trigger: "MANUAL", TargetType: "MANAGEMENT_UNIT", TargetCode: "158148", Version: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := testdb.Scalar(t, db, `SELECT coalesce(daily_run_id::text, 'NULL') FROM public_sources.capture_runs WHERE id = $1`, linked); got != daily {
+		t.Fatalf("linked daily_run_id = %s, want %s", got, daily)
+	}
+	if got := testdb.Scalar(t, db, `SELECT coalesce(daily_run_id::text, 'NULL') FROM public_sources.capture_runs WHERE id = $1`, manual); got != "NULL" {
+		t.Fatalf("manual daily_run_id = %s", got)
 	}
 }
