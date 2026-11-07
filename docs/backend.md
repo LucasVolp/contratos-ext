@@ -4,9 +4,9 @@ A API usa Fastify 5, TypeScript e PostgreSQL 16 pelo driver `pg`, sem ORM. Esta 
 
 ## Organização
 
-- `apps/api/src/app.ts`: composição explícita das dependências, rotas de contratos/atas, validações HTTP, erros, healthcheck e fechamento do pool.
+- `apps/api/src/app.ts`: composição explícita das dependências, rotas de contratos (somente leitura da réplica diária, mais observações internas) e de atas, validações HTTP, erros, healthcheck e fechamento do pool.
 - `apps/api/src/catalog/controller.ts`: registro das rotas do catálogo no Fastify.
-- `apps/api/src/service.ts` e `catalog/`: regras de negócio, importação, cache e preparação de documentos.
+- `apps/api/src/service.ts` e `catalog/`: regras de negócio, importação de atas, cache e preparação de documentos.
 - `apps/api/src/repositories/`: consultas SQL e operações de persistência específicas de cada área. Serviços recebem repositórios, sem importar o driver nem tipos gerados.
 - `apps/api/src/database.ts`: pool de conexões, transações na mesma conexão, decimais como strings e timestamps em UTC.
 - `apps/api/src/models.ts`: tipos próprios para as linhas persistidas.
@@ -15,7 +15,7 @@ A API usa Fastify 5, TypeScript e PostgreSQL 16 pelo driver `pg`, sem ORM. Esta 
 
 Valores de entrada usam parâmetros `$1`, `$2`, etc. Identificadores variáveis vêm de listas internas de colunas permitidas. Os auxiliares de escrita apenas montam INSERT/UPDATE; não mapeiam relações nem interpretam expressões de um ORM. Filtros, agregações, junções e conflitos estão explícitos nos repositórios.
 
-Cada criação gera UUID na aplicação. Contratos e atas mantêm `updatedAt` explicitamente. Substituir itens e gravar o cabeçalho ocorre em uma única transação, sem alterar o histórico de exportações. A preparação de documento por fornecedor e a importação de contratos usam isolamento serializável. Atualizações independentes do JSON do pregão usam concatenação no PostgreSQL, preservando as outras partes do snapshot.
+Cada criação gera UUID na aplicação. Atas mantêm `updatedAt` explicitamente. Substituir itens e gravar o cabeçalho ocorre em uma única transação, sem alterar o histórico de exportações. A preparação de documento por fornecedor e a importação de atas usam isolamento serializável. Atualizações independentes do JSON do pregão usam concatenação no PostgreSQL, preservando as outras partes do snapshot.
 
 ## Migrações e instalações existentes
 
