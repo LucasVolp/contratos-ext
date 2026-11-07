@@ -16,6 +16,7 @@ import {
   RecordData,
 } from "@/lib/api";
 import { ErrorState, Loading, PageHead, Status } from "./ui";
+import { ContractSourcePanel } from "./contract-source/contract-source-panel";
 export function DetailPage({
   id,
   records = false,
@@ -350,16 +351,19 @@ export function DetailPage({
               </section>
             </>
           ) : (
-            <section className="value-summary">
-              <div>
-                <span>VALOR INICIAL</span>
-                <strong>{currency(data.initialValue)}</strong>
-              </div>
-              <div>
-                <span>VALOR GLOBAL</span>
-                <strong>{currency(data.globalValue)}</strong>
-              </div>
-            </section>
+            <>
+              <section className="value-summary">
+                <div>
+                  <span>VALOR INICIAL</span>
+                  <strong>{currency(data.initialValue)}</strong>
+                </div>
+                <div>
+                  <span>VALOR GLOBAL</span>
+                  <strong>{currency(data.globalValue)}</strong>
+                </div>
+              </section>
+              <ContractSourcePanel contractId={id} />
+            </>
           )}
         </div>
         {records && (
