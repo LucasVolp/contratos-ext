@@ -171,11 +171,17 @@ connector, is a later decision.
 
 Identity rules (designer's call):
 
-- The Contratos.gov.br contract id is the external key once resolved. Lookup
-  and deduplication use the **origin UG** (`unidade_gestora_origem`) plus
-  contract number, which is what the existing `(number, uasg)` identity
-  corresponds to. `unidade_compra` (the purchasing unit, e.g. 158147 vs. UG
-  158148) is stored but not used for identity.
+- Identity is the **managing UG** (`contratante.orgao.unidade_gestora` in UG
+  listings, `unidade_codigo` in `/api/contrato/id/{id}`) plus the contract
+  number compared through `public_sources.contract_number_key`. The managing UG
+  is what the current Dados Abertos import stores as `Contract.uasg`
+  (`codigoUnidadeGestora`). Evidence: contract 1057026 has managing UG 158148
+  and origin UG 158533 (a campus). An earlier draft said origin UG; that was
+  corrected on 2026-11-08 during step 2 planning.
+- Resolution is computed at read time (step 2b): no Contratos.gov.br id is
+  stored on `Contract`, whose `externalId` already holds the PNCP control
+  number. `unidade_compra` (purchasing unit) and the origin UG are stored in
+  the replica but are not used for identity.
 - A UG-wide import (~200 contracts) **skips and reports conflicting rows
   individually** instead of cancelling the whole batch, as the current
   `importContracts` does for small imports.

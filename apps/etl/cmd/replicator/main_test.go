@@ -89,7 +89,7 @@ func TestExecuteRejectsUnknownCommand(t *testing.T) {
 }
 
 func TestExecuteCancelledRunIsRecorded(t *testing.T) {
-	db := testdb.Isolated(t, testdb.Migration)
+	db := testdb.Isolated(t, testdb.Migration, testdb.ContractsMigration)
 	useDatabase(t, testdb.Scalar(t, db, "SELECT current_database()"))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -118,7 +118,7 @@ func TestExecuteCancelledRunIsRecorded(t *testing.T) {
 }
 
 func TestExecuteSyncsContract(t *testing.T) {
-	db := testdb.Isolated(t, testdb.Migration)
+	db := testdb.Isolated(t, testdb.Migration, testdb.ContractsMigration)
 	useDatabase(t, testdb.Scalar(t, db, "SELECT current_database()"))
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/contrato/id/13847" {
@@ -134,8 +134,75 @@ func TestExecuteSyncsContract(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	// One-second spacing makes eight requests take about seven seconds; that is
 	// acceptable here and proves the production gate is wired in.
-	code := execute(context.Background(), []string{"sync", "-source", "CONTRATOS_GOV_BR", "-contract", "13847"}, &stdout, &stderr)
+	code := execute(context.Background(), []string{"sync", "-source", "CONTRATOS_GOV_BR", "-contract", "13847", "-normalize=false"}, &stdout, &stderr)
 	if code != 0 || !strings.Contains(stdout.String(), `"status":"SUCCEEDED"`) || !strings.Contains(stdout.String(), `"requests":8`) {
 		t.Fatalf("code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
+	}
+}
+
+func TestParseNormalizeValidation(t *testing.T) {
+	for _, args := range [][]string{
+		{"-source", "CONTRATOS_GOV_BR", "-unit", "158148"},
+		{"-source", "CONTRATOS_GOV_BR", "-contract", "13847"},
+		{"-source", "CONTRATOS_GOV_BR", "-all"},
+	} {
+		if _, err := parseNormalize(args); err != nil {
+			t.Fatalf("%v rejected: %v", args, err)
+		}
+	}
+	for _, args := range [][]string{
+		{"-source", "CONTRATOS_GOV_BR"},
+		{"-source", "CONTRATOS_GOV_BR", "-unit", "158148", "-all"},
+		{"-source", "CONTRATOS_GOV_BR", "-unit", "1581"},
+		{"-source", "PNCP", "-all"},
+		{"-source", "CONTRATOS_GOV_BR", "-contract", "-1"},
+	} {
+		if _, err := parseNormalize(args); err == nil {
+			t.Fatalf("%v accepted", args)
+		}
+	}
+}
+
+func TestExecuteSyncNormalizes(t *testing.T) {
+	db := testdb.Isolated(t, testdb.Migration, testdb.ContractsMigration)
+	useDatabase(t, testdb.Scalar(t, db, "SELECT current_database()"))
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/contrato/id/13847" {
+			_, _ = w.Write([]byte(`[{"id":13847,"numero":"00004/2017","unidade_codigo":"158148","valor_global":"682.318,13"}]`))
+			return
+		}
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer server.Close()
+	previousURL, previousTransport := sourceBaseURL, sourceTransport
+	sourceBaseURL, sourceTransport = server.URL, server.Client().Transport
+	t.Cleanup(func() { sourceBaseURL, sourceTransport = previousURL, previousTransport })
+	var stdout, stderr bytes.Buffer
+	code := execute(context.Background(), []string{"sync", "-source", "CONTRATOS_GOV_BR", "-contract", "13847"}, &stdout, &stderr)
+	if code != 0 || !strings.Contains(stdout.String(), `"normalization":{"normalized":1`) {
+		t.Fatalf("code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
+	}
+	if got := testdb.Scalar(t, db, "SELECT global_value::text FROM public_sources.contracts"); got != "682318.130000" {
+		t.Fatalf("global value = %s", got)
+	}
+}
+
+func TestExecuteNormalizeWithoutSyncSkips(t *testing.T) {
+	db := testdb.Isolated(t, testdb.Migration, testdb.ContractsMigration)
+	useDatabase(t, testdb.Scalar(t, db, "SELECT current_database()"))
+	var stdout, stderr bytes.Buffer
+	code := execute(context.Background(), []string{"normalize", "-source", "CONTRATOS_GOV_BR", "-contract", "999"}, &stdout, &stderr)
+	if code != 0 || !strings.Contains(stdout.String(), `"skipped":1`) {
+		t.Fatalf("code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
+	}
+}
+
+func TestExecuteRequiresContractsMigration(t *testing.T) {
+	db := testdb.Isolated(t, testdb.Migration)
+	useDatabase(t, testdb.Scalar(t, db, "SELECT current_database()"))
+	var stdout, stderr bytes.Buffer
+	code := execute(context.Background(), []string{"normalize", "-source", "CONTRATOS_GOV_BR", "-all"}, &stdout, &stderr)
+	if code != 1 || !strings.Contains(stderr.String(), "202611080001_public_sources_contracts") {
+		t.Fatalf("code = %d, stderr = %q", code, stderr.String())
 	}
 }

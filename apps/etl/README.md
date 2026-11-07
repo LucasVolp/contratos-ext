@@ -237,6 +237,12 @@ pnpm sources:sync -source CONTRATOS_GOV_BR -contract 13847
 - Output is one JSON line: `runId`, `status`, `requests`, `captured`,
   `unchanged`, `notFound`, `failed`, `error`. Exit code is 1 for configuration
   errors and `FAILED` runs, 0 for `SUCCEEDED` and `PARTIAL`.
+- After a capture that did not fail, `sync` normalizes the synced contracts into
+  typed tables (`-normalize=false` skips it); the JSON line gains a
+  `normalization` object. `pnpm sources:normalize -source CONTRATOS_GOV_BR
+  (-unit <UG> | -contract <id> | -all)` rebuilds typed rows from stored
+  captures without any network request. Exit code is 1 when any contract fails
+  to normalize.
 - The wrapper uses `SOURCES_DATABASE_URL`, falling back to `FINANCE_DATABASE_URL`
   and `DATABASE_URL`. Scheduling is external (cron/compose).
 
