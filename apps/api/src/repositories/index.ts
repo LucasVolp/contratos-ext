@@ -1,8 +1,7 @@
 import { Database } from "../database";
 import { FinanceRepository } from "../finance/repository";
 import { FinanceReportsRepository } from "../finance/reports";
-import { ContractRepository } from "./contracts";
-import { ContractSourceRepository } from "./contract-sources";
+import { ContractRepository } from "../contracts/repository";
 import { RecordRepository, ExportRepository } from "./records";
 import {
   PurchaseRepository,
@@ -18,7 +17,6 @@ export class Repositories {
   readonly supplements;
   readonly finance;
   readonly financeReports;
-  readonly contractSources;
   constructor(private readonly db: Database) {
     this.contracts = new ContractRepository(db);
     this.records = new RecordRepository(db);
@@ -28,7 +26,6 @@ export class Repositories {
     this.supplements = new SupplementRepository(db);
     this.finance = new FinanceRepository(db);
     this.financeReports = new FinanceReportsRepository(db);
-    this.contractSources = new ContractSourceRepository(db);
   }
   institutions(scope: string[] | null) {
     return this.db.query<{ uasg: string; name: string }>(

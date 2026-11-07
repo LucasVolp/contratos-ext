@@ -63,40 +63,28 @@ test("real sessions enforce institution scope, management roles, impersonation a
     assert.equal(created.json().passwordHash, undefined);
     const user = await login("user@example.test");
     assert.equal((await call("/users", user)).statusCode, 403);
-    const body = {
-      number: "AUTH-1",
-      object: "Scope test",
-      supplierName: "Supplier",
-      supplierDocument: "11222333000181",
-      initialValue: "10",
-      globalValue: "10",
-      startDate: "2020-01-01",
-      endDate: "2099-01-01",
-    };
-    const own = await call("/contracts", manager, "POST", {
-      ...body,
-      uasg: "015814",
-    });
-    assert.equal(own.statusCode, 201, own.body);
-    const other = await call("/contracts", manager, "POST", {
-      ...body,
-      uasg: "158148",
-    });
-    assert.equal(other.statusCode, 201, other.body);
+    await db.query(`INSERT INTO "Institution" (id, name, uasg, "updatedAt") VALUES (gen_random_uuid(), 'Unit B', '158148', now())`);
+    for (const [externalId, uasg] of [[101, "015814"], [102, "158148"]] as const) {
+      await db.query(
+        `INSERT INTO public_sources.contracts (source, external_id, number, managing_unit_code, object, global_value,
+           start_date, end_date, header_resource, captured_at, source_data)
+         VALUES ('CONTRATOS_GOV_BR', $1, 'AUTH-1', $2, 'Scope test', 10, '2020-01-01', '2099-01-01',
+           'contracts_active_by_unit', now(), '{}')`,
+        [externalId, uasg],
+      );
+    }
     const listing = await call("/contracts", user);
     assert.equal(listing.statusCode, 200, listing.body);
     assert.equal(listing.json().total, 1);
     assert.equal(listing.json().stats.vigency.active, 1);
     assert.equal(listing.json().stats.vigency.activeValue, "10.000000");
     assert.equal((await call("/contracts?uasg=158148", user)).json().total, 0);
+    assert.equal((await call("/contracts", manager)).json().total, 2);
+    assert.equal((await call("/contracts/102", user)).statusCode, 404);
     assert.equal(
-      (await call("/contracts/" + other.json().id, user)).statusCode,
-      404,
-    );
-    assert.equal(
-      (await call("/contracts", user, "POST", { ...body, uasg: "158148" }))
+      (await call("/contracts/102/notes", user, "PUT", { notes: "x" }))
         .statusCode,
-      403,
+      404,
     );
     await db.query(
       `INSERT INTO finance.management_units(management_code,code,name) VALUES ('26421','015814','A'),('26421','158148','B')`,

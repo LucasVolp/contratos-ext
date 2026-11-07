@@ -14,7 +14,7 @@ function invalid(fieldErrors: Record<string, string>): never {
     fieldErrors,
   });
 }
-function check(body: Data, kind: "record" | "contract" | "import") {
+function check(body: Data, kind: "record" | "import") {
   const errors = validateFields(body, kind);
   if (Object.keys(errors).length) invalid(errors);
 }
@@ -52,26 +52,6 @@ function dates(body: Data, keys = ["startDate", "endDate"]): Data {
     throw new BadRequestException(
       "O início da vigência deve ser anterior ou igual ao fim.",
     );
-  return result;
-}
-export function validateContract(body: Data): Data {
-  if (!body || Array.isArray(body) || typeof body !== "object")
-    throw new BadRequestException("Informe os dados do contrato.");
-  check(body, "contract");
-  const result: Data = {};
-  for (const key of [
-    "number",
-    "object",
-    "supplierName",
-    "supplierDocument",
-    "uasg",
-  ])
-    result[key] = text(body, key, true);
-  result.supplierDocument = normalizeDocument(result.supplierDocument);
-  result.unitName = text(body, "unitName");
-  Object.assign(result, dates(body));
-  for (const key of ["initialValue", "globalValue"])
-    result[key] = decimal(body[key], key);
   return result;
 }
 export const recordStrings = [

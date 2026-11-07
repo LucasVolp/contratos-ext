@@ -15,6 +15,7 @@ import {
 } from "../src/auth/access";
 import { AuthService } from "../src/auth/service";
 import { ApplicationService } from "../src/service";
+import { ContractService } from "../src/contracts/service";
 import { CatalogService } from "../src/catalog/service";
 
 const viewer = (overrides: Partial<Viewer> = {}): Viewer => ({
@@ -92,90 +93,35 @@ test("default IFMS reach narrows the catalog without dropping explicit filters",
 
 test("scoped contract listing keeps the scope when a UASG filter is requested", async () => {
   let where: any;
-  const db: any = {
-    contracts: {
-      list: async (input: any) => {
-        where = input;
-        return [];
-      },
-      stats: async () => ({ count: 0 }),
+  const repository: any = {
+    list: async (input: any) => {
+      where = input;
+      return [];
     },
+    stats: async () => ({ count: 0 }),
+    sync: async () => ({ lastCompletedAt: null, running: false, staleUnits: [] }),
   };
-  await new ApplicationService(db).contracts({ uasg: "154054" }, ["158454"]);
+  await new ContractService(repository).list({ uasg: "154054" }, ["158454"]);
   assert.deepEqual(where.scope, ["158454"]);
   assert.deepEqual(where.uasg, "154054");
 });
 
-test("out-of-scope records look missing and writes outside the scope never reach the database", async () => {
-  let writes = 0;
+test("out-of-scope records look missing", async () => {
   const db: any = {
-    contracts: {
-      get: async () => ({ id: "c", uasg: "154054" }),
-      create: async () => writes++,
-      update: async () => writes++,
-      delete: async () => writes++,
-    },
     records: {
       get: async () => ({ id: "r", uasg: "154054", items: [] }),
     },
   };
   const app = new ApplicationService(db);
-  const scope = ["158454"];
   await assert.rejects(
-    () => app.contract("c", scope),
+    () => app.record("r", ["158454"]),
     (e: any) => e.getStatus() === 404,
   );
-  await assert.rejects(
-    () => app.record("r", scope),
-    (e: any) => e.getStatus() === 404,
-  );
-  await assert.rejects(
-    () => app.deleteContract("c", scope),
-    (e: any) => e.getStatus() === 404,
-  );
-  await assert.rejects(
-    () =>
-      app.saveContract(
-        null,
-        {
-          number: "1",
-          object: "Objeto",
-          uasg: "154054",
-          supplierName: "Empresa",
-          supplierDocument: "11222333000181",
-          initialValue: "1",
-          globalValue: "1",
-        },
-        scope,
-      ),
-    (e: any) => e.getStatus() === 403,
-  );
-  // Moving an accessible contract to a foreign UASG is also refused.
-  db.contracts.get = async () => ({ id: "c", uasg: "158454" });
-  await assert.rejects(
-    () =>
-      app.saveContract(
-        "c",
-        {
-          number: "1",
-          object: "Objeto",
-          uasg: "154054",
-          supplierName: "Empresa",
-          supplierDocument: "11222333000181",
-          initialValue: "1",
-          globalValue: "1",
-        },
-        scope,
-      ),
-    (e: any) => e.getStatus() === 403,
-  );
-  assert.equal(writes, 0);
 });
 
 test("public imports outside the scope are refused before calling Compras.gov", async () => {
   let calls = 0;
   const external: any = {
-    contracts: async () => (calls++, []),
     record: async () => (calls++, {}),
   };
   const client: any = {
@@ -186,7 +132,6 @@ test("public imports outside the scope are refused before calling Compras.gov", 
   const catalog = new CatalogService({} as any, client);
   const body = { uasg: "154054", from: "2026-01-01", to: "2026-01-31" };
   for (const run of [
-    () => app.importContracts(body, ["158454"]),
     () => app.importRecord({ ...body, number: "1/2026" }, ["158454"]),
     () => catalog.syncPurchases(body, ["158454"]),
     () => catalog.syncRecords(body, ["158454"]),

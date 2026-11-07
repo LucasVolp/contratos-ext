@@ -22,8 +22,8 @@ import {
 } from "./errors";
 import { registerCatalogRoutes } from "./catalog/controller";
 import { registerFinanceRoutes } from "./finance/controller";
-import { registerContractSourceRoutes } from "./contract-sources/controller";
-import { ContractSourceService } from "./contract-sources/service";
+import { registerContractRoutes } from "./contracts/controller";
+import { ContractService } from "./contracts/service";
 import { FinanceService } from "./finance/service";
 declare module "fastify" {
   interface FastifyContextConfig {
@@ -57,7 +57,7 @@ export async function createApplication(options: ApplicationOptions = {}) {
     repositories.finance,
     repositories.financeReports,
   );
-  const contractSources = new ContractSourceService(repositories, service);
+  const contracts = new ContractService(repositories.contracts);
   const app = Fastify({
     logger: false,
     bodyLimit: 1024 * 1024,
@@ -177,28 +177,6 @@ export async function createApplication(options: ApplicationOptions = {}) {
       type Body = {
         Body: Data;
       };
-      api.get<Query>("/contracts", (request) =>
-        service.contracts(request.query, request.scope),
-      );
-      api.post<Body>("/contracts/import", async (request, reply) =>
-        reply
-          .code(201)
-          .send(await service.importContracts(request.body, request.scope)),
-      );
-      api.post<Body>("/contracts", async (request, reply) =>
-        reply
-          .code(201)
-          .send(await service.saveContract(null, request.body, request.scope)),
-      );
-      api.get<Id>("/contracts/:id", (request) =>
-        service.contract(request.params.id, request.scope),
-      );
-      api.put<Id & Body>("/contracts/:id", (request) =>
-        service.saveContract(request.params.id, request.body, request.scope),
-      );
-      api.delete<Id>("/contracts/:id", (request) =>
-        service.deleteContract(request.params.id, request.scope),
-      );
       api.get<Query>("/records", (request) =>
         service.records(request.query, request.scope),
       );
@@ -248,7 +226,7 @@ export async function createApplication(options: ApplicationOptions = {}) {
       );
       registerCatalogRoutes(api, catalog);
       registerFinanceRoutes(api, finance);
-      registerContractSourceRoutes(api, contractSources);
+      registerContractRoutes(api, contracts);
     },
     { prefix: "/api" },
   );

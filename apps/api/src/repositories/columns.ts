@@ -1,21 +1,4 @@
 // Writable column allowlists used only inside SQL repositories.
-export const contractColumns = [
-  "number",
-  "object",
-  "supplierName",
-  "supplierDocument",
-  "uasg",
-  "unitName",
-  "startDate",
-  "endDate",
-  "initialValue",
-  "globalValue",
-  "source",
-  "externalId",
-  "lastSyncedAt",
-  "createdAt",
-  "updatedAt",
-] as const;
 export const priceRecordColumns = [
   "number",
   "processNumber",

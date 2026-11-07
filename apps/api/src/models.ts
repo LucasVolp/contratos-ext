@@ -1,22 +1,4 @@
 // Database rows. NUMERIC stays a string to preserve decimal precision.
-export interface Contract {
-  id: string;
-  number: string;
-  object: string;
-  supplierName: string;
-  supplierDocument: string;
-  uasg: string;
-  unitName: string;
-  startDate: string | null;
-  endDate: string | null;
-  initialValue: string;
-  globalValue: string;
-  source: string;
-  externalId: string | null;
-  lastSyncedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
 export interface PriceRecord {
   id: string;
   number: string;

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createApplication } from "../../src/app";
 
-test("PostgreSQL-backed HTTP CRUD, conflicts, decimals, atomic replacement and immutable exports", async () => {
+test("PostgreSQL-backed HTTP CRUD, decimals, atomic replacement and immutable exports", async () => {
   const app = await createApplication({auth:testAuth});
   const base = await app.listen({ port: 0, host: "127.0.0.1" });
   const req = async (path: string, method = "GET", body?: any) =>
@@ -12,52 +12,9 @@ test("PostgreSQL-backed HTTP CRUD, conflicts, decimals, atomic replacement and i
       headers: { "Content-Type": "application/json" },
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
-  let contractId: string | undefined, recordId: string | undefined;
+  let recordId: string | undefined;
   try {
     assert.equal((await req("/health")).status, 200);
-    const contract = {
-      number: `TEST-${Date.now()}`,
-      uasg: "999999",
-      object: "Integração API",
-      supplierName: "Empresa Teste",
-      supplierDocument: "11222333000181",
-      initialValue: "0.1",
-      globalValue: "0.2",
-      startDate: "2026-01-01",
-      endDate: "2099-01-01",
-      ignored: "must-not-persist",
-    };
-    let response = await req("/api/contracts", "POST", contract);
-    assert.equal(response.status, 201);
-    const saved = await response.json();
-    contractId = saved.id;
-    assert.equal(saved.globalValue, "0.2");
-    assert.equal("ignored" in saved, false);
-    assert.equal((await req("/api/contracts", "POST", contract)).status, 409);
-    assert.equal(
-      (
-        await req("/api/contracts", "POST", {
-          ...contract,
-          number: "invalid",
-          startDate: "2026-02-30",
-        })
-      ).status,
-      400,
-    );
-    response = await req(
-      `/api/contracts?search=${contract.number}&page=1&limit=1`,
-    );
-    const list = await response.json();
-    assert.equal(list.total, 1);
-    assert.equal(list.stats.totalValue, "0.2");
-    assert.equal(
-      (
-        await req(
-          `/api/contracts?search=${contract.number}&from=2099-01-01&to=2099-02-01`,
-        )
-      ).status,
-      200,
-    );
     const record = {
       number: `TEST-${Date.now()}`,
       uasg: "999999",
@@ -118,7 +75,6 @@ test("PostgreSQL-backed HTTP CRUD, conflicts, decimals, atomic replacement and i
     assert.equal(recordList.stats.totalValue, "0.6");
     assert.equal(recordList.stats.exportsCount, 1);
   } finally {
-    if (contractId) await req(`/api/contracts/${contractId}`, "DELETE");
     if (recordId) await req(`/api/records/${recordId}`, "DELETE");
     await app.close();
   }
