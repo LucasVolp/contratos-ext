@@ -23,7 +23,7 @@ func Run(ctx context.Context, db *sql.DB, opts Options) (result Result, failure 
 	if err := opts.Validate(); err != nil {
 		return result, err
 	}
-	migrations := []string{RequiredMigration}
+	migrations := []string{RequiredMigration, SourceCompatibilityMigration, MonthlyHierarchyMigration, ItemOccurrenceMigration}
 	if opts.Download != nil {
 		migrations = append(migrations, DownloadMigration)
 	}

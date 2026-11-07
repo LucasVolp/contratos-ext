@@ -61,7 +61,7 @@ func monthlySpec(opts Options) aggregateSpec {
 			"committed_value_brl": "Valor Empenhado (R$)", "liquidated_value_brl": "Valor Liquidado (R$)", "paid_value_brl": "Valor Pago (R$)",
 			"registered_payables_value_brl": "Valor Restos a Pagar Inscritos (R$)", "canceled_payables_value_brl": "Valor Restos a Pagar Cancelado (R$)", "outstanding_value_paid_brl": "Valor Restos a Pagar Pagos (R$)",
 		},
-		nullable: map[string]bool{"budget_plan_code": true, "application_modality_code": true, "federative_unit": true, "municipality": true, "amendment_author_code": true},
+		nullable: map[string]bool{"budget_plan_code": true, "application_modality_code": true, "federative_unit": true, "municipality": true, "amendment_author_code": true, "management_unit_code": true, "superior_organ_code": true, "subordinate_agency_code": true},
 	}
 }
 
@@ -152,7 +152,7 @@ func mapAggregate(opts Options, spec aggregateSpec, row Row) (record, error) {
 		values = append(values, field{"fiscal_year", opts.Date.Year()})
 	} else {
 		values = append(values, field{"reference_month", opts.Date.Format("2006-01-02")})
-		if len(row["Código Gestão"]) != 5 || !digits.MatchString(row["Código Gestão"]) || len(row["Código Unidade Gestora"]) != 6 || !digits.MatchString(row["Código Unidade Gestora"]) {
+		if len(row["Código Gestão"]) != 5 || !digits.MatchString(row["Código Gestão"]) || (row["Código Unidade Gestora"] != "-9" && (len(row["Código Unidade Gestora"]) != 6 || !digits.MatchString(row["Código Unidade Gestora"]))) {
 			return nil, fmt.Errorf("invalid monthly management/unit identity")
 		}
 	}
@@ -160,6 +160,9 @@ func mapAggregate(opts Options, spec aggregateSpec, row Row) (record, error) {
 		raw := row[spec.dimensions[name]]
 		if raw == "" && !spec.nullable[name] {
 			return nil, fmt.Errorf("missing classification column %s", spec.dimensions[name])
+		}
+		if name == "management_unit_code" && raw == "-9" {
+			raw = ""
 		}
 		if spec.nullable[name] && raw == "-1" {
 			raw = ""
@@ -224,14 +227,16 @@ func writeAggregates(ctx context.Context, tx *sql.Tx, opts Options, data *Aggreg
 		} else {
 			management, unit := valueOf(group.values, "management_code"), valueOf(group.values, "management_unit_code")
 			scopes[sourceJSON([]any{management, unit})] = []any{management, unit}
-			row := group.rows[0]
-			_, err := tx.ExecContext(ctx, `INSERT INTO finance.management_units (management_code, code, name, management_name)
+			if unit != nil {
+				row := group.rows[0]
+				_, err := tx.ExecContext(ctx, `INSERT INTO finance.management_units (management_code, code, name, management_name)
                 VALUES ($1,$2,$3,$4) ON CONFLICT (management_code, code) DO UPDATE
                 SET name = COALESCE(EXCLUDED.name, finance.management_units.name),
                 management_name = COALESCE(EXCLUDED.management_name, finance.management_units.management_name), updated_at = now()`,
-				management, unit, text(row["Nome Unidade Gestora"]), text(row["Nome Gestão"]))
-			if err != nil {
-				return 0, err
+					management, unit, text(row["Nome Unidade Gestora"]), text(row["Nome Gestão"]))
+				if err != nil {
+					return 0, err
+				}
 			}
 		}
 		values := append(group.values, field{"source_data", sourceJSON(group.rows)}, field{"ingestion_run_id", runID})
@@ -247,7 +252,7 @@ func writeAggregates(ctx context.Context, tx *sql.Tx, opts Options, data *Aggreg
 		if opts.dataset() == AnnualBudget {
 			query = `DELETE FROM finance.annual_budgets WHERE source = $1 AND fiscal_year = extract(year FROM $2::date)::int AND ingestion_run_id <> $3 AND subordinate_agency_code = $4`
 		} else {
-			query = `DELETE FROM finance.monthly_execution WHERE source = $1 AND reference_month = $2::date AND ingestion_run_id <> $3 AND management_code = $4 AND management_unit_code = $5`
+			query = `DELETE FROM finance.monthly_execution WHERE source = $1 AND reference_month = $2::date AND ingestion_run_id <> $3 AND management_code = $4 AND management_unit_code IS NOT DISTINCT FROM $5`
 		}
 		args = append(args, scopes[key]...)
 		if _, err := tx.ExecContext(ctx, query, args...); err != nil {

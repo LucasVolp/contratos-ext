@@ -136,9 +136,6 @@ func ReadDaily(ctx context.Context, opts Options) (*DailyData, error) {
 					return identityErr
 				}
 				selected = opts.selected(management, unit)
-				if selected && spec.kind == Items && !documents[Commitments][code] {
-					return fmt.Errorf("item has no commitment header in this archive: %s", code)
-				}
 			case LiquidationImpacts:
 				selected = documents[Liquidations][row["Código Liquidação"]]
 			case PaymentImpacts:

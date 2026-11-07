@@ -9,6 +9,9 @@ import (
 )
 
 const RequiredMigration = "202611050001_financial_foundation"
+const SourceCompatibilityMigration = "202611070001_financial_source_compatibility"
+const MonthlyHierarchyMigration = "202611070002_financial_optional_monthly_hierarchy"
+const ItemOccurrenceMigration = "202611070003_financial_item_occurrences"
 const DownloadMigration = "202611050002_financial_download_control"
 const Version = "0.3.0"
 const Source = "TRANSPARENCY_PORTAL"

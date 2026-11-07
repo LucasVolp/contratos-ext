@@ -119,12 +119,15 @@ must use a left join to resolve the current item.
   Use the complete source code, including the unit/management/year scope.
   A shortened `2025NE000001` is display data, never a global identifier.
 - The commitment header shares the reference's ID. A payment, liquidation or
-  historical operation may insert the reference first; a later header fills the
+  item or historical operation may insert the reference first; a later header fills the
   same identity without changing existing links. Missing headers are discoverable
   with a left join and must not silently disappear from financial totals.
 - Liquidations and payments each use `(source, document_code)`; a document may
   affect multiple commitments, and a commitment may receive multiple documents.
-- Current item identity is `(commitment_id, sequential)`. Keep current item
+- Current item identity is `(commitment_id, sequential, source_ordinal)`.
+  Sequential values can repeat in the official source; deterministic canonical
+  source ordering preserves every occurrence without adding amounts together.
+  The ordinal identifies a current snapshot slot, not a source-issued item ID. Keep current item
   values separate from operation history; do not add both together.
 - History uses `(commitment_id, source_key)`. Prefer a stable source operation ID.
   If none exists, use a canonical representation of the entire source row plus a
@@ -220,6 +223,13 @@ and allocation policy are later features. No ETL refresh touches these values.
 ## Verification and rollout
 
 Migration: `apps/api/migrations/202611050001_financial_foundation.sql`.
+Source compatibility: `apps/api/migrations/202611070001_financial_source_compatibility.sql`
+`apps/api/migrations/202611070002_financial_optional_monthly_hierarchy.sql`,
+and `apps/api/migrations/202611070003_financial_item_occurrences.sql`.
+Items reference commitment identities even without headers. Monthly unit `-9` maps
+to NULL, with missing organization hierarchy codes also NULL; management identity
+remains required and no campus allocation is inferred. Raw markers remain in
+`source_data`.
 Shared download control: `apps/api/migrations/202611050002_financial_download_control.sql`.
 Apply through the existing migration runner (`pnpm db:migrate`), not Go startup.
 The migration is additive; existing catalog/contract tables and historical SQL

@@ -205,3 +205,33 @@ func TestCachedAnnualArchiveIntegration(t *testing.T) {
 	}
 	t.Logf("real annual archive loaded and replayed: %d aggregate facts per attempt", first.ProcessedRecords)
 }
+
+func TestMonthlyUnassignedUnitIntegration(t *testing.T) {
+	db := isolatedDatabase(t, true)
+	opts := aggregateOptions(MonthlyExecution)
+	row := cloneRow(monthlyRow(), Row{"Código Unidade Gestora": "-9", "Nome Unidade Gestora": "NAO SE APLICA", "Código Órgão Superior": "", "Código Órgão Subordinado": "", "Valor Restos a Pagar Pagos (R$)": "158.514,28"})
+	rows := []Row{row, cloneRow(row, Row{"Código Ação": "OTHER"})}
+	runAggregateFixture(t, db, opts, rows)
+	runAggregateFixture(t, db, opts, rows)
+	if scalar(t, db, "SELECT count(*) FROM finance.monthly_execution WHERE management_unit_code IS NULL") != "2" {
+		t.Fatal("unknown units lost or duplicated")
+	}
+	if scalar(t, db, "SELECT count(*) FROM finance.management_units") != "0" {
+		t.Fatal("manufactured unit")
+	}
+	runAggregateFixture(t, db, opts, []Row{row})
+	if scalar(t, db, "SELECT count(*) FROM finance.monthly_execution") != "1" {
+		t.Fatal("stale unknown-unit classification retained")
+	}
+	if scalar(t, db, "SELECT outstanding_value_paid_brl FROM finance.monthly_execution") != "158514.280000" {
+		t.Fatal("lost exact amount")
+	}
+	if scalar(t, db, `SELECT source_data->0->>'Código Unidade Gestora' FROM finance.monthly_execution`) != "-9" {
+		t.Fatal("source marker not preserved")
+	}
+	for _, unit := range []string{"", "-1", "BAD", "12345"} {
+		if _, err := mapAggregate(opts, monthlySpec(opts), cloneRow(row, Row{"Código Unidade Gestora": unit})); err == nil {
+			t.Fatalf("accepted invalid unit %q", unit)
+		}
+	}
+}

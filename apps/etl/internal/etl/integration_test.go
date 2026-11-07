@@ -52,7 +52,7 @@ func isolatedDatabase(t *testing.T, migrate bool) *sql.DB {
 	})
 	if migrate {
 		execSQL(t, db, `CREATE TABLE public._sql_migrations (name text PRIMARY KEY)`)
-		for _, name := range []string{RequiredMigration, DownloadMigration} {
+		for _, name := range []string{RequiredMigration, DownloadMigration, SourceCompatibilityMigration, MonthlyHierarchyMigration, ItemOccurrenceMigration} {
 			migration, err := os.ReadFile(filepath.Join("..", "..", "..", "api", "migrations", name+".sql"))
 			if err != nil {
 				t.Fatal(err)
@@ -239,4 +239,84 @@ func TestCachedPortalArchiveIntegration(t *testing.T) {
 		t.Fatalf("real archive replay failed: %v %v", replay, err)
 	}
 	t.Log(fmt.Sprintf("real archive loaded and replayed: %d facts per attempt", result.ProcessedRecords))
+}
+
+func TestHeaderlessItemsAndChronologyIntegration(t *testing.T) {
+	db := isolatedDatabase(t, true)
+	code := "015814264212026NE000001"
+	run := func(date string, rows map[Kind][]Row) {
+		t.Helper()
+		opts := testOptions(writeFixture(t, rows, false, Kind(-1), date))
+		opts.Date, _ = time.Parse("20060102", date)
+		if _, err := Run(context.Background(), db, opts); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rows := dailyFixture()
+	rows[Commitments] = nil
+	run("20260930", rows)
+	if scalar(t, db, "SELECT count(*) FROM finance.commitments") != "0" {
+		t.Fatal("manufactured header")
+	}
+	if scalar(t, db, "SELECT count(*) FROM finance.commitment_items") != "2" {
+		t.Fatal("lost headerless items")
+	}
+	older := dailyFixture()
+	older[Items][0]["Valor Atual"] = "999,00"
+	older[Items] = older[Items][:1]
+	run("20260929", older)
+	if scalar(t, db, "SELECT count(*) FROM finance.commitments") != "1" {
+		t.Fatal("late header missing")
+	}
+	if scalar(t, db, "SELECT count(*) FROM finance.commitment_items") != "2" {
+		t.Fatal("old header cleared newer items")
+	}
+	if scalar(t, db, "SELECT current_value FROM finance.commitment_items WHERE sequential = 1") != "10.123456" {
+		t.Fatal("old archive overwrote items")
+	}
+	partial := map[Kind][]Row{Items: {{"Código Empenho": code, "Sequencial": "1", "Valor Atual": "30,00"}}}
+	run("20261001", partial)
+	if scalar(t, db, "SELECT count(*) FROM finance.commitment_items") != "2" {
+		t.Fatal("partial items erased siblings")
+	}
+	run("20260930", rows)
+	if scalar(t, db, "SELECT current_value FROM finance.commitment_items WHERE sequential = 1") != "30.000000" {
+		t.Fatal("old headerless archive overwrote items")
+	}
+	run("20261002", map[Kind][]Row{Commitments: {documentRow(Commitments, code)}})
+	if scalar(t, db, "SELECT count(*) FROM finance.commitment_items") != "0" {
+		t.Fatal("new complete header did not replace item snapshot")
+	}
+	run("20261001", partial)
+	if scalar(t, db, "SELECT count(*) FROM finance.commitment_items") != "0" {
+		t.Fatal("older orphan items bypassed newer header")
+	}
+}
+
+func TestRepeatedItemSequentialIntegration(t *testing.T) {
+	db := isolatedDatabase(t, true)
+	rows := dailyFixture()
+	rows[Commitments] = nil
+	rows[Items] = append(rows[Items], cloneRow(rows[Items][0], Row{"Valor Unitário": "1321,80"}))
+	run := func() {
+		t.Helper()
+		if _, err := Run(context.Background(), db, testOptions(writeFixture(t, rows, false, Kind(-1)))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run()
+	before := scalar(t, db, "SELECT string_agg(id::text || ':' || source_data::text, '|' ORDER BY id) FROM finance.commitment_items")
+	rows[Items][0], rows[Items][2] = rows[Items][2], rows[Items][0]
+	run()
+	if scalar(t, db, "SELECT count(*) FROM finance.commitment_items") != "3" {
+		t.Fatal("lost or duplicated repeated sequentials")
+	}
+	if scalar(t, db, "SELECT string_agg(id::text || ':' || source_data::text, '|' ORDER BY id) FROM finance.commitment_items") != before {
+		t.Fatal("source order changed item identity")
+	}
+	rows[Items] = rows[Items][:1]
+	run()
+	if scalar(t, db, "SELECT count(*) FROM finance.commitment_items") != "2" {
+		t.Fatal("represented sequential was not refreshed independently of siblings")
+	}
 }

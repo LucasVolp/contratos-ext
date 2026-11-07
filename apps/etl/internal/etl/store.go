@@ -121,12 +121,53 @@ func writeDaily(ctx context.Context, tx *sql.Tx, data *DailyData, runID int64) (
 			count++
 		}
 	}
-	seenItems := map[string]bool{}
+
+	// Item snapshots may exist before their header. Preserve newer snapshots even
+	// when an older archive is needed to fill in a missing header.
+	preserveItems := map[string]bool{}
+	itemCodes := map[string]bool{}
+	for code := range parents[Commitments] {
+		itemCodes[code] = true
+	}
 	for _, row := range data.Rows[Items] {
-		if skipped[Commitments][row["Código Empenho"]] {
+		itemCodes[row["Código Empenho"]] = true
+	}
+	for _, code := range sortedKeys(itemCodes) {
+		var newer bool
+		err := tx.QueryRowContext(ctx, `SELECT EXISTS (
+   SELECT 1 FROM finance.commitment_items i
+   JOIN finance.commitment_references r ON r.id = i.commitment_id
+   JOIN finance.ingestion_runs previous ON previous.id = i.ingestion_run_id
+   JOIN finance.ingestion_runs incoming ON incoming.id = $3
+   WHERE r.source = $1 AND r.document_code = $2 AND previous.period_start > incoming.period_start
+  )`, Source, code, runID).Scan(&newer)
+		if err != nil {
+			return 0, err
+		}
+		_, newerDocument, err := newerHeader(ctx, tx, Commitments, code, runID)
+		if err != nil {
+			return 0, err
+		}
+		preserveItems[code] = newer || newerDocument || skipped[Commitments][code]
+	}
+	seenItems := map[string]int{}
+	type itemIdentity struct {
+		commitmentID int64
+		sequential   any
+	}
+	representedItems := map[string]itemIdentity{}
+	// Sequential values can repeat in the official source. Stable source ordering
+	// assigns each occurrence its own slot without collapsing distinct records.
+	itemRows := append([]Row(nil), data.Rows[Items]...)
+	sort.SliceStable(itemRows, func(i, j int) bool { return sourceJSON(itemRows[i]) < sourceJSON(itemRows[j]) })
+	for _, row := range itemRows {
+		if preserveItems[row["Código Empenho"]] {
 			continue
 		}
-		id := parents[Commitments][row["Código Empenho"]]
+		id, err := ensureReference(ctx, tx, row["Código Empenho"])
+		if err != nil {
+			return 0, err
+		}
 		values, nature, err := mapItem(row, id, runID)
 		if err != nil {
 			return 0, err
@@ -136,23 +177,29 @@ func writeDaily(ctx context.Context, tx *sql.Tx, data *DailyData, runID int64) (
 		for _, value := range values {
 			if value.name == "sequential" {
 				key = fmt.Sprintf("%d/%v", id, value.value)
+				representedItems[key] = itemIdentity{id, value.value}
 			}
 		}
-		if seenItems[key] {
-			return 0, fmt.Errorf("duplicate item %s", key)
-		}
-		seenItems[key] = true
+		seenItems[key]++
+		values = append(values, field{"source_ordinal", seenItems[key]})
 		if err = ensureNature(ctx, tx, nature, row); err != nil {
 			return 0, err
 		}
-		if _, err = upsert(ctx, tx, "commitment_items", values, "commitment_id", "sequential"); err != nil {
+		if _, err = upsert(ctx, tx, "commitment_items", values, "commitment_id", "sequential", "source_ordinal"); err != nil {
 			return 0, err
 		}
 		count++
 	}
+	// Refresh variants only for represented sequentials; unseen siblings need a header snapshot.
+	for _, key := range sortedKeys(representedItems) {
+		identity := representedItems[key]
+		if _, err := tx.ExecContext(ctx, "DELETE FROM finance.commitment_items WHERE commitment_id = $1 AND sequential = $2 AND ingestion_run_id <> $3", identity.commitmentID, identity.sequential, runID); err != nil {
+			return 0, err
+		}
+	}
 	// Only headers present in this complete archive can replace their current item set.
 	for _, code := range sortedKeys(parents[Commitments]) {
-		if skipped[Commitments][code] {
+		if preserveItems[code] {
 			continue
 		}
 		_, err := tx.ExecContext(ctx, "DELETE FROM finance.commitment_items WHERE commitment_id = $1 AND ingestion_run_id <> $2", parents[Commitments][code], runID)

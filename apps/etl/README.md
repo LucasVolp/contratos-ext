@@ -22,7 +22,10 @@ pnpm finance:import -from 2026-09-01 -to 2026-09-30 -codes 26421
 ```
 
 The downloader requires migration `202611050002_financial_download_control` in
-addition to the financial foundation. Both are owned by the API migration runner;
+addition to the financial foundation. All imports also require
+`202611070001_financial_source_compatibility` and
+`202611070002_financial_optional_monthly_hierarchy` and
+`202611070003_financial_item_occurrences`. These migrations are owned by the API migration runner;
 the Go program does not create schema objects. The new control row persists request
 spacing and block penalties across processes and restarts.
 
@@ -278,3 +281,22 @@ the 2026 annual budget was also imported on 2026-11-05: 100 grouped facts for ag
 `ETL_TEST_ANNUAL_ARCHIVE` and `ETL_TEST_ANNUAL_DATE=2026-01-01`, then run
 `go test ./internal/etl -run TestCachedAnnualArchiveIntegration -count=1 -v` with
 `ETL_TEST_DATABASE_URL`.
+
+## Incomplete source identities
+
+Daily item rows can precede their commitment header. They attach to
+`commitment_references`, preserving the full source identity without creating a
+header. An item-only archive refreshes its represented sequentials without deleting unseen
+siblings. A sequential may repeat: distinct and identical source rows are preserved
+as separate `source_ordinal` occurrences, assigned by deterministic canonical source
+ordering. Replay and input row reordering do not duplicate occurrences. The ordinal
+is a snapshot slot, not a source-issued item identifier. A complete header snapshot can replace the item set only when no newer
+header or item snapshot exists. Replaying older archives may fill a missing header
+while preserving newer item values.
+
+Monthly source unit `-9` (not applicable) maps to SQL `NULL`; empty superior and
+subordinate organization codes also remain `NULL`. Management identity is still
+mandatory. Other malformed or absent unit codes are rejected. The original source
+markers remain in `source_data`. These rows contribute to institution totals and
+never create a synthetic management unit or campus allocation. Unit-scoped imports
+exclude them. Null-aware uniqueness and cleanup make their replay idempotent.
