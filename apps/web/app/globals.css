@@ -49,6 +49,9 @@
   --accent: #b65e3c;
   --tint: #eef0e7;
   --danger: #a43c3c;
+  --chart-committed: #466c94;
+  --chart-liquidated: #996b29;
+  --chart-paid: #39725e;
 }
 * {
   box-sizing: border-box;
@@ -2519,11 +2522,7 @@ textarea {
   height: 6px;
   margin: 12px 0 8px;
   border-radius: 3px;
-  background: repeating-linear-gradient(
-    -45deg,
-    #e3e7dc 0 4px,
-    #eef0e7 4px 8px
-  );
+  background: repeating-linear-gradient(-45deg, #e3e7dc 0 4px, #eef0e7 4px 8px);
   overflow: hidden;
 }
 .phase-summary-bar i {
@@ -2654,41 +2653,7 @@ textarea {
   color: var(--accent);
 }
 
-/* Financial consultations preserve exact source amounts and readable scope. */
-.finance-filters {
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  padding: 24px;
-  margin: 24px 0;
-}
-.finance-filter-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 18px;
-}
-.finance-filter-field {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  font-size: 12px;
-}
-.finance-filter-grid input {
-  width: 100%;
-  min-width: 0;
-}
-.finance-filter-grid small,
-.finance-filter-actions small {
-  font-size: 11px;
-  color: var(--muted);
-}
-.finance-filter-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  margin-top: 22px;
-}
+/* FinancialRecords: document metadata and exact source values in scrollable tables. */
 .finance-note {
   font-size: 12px;
   line-height: 1.7;
@@ -2698,27 +2663,8 @@ textarea {
 .finance-warning {
   border-left: 3px solid var(--accent);
   padding: 14px 18px;
-  background: #f2eade;
+  background: var(--tint);
   color: var(--ink);
-}
-.finance-metrics {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  border-block: 1px solid var(--line);
-  padding: 22px 0;
-  gap: 24px;
-  margin: 24px 0;
-}
-.finance-metrics dt {
-  font-size: 11px;
-  color: var(--muted);
-}
-.finance-metrics dd {
-  font-family: Fraunces, serif;
-  font-size: clamp(20px, 2vw, 29px);
-  margin: 10px 0 0;
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
 }
 .finance-money {
   font-variant-numeric: tabular-nums;
@@ -2756,49 +2702,773 @@ textarea {
   margin: 0;
   overflow-wrap: anywhere;
 }
-.finance-directory {
-  text-align: left;
-  max-width: 600px;
-  margin: 25px auto 0;
-  font-size: 12px;
-}
-.finance-directory summary {
-  cursor: pointer;
-}
-.finance-directory ul {
-  padding-left: 20px;
-}
-@media (max-width: 1100px) {
-  .finance-filter-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
 @media (max-width: 700px) {
-  .sidebar nav {
-    flex-wrap: wrap;
-    gap: 4px;
-  }
-  .sidebar nav a {
-    flex: 1 1 40%;
-  }
-  .finance-filter-grid,
   .finance-metadata {
     grid-template-columns: minmax(0, 1fr);
   }
-  .finance-filters {
-    padding: 18px;
+}
+
+/* FinancialPanel: overview filters, figures, provenance and progressive detail. */
+.finance-panel .page-head {
+  margin-bottom: 22px;
+}
+.finance-panel .page-head h1 {
+  font-size: 38px;
+}
+.finance-panel .catalog-tabs {
+  margin-bottom: 24px;
+}
+.panel-controls {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: 8px;
+  padding: 18px 22px 12px;
+  margin-bottom: 30px;
+}
+.panel-primary-filters {
+  display: flex;
+  align-items: end;
+  gap: 16px;
+}
+.panel-primary-filters .field {
+  min-width: 125px;
+  margin: 0;
+}
+.panel-primary-filters .panel-unit-filter {
+  flex: 1;
+  min-width: 0;
+}
+.panel-primary-filters select {
+  width: 100%;
+  min-height: 44px;
+}
+.panel-primary-filters label {
+  font-size: 11px;
+}
+.panel-refresh {
+  min-height: 44px;
+  white-space: nowrap;
+}
+.panel-advanced {
+  margin-top: 12px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.panel-advanced summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  min-height: 30px;
+  cursor: pointer;
+}
+.panel-institution-form {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  max-width: 520px;
+  padding: 12px 0;
+}
+.panel-institution-form .field {
+  flex: 1;
+  margin: 0;
+}
+.panel-advanced > .field {
+  margin: 12px 0;
+}
+.panel-scope-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.panel-scope-heading h2 {
+  font-size: 25px;
+  font-weight: 400;
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+.panel-source {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.panel-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 15px;
+  margin: 0 0 18px;
+}
+.panel-metrics:has(> :nth-child(4)) {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.panel-metric {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--green);
+  border-radius: 8px;
+  padding: 20px;
+  min-width: 0;
+}
+.panel-metric.committed {
+  border-top-color: var(--chart-committed);
+}
+.panel-metric.liquidated {
+  border-top-color: var(--chart-liquidated);
+}
+.panel-metric.paid {
+  border-top-color: var(--chart-paid);
+}
+.panel-metric dt {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.panel-metric dt svg {
+  color: var(--muted);
+}
+.panel-metric dd {
+  font-family: Fraunces, serif;
+  font-size: clamp(25px, 2.5vw, 36px);
+  font-weight: 400;
+  line-height: 1.25;
+  margin: 15px 0 6px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.panel-metric-exact {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  margin: 0 0 14px;
+  font-variant-numeric: tabular-nums;
+}
+.panel-metric small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+.panel-provenance {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px 18px;
+  color: var(--muted);
+  font-size: 10px;
+  margin: 14px 0;
+}
+.panel-coverage {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--tint);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 4px 7px;
+}
+.panel-coverage-note {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 12px 0 26px;
+}
+.panel-loading {
+  min-height: 340px;
+}
+.panel-filter-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  margin: -12px 0 22px;
+}
+.panel-text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  padding: 8px 0;
+  color: var(--green);
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.panel-prior-year {
+  margin: 32px 0;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+}
+.panel-prior-year h2 {
+  font-size: 26px;
+  margin: 6px 0;
+}
+.panel-prior-year p {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0 0 18px;
+}
+.panel-prior-year .panel-metric {
+  background: var(--canvas);
+  padding: 16px 20px;
+}
+.panel-prior-year .panel-metric dd {
+  font-size: 27px;
+}
+.panel-prior-year .panel-metric-exact {
+  color: var(--ink);
+}
+.panel-detail-action {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin: 24px 0;
+}
+.panel-detail-action > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.panel-detail-table .registry-top h2 {
+  font-size: 24px;
+}
+
+/* FinancialCharts: accessible trends and comparisons, with exact values available. */
+.panel-charts {
+  margin-top: 28px;
+  min-width: 0;
+}
+.panel-chart {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 24px;
+  min-width: 0;
+}
+.panel-chart h2 {
+  font-size: 25px;
+  font-weight: 400;
+  margin: 6px 0 0;
+}
+.panel-chart .section-heading {
+  margin: 0 0 22px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.panel-chart-unit {
+  font-size: 10px;
+  color: var(--muted);
+}
+.panel-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding-left: 6px;
+}
+.panel-chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+}
+.panel-chart-legend i {
+  width: 18px;
+  height: 3px;
+  display: inline-block;
+}
+.panel-chart-legend i.committed {
+  background: var(--chart-committed);
+}
+.panel-chart-legend i.liquidated {
+  background: var(--chart-liquidated);
+}
+.panel-chart-legend i.paid {
+  background: var(--chart-paid);
+}
+.panel-trend {
+  max-width: 100%;
+}
+.panel-trend svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 300px;
+  margin: 10px 0;
+}
+.chart-grid {
+  stroke: var(--line);
+  stroke-dasharray: 3 5;
+}
+.chart-tick {
+  fill: var(--muted);
+  font-family: "DM Sans", sans-serif;
+  font-size: 12px;
+}
+.chart-series path {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+.chart-series.committed {
+  stroke: var(--chart-committed);
+  fill: var(--chart-committed);
+}
+.chart-series.liquidated {
+  stroke: var(--chart-liquidated);
+  fill: var(--chart-liquidated);
+}
+.chart-series.paid {
+  stroke: var(--chart-paid);
+  fill: var(--chart-paid);
+}
+.chart-series.liquidated path {
+  stroke-dasharray: 6 3;
+}
+.chart-series.paid path {
+  stroke-width: 3;
+}
+.panel-chart-values {
+  font-size: 11px;
+  margin: 0 0 10px;
+}
+.panel-chart-values summary {
+  cursor: pointer;
+  width: fit-content;
+  padding: 6px 0;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.panel-chart-values table {
+  white-space: nowrap;
+}
+.panel-chart-values .table-scroll {
+  margin-top: 14px;
+}
+.panel-chart-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.panel-chart-comparison {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 0 14px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.panel-metric-switch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 3px;
+  background: var(--tint);
+  border-radius: 6px;
+}
+.panel-metric-switch button {
+  background: none;
+  border: 0;
+  color: var(--ink);
+  padding: 8px 13px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.panel-metric-switch button[aria-pressed="true"] {
+  background: var(--paper);
+  font-weight: 600;
+  outline: 1px solid var(--line);
+}
+.panel-count {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.panel-ranking {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.panel-ranking li {
+  margin-bottom: 16px;
+}
+.panel-ranking button,
+.ranking-content {
+  display: block;
+  width: 100%;
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  padding: 4px 0 6px;
+}
+.panel-ranking button {
+  cursor: pointer;
+}
+.panel-ranking button:hover .ranking-heading strong {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.panel-ranking button[aria-pressed="true"] .ranking-heading strong {
+  font-weight: 700;
+}
+.ranking-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 9px;
+}
+.ranking-heading > span:first-child {
+  min-width: 0;
+}
+.ranking-heading strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.ranking-heading small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 2px;
+}
+.ranking-value {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ranking-track {
+  height: 5px;
+  position: relative;
+  display: block;
+  background: var(--tint);
+  border-radius: 3px;
+}
+.ranking-track.signed::before {
+  content: "";
+  position: absolute;
+  height: 12px;
+  width: 1px;
+  top: -3px;
+  left: 50%;
+  background: var(--muted);
+}
+.ranking-fill {
+  position: absolute;
+  height: 5px;
+  background: var(--green);
+  border-radius: 3px;
+}
+.ranking-fill.negative {
+  background: var(--danger);
+}
+.panel-footnote,
+.panel-no-data {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 15px 0 0;
+  line-height: 1.7;
+}
+@media (max-width: 1100px) {
+  .panel-metrics:has(> :nth-child(4)) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .finance-page .catalog-tabs {
+  .panel-primary-filters {
     flex-wrap: wrap;
   }
-  .finance-page .catalog-tabs a {
-    flex: 1 1 auto;
+  .panel-primary-filters .panel-unit-filter {
+    flex-basis: 100%;
   }
-  .finance-page .pager {
+}
+@media (max-width: 950px) {
+  .panel-chart-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 700px) {
+  .finance-panel .page-head h1 {
+    font-size: 32px;
+  }
+  .finance-panel .page-head .button {
+    min-height: 44px;
+  }
+  .finance-panel .catalog-tabs {
     flex-wrap: wrap;
+    gap: 4px;
+  }
+  .finance-panel .catalog-tabs a {
+    min-height: 44px;
+  }
+  .panel-controls {
+    padding: 16px;
+  }
+  .panel-primary-filters {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 15px;
+  }
+  .panel-primary-filters .field {
+    min-width: 0;
+  }
+  .panel-institution-form {
+    display: block;
+  }
+  .panel-institution-form .button {
+    margin-top: 12px;
+  }
+  .panel-advanced summary,
+  .panel-chart-values summary,
+  .panel-text-button,
+  .panel-metric-switch button {
+    min-height: 44px;
+  }
+  .panel-scope-heading {
+    align-items: start;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .panel-scope-heading h2 {
+    font-size: 23px;
+  }
+  .panel-metrics,
+  .panel-metrics:has(> :nth-child(4)) {
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
   }
-  .finance-page .pager > div {
-    flex-wrap: wrap;
+  .panel-metric {
+    padding: 17px 20px;
   }
+  .panel-metric dd {
+    font-size: 32px;
+  }
+  .panel-metric-exact {
+    margin-bottom: 8px;
+  }
+  .panel-provenance {
+    display: grid;
+    gap: 7px;
+  }
+  .panel-coverage {
+    width: fit-content;
+  }
+  .panel-chart {
+    padding: 19px 16px;
+  }
+  .panel-chart h2 {
+    font-size: 23px;
+  }
+  .panel-chart .section-heading {
+    align-items: start;
+  }
+  .panel-chart-unit {
+    display: none;
+  }
+  .panel-chart-comparison {
+    align-items: start;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .panel-metric-switch {
+    display: flex;
+    width: 100%;
+  }
+  .panel-metric-switch button {
+    flex: 1;
+  }
+  .panel-chart-legend {
+    gap: 12px;
+    padding: 0;
+  }
+  .panel-chart-legend span {
+    font-size: 10px;
+  }
+  .chart-tick {
+    font-size: 20px;
+  }
+  .panel-detail-action {
+    align-items: start;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .panel-detail-action .button {
+    min-height: 44px;
+    width: 100%;
+  }
+  .ranking-heading {
+    gap: 10px;
+  }
+}
+
+/* CommitmentFilters: compact search with optional document-specific filters. */
+.panel-search-form {
+  margin: 0 0 24px;
+}
+.panel-search-primary {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.panel-search-primary .field {
+  flex: 1;
+  margin: 0;
+}
+.panel-search-primary .button {
+  min-height: 44px;
+}
+.panel-search-advanced {
+  margin-top: 8px;
+}
+.panel-search-advanced summary {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 8px 0;
+  cursor: pointer;
+}
+.panel-search-advanced .form-grid {
+  margin: 14px 0;
+}
+@media (max-width: 700px) {
+  .panel-search-primary {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .panel-search-advanced summary {
+    min-height: 44px;
+  }
+  .finance-panel .pager button {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* CommitmentPage: summary first, one document collection at a time. */
+.commitment-overview {
+  border-block: 1px solid var(--line);
+  margin: 26px 0 16px;
+}
+.commitment-overview .finance-metadata {
+  margin: 24px 0;
+}
+.commitment-document-details {
+  font-size: 12px;
+}
+.commitment-document-details summary {
+  cursor: pointer;
+  min-height: 36px;
+  padding: 8px 0;
+  color: var(--green);
+}
+.commitment-prior-year {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 35px;
+  padding: 20px 0;
+  margin: 8px 0 18px;
+  border-bottom: 1px solid var(--line);
+}
+.commitment-prior-year span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.commitment-prior-year strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  margin-top: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.commitment-sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-bottom: 1px solid var(--line);
+}
+.commitment-sections button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--muted);
+  padding: 12px 18px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.commitment-sections button[aria-pressed="true"] {
+  color: var(--green);
+  border-bottom-color: var(--green);
+  font-weight: 600;
+}
+.finance-panel .finance-warning {
+  background: var(--tint);
+}
+@media (max-width: 700px) {
+  .commitment-document-details summary {
+    min-height: 44px;
+  }
+  .commitment-sections {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .commitment-sections button {
+    min-height: 44px;
+    padding: 10px;
+  }
+  .commitment-prior-year {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* TrendChart legends also distinguish series without relying on color. */
+.panel-chart-legend i.liquidated {
+  background: none;
+  border-top: 3px dashed var(--chart-liquidated);
+}
+.panel-chart-legend i.paid {
+  background: none;
+  border-top: 3px dotted var(--chart-paid);
+}
+.chart-series.paid path {
+  stroke-dasharray: 2 4;
+}
+
+/* CommitmentList: compact listing header follows the shared PageBar pattern. */
+.panel-list-title {
+  color: var(--ink);
+  font-size: 32px;
+  font-weight: 400;
+  margin: 0;
+  line-height: 1.2;
+}
+.panel-list-description {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 8px 0 0;
+}
+
+/* PanelMetrics keeps explanatory labels aligned when exact and compact figures coincide. */
+.panel-metric {
+  display: flex;
+  flex-direction: column;
+}
+.panel-metric small {
+  margin-top: auto;
+  padding-top: 6px;
 }

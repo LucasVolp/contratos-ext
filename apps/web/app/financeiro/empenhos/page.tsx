@@ -1,10 +1,10 @@
 import { Suspense } from "react";
-import { FinancePage } from "@/components/finance/finance-page";
+import { CommitmentList } from "@/components/finance/commitment-list";
 import { Loading } from "@/components/ui";
 export default function Page() {
   return (
     <Suspense fallback={<Loading />}>
-      <FinancePage mode="commitments" />
+      <CommitmentList />
     </Suspense>
   );
 }

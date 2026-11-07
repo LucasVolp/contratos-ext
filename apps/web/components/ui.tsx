@@ -158,15 +158,29 @@ export function Loading() {
     </div>
   );
 }
-export function Empty({ kind, href }: { kind: string; href: string }) {
+export function Empty({
+  kind,
+  href,
+  title = "Nenhum registro encontrado.",
+  description,
+  actionLabel,
+}: {
+  kind: string;
+  href: string;
+  title?: string;
+  description?: string;
+  actionLabel?: string;
+}) {
   return (
     <div className="empty">
-      <div className="eyebrow">UM NOVO COMEÇO</div>
-      <h2>Nenhum registro por aqui.</h2>
-      <p>Cadastre {kind} ou ajuste os filtros para encontrar o que procura.</p>
+      <h2>{title}</h2>
+      <p>
+        {description ||
+          `Cadastre ${kind} ou ajuste os filtros para encontrar o que procura.`}
+      </p>
       <Link href={href} className="button">
-        <Plus size={16} />
-        Adicionar {kind}
+        {!actionLabel && <Plus size={16} />}{" "}
+        {actionLabel || `Adicionar ${kind}`}
       </Link>
     </div>
   );

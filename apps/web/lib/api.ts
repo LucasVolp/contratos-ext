@@ -1,4 +1,5 @@
-import { parseDecimal, formatDecimal } from "@contracts/validation";
+import { formatMoney, compactMoney } from "./decimal-display";
+import { parseDecimal } from "@contracts/validation";
 export type Contract = {
   id: string;
   number: string;
@@ -111,23 +112,8 @@ export async function api<T>(
   if (response.status === 204) return undefined as T;
   return response.json();
 }
-export const currency = (value: unknown) =>
-  value === null || value === undefined || value === ""
-    ? "Não informado"
-    : formatDecimal(String(value), true);
-/** Short money for summaries ("R$ 80,7 mi"); pair it with `currency` where the exact value matters. */
-export function compactCurrency(value: unknown) {
-  const amount = Number(value);
-  if (value === null || value === undefined || value === "" || !Number.isFinite(amount))
-    return "Não informado";
-  const size = Math.abs(amount);
-  const [divisor, suffix] =
-    size >= 1e9 ? [1e9, " bi"] : size >= 1e6 ? [1e6, " mi"] : size >= 1e3 ? [1e3, " mil"] : [1, ""];
-  return `R$ ${(amount / divisor).toLocaleString("pt-BR", {
-    minimumFractionDigits: divisor === 1 ? 2 : 0,
-    maximumFractionDigits: divisor === 1 ? 2 : 1,
-  })}${suffix}`;
-}
+export const currency = formatMoney;
+export const compactCurrency = compactMoney;
 export const date = (value: unknown) =>
   value
     ? new Date(String(value).slice(0, 10) + "T12:00:00").toLocaleDateString(

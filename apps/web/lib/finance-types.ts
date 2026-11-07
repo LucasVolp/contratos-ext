@@ -46,3 +46,84 @@ export interface CommitmentHeader {
 export interface CommitmentDetail extends CommitmentSummary {
   header: CommitmentHeader | null;
 }
+
+export interface FinanceUnit {
+  managementCode: string;
+  managementName: string | null;
+  code: string;
+  name: string | null;
+}
+export interface ExecutionAmounts {
+  committedValue: string | null;
+  liquidatedValue: string | null;
+  paidValue: string | null;
+  registeredPayablesValue: string | null;
+  canceledPayablesValue: string | null;
+  priorYearPaidValue: string | null;
+}
+export interface ExecutionSummary extends ExecutionAmounts {
+  sourceRowCount: number;
+  observedMonthCount: number;
+  firstMonth: string | null;
+  lastMonth: string | null;
+  lastImportedAt: string | null;
+}
+export interface ExecutionRow extends ExecutionSummary {
+  managementCode: string;
+  managementUnitCode: string | null;
+  unitName: string | null;
+  expenseNature: string | null;
+  economicCategoryCode: string;
+  expenseGroupCode: string;
+  applicationModalityCode: string | null;
+  expenseElementCode: string;
+  expenseElementName: string | null;
+}
+export interface BudgetAmounts {
+  initialBudget: string | null;
+  updatedBudget: string | null;
+  committedBudget: string | null;
+  executedBudget: string | null;
+}
+export interface BudgetSummary extends BudgetAmounts {
+  sourceRowCount: number;
+  lastImportedAt: string | null;
+}
+export interface BudgetRow extends BudgetSummary {
+  subordinateAgencyCode: string;
+  subordinateAgencyName: string | null;
+  budgetaryUnitCode: string;
+  budgetaryUnitName: string | null;
+  actionCode: string;
+  actionName: string | null;
+  economicCategoryCode: string;
+  expenseGroupCode: string;
+  expenseGroupName: string | null;
+  expenseElementCode: string;
+  expenseElementName: string | null;
+}
+export interface FinancialReport<Row, Summary> extends Page<Row> {
+  summary: Summary;
+}
+export interface ChartEntry {
+  id: string;
+  name: string;
+  caption?: string;
+  value: string | null;
+  filterValue?: string;
+}
+export type ExecutionMetric =
+  | "committedValue"
+  | "liquidatedValue"
+  | "paidValue";
+export interface ExecutionBreakdowns {
+  monthly: { month: number; summary: ExecutionSummary }[];
+  units: { code: string; name: string | null; summary: ExecutionSummary }[];
+  natures: { code: string; name: string | null; summary: ExecutionSummary }[];
+  unclassifiedCount: number;
+  unassignedUnitCount: number;
+}
+export interface BudgetBreakdowns {
+  actions: { code: string; name: string | null; summary: BudgetSummary }[];
+  groups: { code: string; name: string | null; summary: BudgetSummary }[];
+}

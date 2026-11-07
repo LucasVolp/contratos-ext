@@ -42,7 +42,7 @@ export async function financeFixture() {
       (type,source_file,period_start,period_end,scope_type,scope_codes,trigger_type,status,etl_version)
       VALUES ('DAILY_EXPENSES','fixture.zip','2026-01-01','2026-12-31','MANAGEMENT',ARRAY['26421'],'MANUAL','IN_PROGRESS','test') RETURNING id`);
     await db.query(`INSERT INTO finance.management_units (management_code,code,name,management_name)
-      VALUES ('26421','015814','Unidade de teste','Instituição de teste')`);
+      VALUES ('26421','015814','Unidade de teste A','Instituição de teste'),('26421','158148','Unidade de teste B','Instituição de teste')`);
     await db.query(
       `INSERT INTO finance.expense_natures (code) VALUES ('339030')`,
     );
@@ -70,8 +70,8 @@ export async function financeFixture() {
         (reference_month,management_code,management_unit_code,superior_organ_code,subordinate_agency_code,action_code,
         economic_category_code,expense_group_code,application_modality_code,expense_element_code,committed_value_brl,
         liquidated_value_brl,paid_value_brl,registered_payables_value_brl,canceled_payables_value_brl,outstanding_value_paid_brl,ingestion_run_id)
-        VALUES ('2026-01-01','26421','015814','26000','26421','20RL','3','3','90',$1,1,0.1,NULL,2,-0.000001,0,$2)`,
-        [String(i + 1).padStart(2, "0"), run],
+        VALUES ('2026-01-01','26421',$3,'26000','26421','20RL','3','3','90',$1,1,0.1,NULL,2,-0.000001,0,$2)`,
+        [String(i + 1).padStart(2, "0"), run, i < 10 ? "015814" : "158148"],
       );
       await db.query(
         `INSERT INTO finance.annual_budgets

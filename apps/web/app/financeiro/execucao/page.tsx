@@ -1,10 +1,10 @@
 import { Suspense } from "react";
-import { FinancePage } from "@/components/finance/finance-page";
+import { ExecutionPanel } from "@/components/finance/execution-panel";
 import { Loading } from "@/components/ui";
 export default function Page() {
   return (
     <Suspense fallback={<Loading />}>
-      <FinancePage mode="execution" />
+      <ExecutionPanel />
     </Suspense>
   );
 }
