@@ -27,6 +27,12 @@ export class Repositories {
     this.finance = new FinanceRepository(db);
     this.financeReports = new FinanceReportsRepository(db);
   }
+  institutions(scope: string[] | null) {
+    return this.db.query<{ uasg: string; name: string }>(
+      `SELECT uasg,name FROM "Institution" ${scope === null ? "" : "WHERE uasg=ANY($1::text[])"} ORDER BY name`,
+      scope === null ? [] : [scope],
+    );
+  }
   transaction<T>(
     run: (repos: Repositories) => Promise<T>,
     options?: {

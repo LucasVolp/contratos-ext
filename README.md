@@ -1,6 +1,6 @@
 # Contracts Ext
 
-Aplicação independente para acompanhar contratos, consultar pregões e atas públicas e preencher documentos de atas de registro de preços em modelos Word, com download em DOCX e PDF. Interface em português, sem autenticação.
+Aplicação independente para acompanhar contratos, consultar pregões e atas públicas e preencher documentos de atas de registro de preços em modelos Word, com download em DOCX e PDF. The interface is in Portuguese, with session authentication and institution-scoped access.
 
 ## Iniciar com Docker
 
@@ -116,3 +116,17 @@ Importações podem demorar de acordo com o período e o serviço público. Em f
 Para mudar portas, altere `WEB_PORT`, `API_PORT`, `POSTGRES_PORT` e `GOTENBERG_PORT` no `.env`. As credenciais padrão são exclusivamente para desenvolvimento local; configure `POSTGRES_USER`, `POSTGRES_PASSWORD` e `POSTGRES_DB` conforme seu ambiente.
 
 O escopo não inclui usuários, permissões, assinaturas eletrônicas, fiscalização, aditivos ou tramitação de processos. Não publique a aplicação na internet sem adicionar os controles adequados ao ambiente.
+
+## Authentication setup
+
+Set private `ADMIN_EMAIL` and `ADMIN_PASSWORD` values in `.env` before starting the
+API. Startup creates the initial general manager only when no accounts exist.
+`pnpm auth:create-manager` explicitly creates or restores a manager using these
+values. `pnpm db:seed-institutions` optionally registers the known MS institutions
+without replacing existing names or links. No default password is created.
+
+Sessions use HttpOnly, SameSite=Lax cookies. Set `SESSION_COOKIE_SECURE=true` for
+HTTPS and `SESSION_TTL_HOURS` to change the default 12-hour lifetime. Institution
+restrictions are enforced by SQL repositories, including financial reads; client
+filters only narrow the viewer's scope. Administration and institutional LOA are
+restricted to general managers.

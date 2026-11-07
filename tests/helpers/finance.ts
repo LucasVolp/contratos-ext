@@ -4,6 +4,8 @@ import { once } from "node:events";
 import { resolve } from "node:path";
 import { Database } from "../../apps/api/src/database";
 import { migrate } from "../../apps/api/src/migrate";
+import { AuthService } from "../../apps/api/src/auth/service";
+import { AuthRepository } from "../../apps/api/src/auth/repository";
 import { createApplication } from "../../apps/api/src/app";
 
 export async function financeFixture() {
@@ -30,6 +32,12 @@ export async function financeFixture() {
   }
   try {
     await migrate(db);
+    const email = "finance-browser@example.test",
+      password = "Finance-browser-2026!";
+    await new AuthService(new AuthRepository(db)).ensureManager({
+      email,
+      password,
+    });
     const [{ id: run }] = await db.query(`INSERT INTO finance.ingestion_runs
       (type,source_file,period_start,period_end,scope_type,scope_codes,trigger_type,status,etl_version)
       VALUES ('DAILY_EXPENSES','fixture.zip','2026-01-01','2026-12-31','MANAGEMENT',ARRAY['26421'],'MANUAL','IN_PROGRESS','test') RETURNING id`);
@@ -143,7 +151,14 @@ export async function financeFixture() {
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
     if (!ready) throw new Error(`Financial web server did not start: ${logs}`);
-    return { baseURL, id, headerlessId: "9007199254741013", cleanup };
+    return {
+      baseURL,
+      id,
+      email,
+      password,
+      headerlessId: "9007199254741013",
+      cleanup,
+    };
   } catch (error) {
     await cleanup();
     throw error;

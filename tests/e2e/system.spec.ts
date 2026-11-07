@@ -64,11 +64,26 @@ test.describe.serial('Sistema independente', () => {
   });
   test('contratos disponíveis na interface com busca real', async ({ page }) => {
     await page.goto('/contratos');
-    await expect(page.getByRole('heading', { name: 'Contratos', exact: true })).toBeVisible();
+    // The sidebar shows the purchase phases in order; contracts are the third one.
+    await expect(page.getByRole('link', { name: /Fase 3: Contrato/ })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('heading', { name: 'Contratos', exact: true })).toHaveCount(0);
     await page.getByRole('textbox', { name: 'Buscar contratos' }).fill(contract.number);
+    // The test contract runs from 2026-01-01 to 2026-12-31: in force, outside the 30-day window.
+    const summary = page.getByRole('region', { name: 'Resumo dos contratos' });
+    await expect(summary).toContainText('1contrato');
+    await expect(summary.getByRole('img')).toHaveAttribute('aria-label', '1 em vigor, 0 vencem em 30 dias, 0 encerrados, 0 a iniciar ou sem data');
+    await expect(summary.getByRole('link', { name: /Novo ciclo/ })).toHaveAttribute('href', '/pregoes');
     await expect(page.getByText(contract.number, { exact: true })).toBeVisible();
     await page.getByRole('link', { name: new RegExp(contract.number) }).first().click();
     await expect(page.getByText(contract.object, { exact: true }).first()).toBeVisible();
+  });
+  test('documentos mostram prontidão e exportação no resumo', async ({ page }) => {
+    await page.goto('/atas');
+    await page.getByRole('textbox', { name: 'Buscar atas' }).fill(record.number);
+    const summary = page.getByRole('region', { name: 'Resumo dos documentos' });
+    await expect(summary).toContainText('1documento');
+    await expect(summary.getByRole('img')).toHaveAttribute('aria-label', '1 prontos, 0 com pendências');
+    await expect(summary.getByRole('link', { name: /Fase 3/ })).toHaveAttribute('href', '/contratos');
   });
   test('ata mostra dados e permite download no navegador', async ({ page }) => {
     await page.goto(`/atas/${recordId}`);
@@ -79,7 +94,7 @@ test.describe.serial('Sistema independente', () => {
   });
   test('navegação móvel mantém módulos e não extrapola viewport', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/contratos'); await expect(page.getByRole('heading', { name: 'Contratos', exact: true })).toBeVisible();
+    await page.goto('/contratos'); await expect(page.getByRole('button', { name: 'Trocar de usuário' })).toBeVisible();
     await expect(page.getByRole('table')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     await page.goto(`/atas/${recordId}`); await expect(page.getByRole('button', { name: /baixar docx/i })).toBeVisible();

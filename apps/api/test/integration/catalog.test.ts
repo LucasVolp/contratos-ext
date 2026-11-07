@@ -1,3 +1,4 @@
+import { testAuth } from "../helpers/viewer";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createApplication } from "../../src/app";
@@ -5,7 +6,7 @@ import { ServiceUnavailableException } from "../../src/errors";
 import { CatalogClient } from "../../src/catalog/client";
 import { Database } from "../../src/database";
 test("catalog HTTP snapshots, cross-year links, supplements and supplier drafts preserve local data", async () => {
-  const app = await createApplication();
+  const app = await createApplication({auth:testAuth});
   const base = await app.listen({ port: 0, host: "127.0.0.1" });
   const db = app.db,
     repos = app.repositories;
@@ -349,7 +350,7 @@ test("catalog HTTP snapshots, cross-year links, supplements and supplier drafts 
   }
 });
 test("automatic public endpoints share requests, retain partial cache, and bulk refresh every unique item", async () => {
-  const app = await createApplication();
+  const app = await createApplication({auth:testAuth});
   const base = await app.listen({ port: 0, host: "127.0.0.1" }),
     db = app.db,
     repos = app.repositories,

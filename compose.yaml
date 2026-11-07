@@ -30,6 +30,11 @@ services:
       NODE_ENV: production
       PORT: 4100
       DATABASE_URL: postgresql://${POSTGRES_USER:-contracts}:${POSTGRES_PASSWORD:-contracts_local}@db:5432/${POSTGRES_DB:-contracts}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_NAME: ${ADMIN_NAME:-}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
       GOTENBERG_URL: http://gotenberg:3000
       COMPRAS_API_BASE_URL: ${COMPRAS_API_BASE_URL:-https://dadosabertos.compras.gov.br}
     ports:

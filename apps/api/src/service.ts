@@ -1,3 +1,4 @@
+import { assertUasg, inScope, narrowScope, Scope } from "./auth/access";
 import { validateFilters } from "@contracts/validation";
 import {
   BadRequestException,
@@ -28,7 +29,7 @@ export class ApplicationService {
     readonly db: Repositories,
     readonly external: ComprasClient = new ComprasClient(),
   ) {}
-  async contracts(query: Data) {
+  async contracts(query: Data, scope: Scope = null) {
     const fieldErrors = validateFilters(query);
     if (Object.keys(fieldErrors).length)
       throw new BadRequestException({
@@ -53,6 +54,7 @@ export class ApplicationService {
     const boundary = new Date(`${today}T00:00:00Z`);
     boundary.setUTCDate(boundary.getUTCDate() + 30);
     const filter = {
+      scope: narrowScope(scope, query.uasgs),
       uasg: query.uasg ? String(query.uasg) : undefined,
       search: query.search ? String(query.search) : undefined,
       from,
@@ -73,26 +75,29 @@ export class ApplicationService {
       stats,
     };
   }
-  async contract(id: string) {
+  async contract(id: string, scope: Scope = null) {
     const value = await this.db.contracts.get(id);
-    if (!value) throw new NotFoundException("Contrato não encontrado.");
+    if (!value || !inScope(scope, value.uasg))
+      throw new NotFoundException("Contrato não encontrado.");
     return presentContract(value);
   }
-  async saveContract(id: string | null, body: Data) {
+  async saveContract(id: string | null, body: Data, scope: Scope = null) {
     const data = validateContract(body);
+    assertUasg(scope, data.uasg);
     if (id) {
-      await this.contract(id);
+      await this.contract(id, scope);
       return presentContract(await this.db.contracts.update(id, data));
     }
     return presentContract(await this.db.contracts.create(data));
   }
-  async deleteContract(id: string) {
-    await this.contract(id);
+  async deleteContract(id: string, scope: Scope = null) {
+    await this.contract(id, scope);
     await this.db.contracts.remove(id);
     return { deleted: true };
   }
-  async importContracts(body: Data) {
+  async importContracts(body: Data, scope: Scope = null) {
     const { uasg, from, to } = importRange(body);
+    assertUasg(scope, uasg);
     const fetched = await this.external.contracts(uasg, from, to);
     // Fetch and validate every page before opening a transaction: remote failure cannot leave partial writes.
     const rows = [
@@ -129,12 +134,17 @@ export class ApplicationService {
       },
     );
   }
-  async records(query: Data) {
+  async records(query: Data, scope: Scope = null) {
     const { page, limit } = pagination(query);
     const search = query.search ? String(query.search) : undefined;
     const [rows, stats] = await Promise.all([
-      this.db.records.list(search, page, limit),
-      this.db.records.stats(search),
+      this.db.records.list(
+        search,
+        page,
+        limit,
+        narrowScope(scope, query.uasgs),
+      ),
+      this.db.records.stats(search, narrowScope(scope, query.uasgs)),
     ]);
     return {
       data: rows.map(presentRecord),
@@ -144,23 +154,26 @@ export class ApplicationService {
       stats,
     };
   }
-  async record(id: string) {
+  async record(id: string, scope: Scope = null) {
     const value = await this.db.records.get(id);
-    if (!value) throw new NotFoundException("Ata não encontrada.");
+    if (!value || !inScope(scope, value.uasg))
+      throw new NotFoundException("Ata não encontrada.");
     return presentRecord(value);
   }
-  async saveRecord(id: string | null, body: Data) {
+  async saveRecord(id: string | null, body: Data, scope: Scope = null) {
     const { items, ...fields } = validateRecord(body);
-    if (id) await this.record(id);
+    assertUasg(scope, fields.uasg);
+    if (id) await this.record(id, scope);
     return presentRecord(await this.db.records.save(id, fields, items));
   }
-  async deleteRecord(id: string) {
-    await this.record(id);
+  async deleteRecord(id: string, scope: Scope = null) {
+    await this.record(id, scope);
     await this.db.records.remove(id);
     return { deleted: true };
   }
-  async importRecord(body: Data) {
+  async importRecord(body: Data, scope: Scope = null) {
     const { uasg, from, to } = importRange(body);
+    assertUasg(scope, uasg);
     if (typeof body.number !== "string" || !body.number.trim())
       throw new BadRequestException("Número da ata é obrigatório.");
     const value = await this.external.record(
@@ -175,10 +188,10 @@ export class ApplicationService {
         `Ata já cadastrada: ${value.number}, UASG ${uasg}. Abra e edite o registro existente; a importação não substitui dados locais.`,
       );
     }
-    return this.saveRecord(null, value);
+    return this.saveRecord(null, value, scope);
   }
-  async exports(id: string) {
-    await this.record(id);
+  async exports(id: string, scope: Scope = null) {
+    await this.record(id, scope);
     return this.db.exports.list(id);
   }
 }

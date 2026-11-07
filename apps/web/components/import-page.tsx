@@ -84,7 +84,6 @@ export function ImportPage({ records = false }: { records?: boolean }) {
   return (
     <>
       <PageHead
-        section={records ? "Atas & documentos" : "Contratos"}
         title={records ? "Importar ata" : "Importar contratos"}
         description="Traga os registros públicos do Compras.gov.br para o seu arquivo."
         back={root}

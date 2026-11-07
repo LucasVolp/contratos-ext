@@ -8,12 +8,14 @@ import {
 import { Conditions, insert, update, quote } from "./sql";
 export interface CatalogFilters {
   uasg?: string;
+  scope?: string[] | null;
   from?: string;
   to?: string;
   search?: string;
 }
 function conditions(f: CatalogFilters, purchase: boolean) {
   const c = new Conditions();
+  if (f.scope) c.add(`uasg=ANY(${c.param(f.scope)}::text[])`);
   if (f.uasg) c.add(`uasg=${c.param(f.uasg)}`);
   if (purchase) {
     if (f.from || f.to) c.add('"publishedAt" IS NOT NULL');
@@ -115,8 +117,13 @@ export class PurchaseRepository {
         srpCount: number;
         estimatedValue: string | null;
         awardedValue: string | null;
+        homologated: {
+          count: number;
+          estimatedValue: string | null;
+          awardedValue: string | null;
+        };
       }>(
-        `SELECT COUNT(*)::int AS count, COUNT(*) FILTER (WHERE srp IS TRUE)::int AS "srpCount", SUM("estimatedValue") AS "estimatedValue", SUM("awardedValue") AS "awardedValue" FROM "PublicPurchase" WHERE ${c.text}`,
+        `SELECT COUNT(*)::int AS count, COUNT(*) FILTER (WHERE srp IS TRUE)::int AS "srpCount", SUM("estimatedValue") AS "estimatedValue", SUM("awardedValue") AS "awardedValue",jsonb_build_object('count',count(*) FILTER (WHERE "estimatedValue" IS NOT NULL AND "awardedValue" IS NOT NULL),'estimatedValue',(sum("estimatedValue") FILTER (WHERE "estimatedValue" IS NOT NULL AND "awardedValue" IS NOT NULL))::text,'awardedValue',(sum("awardedValue") FILTER (WHERE "estimatedValue" IS NOT NULL AND "awardedValue" IS NOT NULL))::text) AS homologated FROM "PublicPurchase" WHERE ${c.text}`,
         c.values,
       )
     )[0];
@@ -195,12 +202,30 @@ export class PublicRecordRepository {
   }
   async stats(f: CatalogFilters) {
     const c = conditions(f, false);
+    const where = c.text;
+    const today = new Date().toISOString().slice(0, 10);
+    const boundary = new Date(today + "T00:00:00Z");
+    boundary.setUTCDate(boundary.getUTCDate() + 90);
+    const day = c.param(today),
+      horizon = c.param(boundary.toISOString().slice(0, 10));
+    const active = `"startDate"<=${day} AND "endDate">=${day}`;
     return (
       await this.db.query<{
         count: number;
         totalValue: string | null;
+        vigency: {
+          active: number;
+          expiring: number;
+          ended: number;
+          activeValue: string | null;
+        };
+        withDocuments: number;
       }>(
-        `SELECT COUNT(*)::int AS count, SUM("totalValue") AS "totalValue" FROM "PublicRecord" WHERE ${c.text}`,
+        `
+     SELECT count(*)::int AS count,sum("totalValue") AS "totalValue",
+      jsonb_build_object('active',count(*) FILTER (WHERE ${active}),'expiring',count(*) FILTER (WHERE ${active} AND "endDate"<=${horizon}),'ended',count(*) FILTER (WHERE "endDate"<${day}),'activeValue',(sum("totalValue") FILTER (WHERE ${active}))::text) AS vigency,
+      count(*) FILTER (WHERE EXISTS(SELECT 1 FROM "PriceRecord" r WHERE r."sourcePublicRecordId"="PublicRecord".id))::int AS "withDocuments"
+     FROM "PublicRecord" WHERE ${where}`,
         c.values,
       )
     )[0];

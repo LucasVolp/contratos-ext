@@ -27,6 +27,8 @@ import {
 import { AutomaticRefresh, fresh } from "./automatic";
 import { CatalogDrafts } from "./drafts";
 import { CatalogSupplements, presentSupplement } from "./supplements";
+import { assertUasg, inScope, narrowScope, Scope } from "../auth/access";
+import { AuthRepository } from "../auth/repository";
 export class CatalogService {
   private readonly automatic = new AutomaticRefresh();
   private readonly supplements: CatalogSupplements;
@@ -36,12 +38,19 @@ export class CatalogService {
   ) {
     this.supplements = new CatalogSupplements(db, client);
   }
-  async purchases(query: Raw) {
+  async purchases(query: Raw, scope: Scope = null) {
     filters(query);
     const { page, limit } = pagination(query);
     const [rows, stats] = await Promise.all([
-      this.db.purchases.list(query, page, limit),
-      this.db.purchases.stats(query),
+      this.db.purchases.list(
+        { ...query, scope: narrowScope(scope, query.uasgs) },
+        page,
+        limit,
+      ),
+      this.db.purchases.stats({
+        ...query,
+        scope: narrowScope(scope, query.uasgs),
+      }),
     ]);
     return plain({
       data: rows.map((row) => this.purchaseSummary(row)),
@@ -57,6 +66,18 @@ export class CatalogService {
       ...result,
       recordsLookup: (snapshot as Raw).recordsLookup ?? null,
     };
+  }
+  async authorizePurchase(id: string, scope: Scope) {
+    const row = await this.db.purchases.get(id);
+    if (row && !inScope(scope, row.uasg))
+      throw new NotFoundException("Pregão não encontrado no catálogo local.");
+  }
+  async authorizeRecord(id: string, scope: Scope) {
+    const row = await this.db.publicRecords.get(id);
+    if (row && !inScope(scope, row.uasg))
+      throw new NotFoundException(
+        "Ata publicada não encontrada no catálogo local.",
+      );
   }
   async purchaseRow(id: string) {
     const row = await this.db.purchases.get(id);
@@ -76,8 +97,9 @@ export class CatalogService {
       linkedRecords,
     });
   }
-  async syncPurchases(body: Raw) {
+  async syncPurchases(body: Raw, scope: Scope = null) {
     const { uasg, from, to } = syncRange(body, 366);
+    assertUasg(scope, uasg);
     const fetched = await this.client.purchases(uasg, from, to);
     const rows = [
       ...new Map(
@@ -160,12 +182,19 @@ export class CatalogService {
       return { ...result, linkedPurchaseId: purchase?.id ?? null };
     });
   }
-  async records(query: Raw) {
+  async records(query: Raw, scope: Scope = null) {
     filters(query);
     const { page, limit } = pagination(query);
     const [rows, stats] = await Promise.all([
-      this.db.publicRecords.list(query, page, limit),
-      this.db.publicRecords.stats(query),
+      this.db.publicRecords.list(
+        { ...query, scope: narrowScope(scope, query.uasgs) },
+        page,
+        limit,
+      ),
+      this.db.publicRecords.stats({
+        ...query,
+        scope: narrowScope(scope, query.uasgs),
+      }),
     ]);
     return plain({
       data: await this.recordSummaries(rows),
@@ -241,12 +270,101 @@ export class CatalogService {
       ).values(),
     ];
   }
-  async syncRecords(body: Raw) {
+  async syncRecords(body: Raw, scope: Scope = null) {
     const { uasg, from, to } = syncRange(body);
-    const rows = this.uniqueRecords(await this.client.records(uasg, from, to));
-    return this.db.transaction((tx) => this.storeRecords(tx, rows), {
-      timeout: 60000,
-    });
+    assertUasg(scope, uasg);
+    const fetched = (await this.client.records(uasg, from, to)).filter(
+      (raw) => !raw.ataExcluido,
+    );
+    const rows = this.uniqueRecords(
+      fetched.filter((raw) => string(raw.numeroControlePncpAta).trim()),
+    );
+    const incompleteRecords = fetched
+      .filter((raw) => !string(raw.numeroControlePncpAta).trim())
+      .map((raw) => ({ number: string(raw.numeroAtaRegistroPreco) }));
+    const stored = await this.db.transaction(
+      (tx) => this.storeRecords(tx, rows),
+      { timeout: 60000 },
+    );
+    return { ...stored, incompleteRecords };
+  }
+  async syncReach(kind: "purchases" | "records", body: Raw, scope: Scope) {
+    const requested = narrowScope(scope, body?.uasgs);
+    const institutions = await this.db.institutions(requested);
+    const names = new Map(institutions.map((i) => [i.uasg, i.name]));
+    const uasgs = (requested ?? institutions.map((i) => i.uasg))
+      .slice()
+      .sort((a, b) =>
+        (names.get(a) ?? a).localeCompare(names.get(b) ?? b, "pt-BR"),
+      );
+    if (!uasgs.length)
+      throw new UnprocessableEntityException(
+        "Nenhuma UASG para atualizar. Vincule instituições ao seu perfil ou cadastre instituições.",
+      );
+    // Validate the period once, with field errors, before any public request.
+    const { from, to } = syncRange(
+      { uasg: uasgs[0], from: body?.from, to: body?.to },
+      kind === "purchases" ? 366 : undefined,
+    );
+    const results: Array<{
+      uasg: string;
+      name: string | null;
+      created: number;
+      updated: number;
+      total: number;
+      incomplete: number;
+      error: string | null;
+    }> = [];
+    const queue = [...uasgs];
+    // A few units at a time keeps the public API load modest and the wait short.
+    await Promise.all(
+      Array.from({ length: Math.min(3, queue.length) }, async () => {
+        for (let uasg = queue.shift(); uasg; uasg = queue.shift()) {
+          const base = { uasg, name: names.get(uasg) ?? null };
+          try {
+            const result =
+              kind === "purchases"
+                ? await this.syncPurchases({ uasg, from, to }, scope)
+                : await this.syncRecords({ uasg, from, to }, scope);
+            results.push({
+              ...base,
+              created: result.created,
+              updated: result.updated,
+              total: result.total,
+              incomplete:
+                (result as { incompleteRecords?: unknown[] }).incompleteRecords
+                  ?.length ?? 0,
+              error: null,
+            });
+          } catch (error) {
+            results.push({
+              ...base,
+              created: 0,
+              updated: 0,
+              total: 0,
+              incomplete: 0,
+              error:
+                error instanceof Error && "statusCode" in error
+                  ? error.message
+                  : "Não foi possível consultar esta UASG no Compras.gov. Os dados salvos foram preservados.",
+            });
+          }
+        }
+      }),
+    );
+    results.sort((a, b) => uasgs.indexOf(a.uasg) - uasgs.indexOf(b.uasg));
+    const sum = (key: "created" | "updated" | "total" | "incomplete") =>
+      results.reduce((total, row) => total + row[key], 0);
+    return {
+      from,
+      to,
+      created: sum("created"),
+      updated: sum("updated"),
+      total: sum("total"),
+      incomplete: sum("incomplete"),
+      failed: results.filter((row) => row.error).length,
+      results,
+    };
   }
   async refreshLinkedRecords(id: string, body: Raw = {}) {
     const purchase = await this.purchaseRow(id);

@@ -5,6 +5,12 @@ test.describe.configure({ mode: "serial" });
 test.beforeAll(async () => {
   fixture = await financeFixture();
 });
+test.beforeEach(async ({ page }) => {
+  const response = await page.request.post(fixture.baseURL + "/api/auth/login", {
+    data: { email: fixture.email, password: fixture.password },
+  });
+  expect(response.ok()).toBe(true);
+});
 test.afterAll(async () => {
   if (fixture) await fixture.cleanup();
 });

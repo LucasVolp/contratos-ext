@@ -18,10 +18,15 @@ import {
   FormValidation,
   focusInvalid,
   Loading,
-  PageHead,
+  PageBar,
   Pager,
+  ReachContext,
 } from "../ui";
 import { CatalogTabs } from "./catalog-tabs";
+import { CatalogRefresh } from "./catalog-refresh";
+import { PurchasesOverview } from "./purchases-overview";
+import { PublishedAtasOverview } from "./published-atas-overview";
+import { useReach } from "@/lib/session";
 export function CatalogList({ records = false }: { records?: boolean }) {
   const [search, setSearch] = useState(""),
     [filters, setFilters] = useState({ uasg: "", from: "", to: "" }),
@@ -33,14 +38,16 @@ export function CatalogList({ records = false }: { records?: boolean }) {
       PurchaseSummary | PublicRecordSummary
     > | null>(null),
     [error, setError] = useState(""),
-    [loading, setLoading] = useState(true);
+    [loading, setLoading] = useState(true),
+    [refreshing, setRefreshing] = useState(false);
   const root = records ? "/atas/publicadas" : "/pregoes";
+  const reach = useReach();
   useEffect(() => {
     const c = new AbortController();
     const timer = setTimeout(() => {
       setLoading(true);
       api<CatalogPage<PurchaseSummary | PublicRecordSummary>>(
-        `/${records ? "public-records" : "purchases"}?${new URLSearchParams({ ...applied, search, page: String(page), limit: "12" })}`,
+        `/${records ? "public-records" : "purchases"}?${new URLSearchParams({ ...applied, ...(reach.uasgs ? { uasgs: reach.uasgs } : {}), search, page: String(page), limit: "12" })}`,
         { signal: c.signal },
       )
         .then((v) => {
@@ -67,7 +74,7 @@ export function CatalogList({ records = false }: { records?: boolean }) {
       clearTimeout(timer);
       c.abort();
     };
-  }, [records, applied, search, page, reload]);
+  }, [records, applied, search, page, reload, reach.uasgs]);
   function submit(e: React.FormEvent) {
     e.preventDefault();
     const next = validateFilters(filters);
@@ -81,65 +88,40 @@ export function CatalogList({ records = false }: { records?: boolean }) {
   }
   return (
     <>
-      <PageHead
-        section={records ? "Atas & documentos" : "Pregões"}
-        title={records ? "Atas publicadas" : "Pregões"}
-        description={
-          records
-            ? "Consulte o acervo público salvo e prepare documentos por fornecedor."
-            : "Processos, resultados e atas em uma visão de trabalho."
+      <PageBar
+        context={
+          <>
+            {records && <CatalogTabs published />}
+            <ReachContext reach={reach} onChange={() => setPage(1)} />
+          </>
         }
       >
-        <Link className="button" href={`${root}/consultar`}>
+        <button
+          type="button"
+          className="button"
+          aria-expanded={refreshing}
+          onClick={() => setRefreshing((open) => !open)}
+        >
           <RefreshCw size={16} />
-          {records ? "Consultar atas" : "Consultar pregões"}
-        </Link>
-      </PageHead>
-      {records && <CatalogTabs published />}
-      <section className="stats-strip">
-        <div>
-          <span>{records ? "ATAS SALVAS" : "PREGÕES SALVOS"}</span>
-          <strong>
-            {data?.stats.count ?? "—"}
-            <small>registros</small>
-          </strong>
-        </div>
-        <div>
-          <span>
-            {records ? "VALOR CONHECIDO" : "VALOR ESTIMADO CONHECIDO"}
-          </span>
-          <strong className="money">
-            {data
-              ? currency(
-                  records ? data.stats.totalValue : data.stats.estimatedValue,
-                )
-              : "—"}
-          </strong>
-        </div>
-        <div>
-          <span>{records ? "FONTE DOS REGISTROS" : "REGISTRO DE PREÇOS"}</span>
-          {records ? (
-            <p className="stat-source">Compras.gov.br</p>
-          ) : (
-            <strong>
-              {data?.stats.srpCount ?? "—"}
-              <small>com SRP confirmado</small>
-            </strong>
-          )}
-        </div>
-      </section>
+          Atualizar do Compras.gov
+        </button>
+      </PageBar>
+      {refreshing && (
+        <CatalogRefresh
+          records={records}
+          reach={reach}
+          onDone={() => {
+            setPage(1);
+            setReload((n) => n + 1);
+          }}
+        />
+      )}
+      {records ? (
+        <PublishedAtasOverview stats={data?.stats ?? null} />
+      ) : (
+        <PurchasesOverview stats={data?.stats ?? null} />
+      )}
       <section className="registry">
-        <div className="registry-top">
-          <div>
-            <div className="eyebrow">CATÁLOGO PÚBLICO · ARQUIVO LOCAL</div>
-            <h2>{records ? "Atas disponíveis" : "Processos disponíveis"}</h2>
-          </div>
-          <span className="archive-note">
-            {data
-              ? `${data.total} registros encontrados`
-              : "Consulta ao arquivo"}
-          </span>
-        </div>
         <div className="filters">
           <div className="search-field">
             <Search size={18} />
@@ -212,14 +194,24 @@ export function CatalogList({ records = false }: { records?: boolean }) {
             <Loading />
           ) : !data?.data.length ? (
             <div className="empty">
-              <h2>Seu catálogo começa com uma consulta.</h2>
+              <h2>Nenhum registro salvo nesta abrangência.</h2>
               <p>
-                Consulte a fonte pública ou ajuste os filtros para encontrar
-                registros salvos.
+                A lista mostra o que já foi trazido do Compras.gov. Atualize
+                pelo período desejado ou ajuste os filtros.
               </p>
-              <Link className="button" href={`${root}/consultar`}>
-                {records ? "Consultar atas" : "Consultar pregões"}
-              </Link>
+              {!refreshing && (
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() => {
+                    setRefreshing(true);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                >
+                  <RefreshCw size={16} />
+                  Atualizar do Compras.gov
+                </button>
+              )}
             </div>
           ) : (
             <div className="table-scroll">

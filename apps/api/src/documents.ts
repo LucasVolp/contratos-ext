@@ -13,6 +13,7 @@ import Decimal from "decimal.js";
 import { Data, readiness } from "./domain";
 import { ApplicationService } from "./service";
 import { Repositories } from "./repositories";
+import type { Scope } from "./auth/access";
 export const TEMPLATE_VERSION = "arp-ata-14133-standalone-v2";
 const brDate = (value: string | null) =>
   value ? value.split("-").reverse().join("/") : " ";
@@ -142,10 +143,15 @@ export class DocumentService {
     private readonly app: ApplicationService,
     private readonly converter: (docx: Buffer) => Promise<Buffer> = convertPdf,
   ) {}
-  async generate(id: string, format: string, itemId?: string) {
+  async generate(
+    id: string,
+    format: string,
+    itemId?: string,
+    scope: Scope = null,
+  ) {
     if (!["docx", "pdf"].includes(format))
       throw new BadRequestException("Formato inválido. Use docx ou pdf.");
-    const record = await this.app.record(id);
+    const record = await this.app.record(id, scope);
     const check = readiness(record, itemId);
     if (!check.ready)
       throw new UnprocessableEntityException({

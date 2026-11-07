@@ -1,3 +1,4 @@
+import { readiness } from "../domain";
 import { Database, SqlConnection } from "../database";
 import { PriceRecord, RecordItem, DocumentExport } from "../models";
 import {
@@ -14,8 +15,9 @@ type ExportSummary = Pick<
   DocumentExport,
   "id" | "format" | "templateVersion" | "createdAt" | "itemNumber"
 >;
-function searchCondition(search?: string) {
+function searchCondition(search?: string, scope: string[] | null = null) {
   const c = new Conditions();
+  if (scope) c.add(`r.uasg=ANY(${c.param(scope)}::text[])`);
   c.search(search, [
     "r.number",
     "r.object",
@@ -67,8 +69,9 @@ export class RecordRepository {
     search: string | undefined,
     page: number,
     limit: number,
+    scope: string[] | null = null,
   ): Promise<RecordDetail[]> {
-    const c = searchCondition(search),
+    const c = searchCondition(search, scope),
       where = c.text;
     const rows = await this.db.query<PriceRecord>(
       `SELECT r.* FROM "PriceRecord" r WHERE ${where} ORDER BY r."updatedAt" DESC, r.id ASC LIMIT ${c.param(limit)} OFFSET ${c.param((page - 1) * limit)}`,
@@ -80,21 +83,28 @@ export class RecordRepository {
       items: items.filter((item) => item.recordId === row.id),
     }));
   }
-  async stats(search?: string) {
-    const c = searchCondition(search);
-    return (
+  async stats(search?: string, scope: string[] | null = null) {
+    const c = searchCondition(search, scope);
+    const result = (
       await this.db.query<{
         count: number;
         totalValue: string;
         exportsCount: number;
+        exported: number;
       }>(
         `SELECT COUNT(*)::int AS count,
       COALESCE(SUM((SELECT SUM(i.quantity*i."unitPrice") FROM "RecordItem" i WHERE i."recordId"=r.id)),0) AS "totalValue",
-      COALESCE(SUM((SELECT COUNT(*) FROM "DocumentExport" e WHERE e."recordId"=r.id)),0)::int AS "exportsCount"
+      COALESCE(SUM((SELECT COUNT(*) FROM "DocumentExport" e WHERE e."recordId"=r.id)),0)::int AS "exportsCount",
+      count(*) FILTER (WHERE EXISTS (SELECT 1 FROM "DocumentExport" e WHERE e."recordId"=r.id))::int AS exported
       FROM "PriceRecord" r WHERE ${c.text}`,
         c.values,
       )
     )[0];
+    const rows = await this.list(search, 1, 2147483647, scope);
+    return {
+      ...result,
+      ready: rows.filter((row) => readiness(row).ready).length,
+    };
   }
   save(
     id: string | null,

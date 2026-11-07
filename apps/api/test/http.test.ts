@@ -1,3 +1,4 @@
+import { testAuth } from "./helpers/viewer";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createApplication } from "../src/app";
@@ -16,7 +17,7 @@ test("Fastify preserves validation errors, UUID checks, JSON errors, health stat
       closed++;
     },
   } as unknown as Database;
-  const app = await createApplication({ db });
+  const app = await createApplication({ db,auth:testAuth });
   try {
     const health = await app.inject({ method: "GET", url: "/health" });
     assert.deepEqual(health.json(), { status: "ok", database: "ok" });

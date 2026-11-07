@@ -2,6 +2,7 @@ import "../src/env";
 import { Database } from "../src/database";
 import { Repositories } from "../src/repositories";
 import { validateRecord } from "../src/domain";
+import { seedInstitutions } from "./institutions";
 const db = new Database();
 const repos = new Repositories(db);
 function day(offset: number) {
@@ -122,6 +123,10 @@ async function seed() {
   );
   console.log(
     "Demonstração pronta: 4 contratos e 1 ata. Os dados são fictícios; nenhum outro registro foi removido.",
+  );
+  const institutions = await seedInstitutions(db);
+  console.log(
+    `Instituições de ensino de MS: ${institutions.created} criadas, ${institutions.total - institutions.created} já existentes preservadas.`,
   );
 }
 seed()

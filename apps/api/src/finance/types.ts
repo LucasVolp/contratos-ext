@@ -1,7 +1,17 @@
 export type FinanceQuery = Record<string, unknown>;
-export interface Pagination { page: number; limit: number; offset: number }
-export interface Page<T> { data: T[]; total: number; page: number; limit: number }
+export interface Pagination {
+  page: number;
+  limit: number;
+  offset: number;
+}
+export interface Page<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+}
 export interface CommitmentFilters extends Pagination {
+  allowedUnitCodes?: string[];
   managementCode: string;
   managementUnitCode?: string;
   fiscalYear?: number;
@@ -11,7 +21,11 @@ export interface CommitmentFilters extends Pagination {
   from?: string;
   to?: string;
 }
-export interface UnitFilters extends Pagination { managementCode?: string; search?: string }
+export interface UnitFilters extends Pagination {
+  allowedUnitCodes?: string[];
+  managementCode?: string;
+  search?: string;
+}
 export interface FinanceUnit {
   managementCode: string;
   code: string;
@@ -56,9 +70,12 @@ export interface CommitmentHeader {
   ingestionRunId: string;
   updatedAt: string;
 }
-export interface CommitmentDetail extends CommitmentSummary { header: CommitmentHeader | null }
+export interface CommitmentDetail extends CommitmentSummary {
+  header: CommitmentHeader | null;
+}
 
 export interface ExecutionFilters extends Pagination {
+  allowedUnitCodes?: string[];
   managementCode: string;
   fiscalYear: number;
   managementUnitCode?: string;
@@ -96,7 +113,9 @@ export interface ExecutionRow extends ExecutionSummary {
   expenseElementCode: string;
   expenseElementName: string | null;
 }
-export interface ReportPage<Row, Summary> extends Page<Row> { summary: Summary }
+export interface ReportPage<Row, Summary> extends Page<Row> {
+  summary: Summary;
+}
 
 export interface BudgetFilters extends Pagination {
   subordinateAgencyCode: string;

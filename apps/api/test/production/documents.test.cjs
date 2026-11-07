@@ -51,7 +51,7 @@ for (const format of ["docx", "pdf"]) {
       { record: async () => record },
       async () => Buffer.from("%PDF-compiled-regression"),
     );
-    const result = await service.generate("record", format);
+    const result = await service.generate("record", format, undefined, null);
     assert.ok(TEMPLATE_VERSION);
     assert.equal(saved.format, format);
     assert.equal(saved.snapshot.record.number, "77/2026");

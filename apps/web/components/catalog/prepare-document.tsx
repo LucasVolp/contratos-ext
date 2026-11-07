@@ -96,7 +96,6 @@ function PrepareDocumentContent({ id }: { id: string }) {
   return (
     <>
       <PageHead
-        section="Atas & documentos"
         title="Preparar documento"
         description="Escolha o fornecedor e continue o preenchimento no editor."
         back={`/atas/publicadas/${id}`}

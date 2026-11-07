@@ -1,3 +1,4 @@
+import { testAuth } from "./helpers/viewer";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createApplication } from "../src/app";
@@ -9,7 +10,7 @@ test("financial HTTP validation rejects invalid filters and bigint identities be
     query: async () => { queries++; return []; },
     close: async () => { closed++; },
   } as unknown as Database;
-  const app = await createApplication({ db });
+  const app = await createApplication({ db,auth:testAuth });
   try {
     for (const url of [
       "/api/finance/commitments",

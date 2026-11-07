@@ -140,6 +140,19 @@ export type CatalogPage<T> = {
     estimatedValue?: string | null;
     awardedValue?: string | null;
     totalValue?: string | null;
+    /** Pregões with both estimated and awarded values, the only fair base for savings. */
+    homologated?: {
+      count: number;
+      estimatedValue: string | null;
+      awardedValue: string | null;
+    };
+    vigency?: {
+      active: number;
+      expiring: number;
+      ended: number;
+      activeValue: string | null;
+    };
+    withDocuments?: number;
   };
 };
 export const known = (value: unknown) =>

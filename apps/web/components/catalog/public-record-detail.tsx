@@ -107,7 +107,6 @@ function PublicRecordDetailPageContent({ id }: { id: string }) {
   return (
     <>
       <PageHead
-        section="Atas & documentos"
         title={data.number}
         description="Ata publicada · registro oficial salvo no catálogo"
         back="/atas/publicadas"

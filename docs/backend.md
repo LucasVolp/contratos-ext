@@ -26,8 +26,9 @@ As duas migrações originais mantêm os mesmos nomes e bytes. Em um banco exist
 The two additional deployed ORM migrations (`202610310002_authentication` and
 `202610310003_institution_organization`) are also retained byte-for-byte from
 commit `87daef7`, with SHA-256 matching the deployed journal. They preserve legacy
-tables and upgrade compatibility; they do not add authentication routes to the
-current API. Their historical enum labels remain unchanged to preserve checksums.
+tables and upgrade compatibility. Authentication and institution administration
+now use these tables through explicit SQL repositories and Fastify routes. Their
+historical enum labels remain unchanged to preserve checksums.
 The migration adoption test covers all four deployed ORM entries.
 
 Não é necessário recriar o banco, executar seed ou remover volumes para atualizar uma instalação. O Compose continua executando as migrações antes de iniciar a API. Faça backup antes de atualizar um ambiente com dados importantes. Como esta etapa preserva o esquema, a versão anterior da API permanece compatível com os dados; o journal novo não interfere no Prisma antigo.

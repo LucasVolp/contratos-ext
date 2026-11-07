@@ -4,8 +4,11 @@ Base path: `/api/finance`. This slice provides read-only access to imported
 commitments and their related documents. It uses PostgreSQL directly through the
 existing Fastify API, with no runtime dependency on Go, SAGA or envelopa.
 
-The current application has no authentication routes. These endpoints follow its
-existing public-read model. They do not trigger imports or modify financial facts.
+All endpoints require a valid session. Management-unit directories, commitment lists,
+monthly reports, details and child collections are restricted to the viewer's
+linked UASGs. General managers have unrestricted scope. Out-of-scope details
+return 404. Institutional annual budget reports require a general manager because
+the source has no campus allocation. Client query parameters cannot widen access.
 
 ## Endpoints
 

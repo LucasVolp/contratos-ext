@@ -1,3 +1,4 @@
+import { testAuth } from "../helpers/viewer";
 import { test, TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { createApplication } from "../../src/app";
@@ -11,7 +12,7 @@ async function setup(t: TestContext, type = "MONTHLY_EXECUTION") {
   const [{ name }] = await db.query<{ name: string }>("SELECT current_database() AS name");
   const url = new URL(process.env.DATABASE_URL || "postgresql://contracts:contracts_local@localhost:5540/contracts");
   url.pathname = "/" + name;
-  const app = await createApplication({ db: new Database(url.toString()) });
+  const app = await createApplication({ db: new Database(url.toString()),auth:testAuth });
   const [{ id: run }] = await db.query(`INSERT INTO finance.ingestion_runs
     (type, source_file, period_start, period_end, scope_type, scope_codes, trigger_type, status, etl_version, finished_at)
     VALUES ($1, 'report.zip', '2026-01-01', '2026-12-31', $2, ARRAY['26421'], 'MANUAL', 'SUCCESS', 'test', now()) RETURNING id`,

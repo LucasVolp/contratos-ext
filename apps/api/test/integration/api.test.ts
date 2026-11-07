@@ -1,9 +1,10 @@
+import { testAuth } from "../helpers/viewer";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createApplication } from "../../src/app";
 
 test("PostgreSQL-backed HTTP CRUD, conflicts, decimals, atomic replacement and immutable exports", async () => {
-  const app = await createApplication();
+  const app = await createApplication({auth:testAuth});
   const base = await app.listen({ port: 0, host: "127.0.0.1" });
   const req = async (path: string, method = "GET", body?: any) =>
     fetch(base + path, {

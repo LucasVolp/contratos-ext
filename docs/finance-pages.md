@@ -36,7 +36,7 @@ After building the web application, run:
 
 ```sh
 pnpm --filter @contracts/web build
-pnpm exec playwright test tests/e2e/finance.spec.ts
+pnpm exec playwright test --config playwright.finance.config.ts
 ```
 
 The financial browser suite creates and migrates an isolated temporary PostgreSQL

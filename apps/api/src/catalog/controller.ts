@@ -5,6 +5,14 @@ export function registerCatalogRoutes(
   api: FastifyInstance,
   catalog: CatalogService,
 ) {
+  api.addHook("preHandler", async (request) => {
+    const params = request.params as { id?: string };
+    if (!params?.id) return;
+    if (request.routeOptions.url?.startsWith("/api/purchases/"))
+      await catalog.authorizePurchase(params.id, request.scope);
+    if (request.routeOptions.url?.startsWith("/api/public-records/"))
+      await catalog.authorizeRecord(params.id, request.scope);
+  });
   type Id = {
     Params: {
       id: string;
@@ -16,9 +24,19 @@ export function registerCatalogRoutes(
   type Body = {
     Body: Raw;
   };
-  api.get<Query>("/purchases", (request) => catalog.purchases(request.query));
+  api.post<Body>("/purchases/sync-reach", (request) =>
+    catalog.syncReach("purchases", request.body, request.scope),
+  );
+  api.post<Body>("/public-records/sync-reach", (request) =>
+    catalog.syncReach("records", request.body, request.scope),
+  );
+  api.get<Query>("/purchases", (request) =>
+    catalog.purchases(request.query, request.scope),
+  );
   api.post<Body>("/purchases/sync", async (request, reply) =>
-    reply.code(201).send(await catalog.syncPurchases(request.body)),
+    reply
+      .code(201)
+      .send(await catalog.syncPurchases(request.body, request.scope)),
   );
   api.get<Id>("/purchases/:id", (request) =>
     catalog.purchase(request.params.id),
@@ -46,10 +64,12 @@ export function registerCatalogRoutes(
         ),
   );
   api.get<Query>("/public-records", (request) =>
-    catalog.records(request.query),
+    catalog.records(request.query, request.scope),
   );
   api.post<Body>("/public-records/sync", async (request, reply) =>
-    reply.code(201).send(await catalog.syncRecords(request.body)),
+    reply
+      .code(201)
+      .send(await catalog.syncRecords(request.body, request.scope)),
   );
   api.get<Id>("/public-records/:id", (request) =>
     catalog.record(request.params.id),

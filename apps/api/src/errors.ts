@@ -4,6 +4,12 @@ export type ErrorBody = {
 };
 export class HttpError extends Error {
   readonly body: ErrorBody;
+  getStatus() {
+    return this.statusCode;
+  }
+  getResponse() {
+    return this.body;
+  }
   constructor(
     readonly statusCode: number,
     body: string | ErrorBody,
@@ -45,5 +51,16 @@ export class BadGatewayException extends HttpError {
 export class ServiceUnavailableException extends HttpError {
   constructor(body: string | ErrorBody) {
     super(503, body);
+  }
+}
+
+export class UnauthorizedException extends HttpError {
+  constructor(body: string | ErrorBody) {
+    super(401, body);
+  }
+}
+export class ForbiddenException extends HttpError {
+  constructor(body: string | ErrorBody) {
+    super(403, body);
   }
 }

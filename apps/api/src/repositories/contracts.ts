@@ -4,6 +4,7 @@ import { contractColumns } from "./columns";
 import { Conditions, insert, update, quote } from "./sql";
 export interface ContractFilters {
   uasg?: string;
+  scope?: string[] | null;
   search?: string;
   from?: string | null;
   to?: string | null;
@@ -36,6 +37,7 @@ function statusSql(
 }
 function conditions(f: ContractFilters) {
   const c = new Conditions();
+  if (f.scope) c.add(`uasg=ANY(${c.param(f.scope)}::text[])`);
   if (f.uasg) c.add(`uasg=${c.param(f.uasg)}`);
   c.search(f.search, [
     "number",
@@ -85,13 +87,25 @@ export class ContractRepository {
     const c = conditions(f),
       where = c.text,
       expiring = statusSql("EXPIRING", f.today, f.boundary, c);
+    const active = statusSql("ACTIVE", f.today, f.boundary, c),
+      ended = statusSql("EXPIRED", f.today, f.boundary, c),
+      upcoming = statusSql("UPCOMING", f.today, f.boundary, c),
+      unknown = statusSql("UNKNOWN", f.today, f.boundary, c);
     return (
       await this.db.query<{
         count: number;
         totalValue: string;
         expiringCount: number;
+        vigency: {
+          active: number;
+          expiring: number;
+          ended: number;
+          upcoming: number;
+          unknown: number;
+          activeValue: string | null;
+        };
       }>(
-        `SELECT COUNT(*)::int AS count, COALESCE(SUM("globalValue"),0) AS "totalValue", COUNT(*) FILTER (WHERE ${expiring})::int AS "expiringCount" FROM "Contract" WHERE ${where}`,
+        `SELECT COUNT(*)::int AS count, COALESCE(SUM("globalValue"),0) AS "totalValue", COUNT(*) FILTER (WHERE ${expiring})::int AS "expiringCount",jsonb_build_object('active',count(*) FILTER (WHERE ${active}),'expiring',count(*) FILTER (WHERE ${expiring}),'ended',count(*) FILTER (WHERE ${ended}),'upcoming',count(*) FILTER (WHERE ${upcoming}),'unknown',count(*) FILTER (WHERE ${unknown}),'activeValue',(sum("globalValue") FILTER (WHERE ${active} OR ${expiring}))::text) AS vigency FROM "Contract" WHERE ${where}`,
         c.values,
       )
     )[0];

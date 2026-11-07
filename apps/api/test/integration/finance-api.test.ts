@@ -1,3 +1,4 @@
+import { testAuth } from "../helpers/viewer";
 import { test, TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { createApplication } from "../../src/app";
@@ -15,7 +16,7 @@ async function setup(t: TestContext) {
   url.pathname = "/" + name;
   // The app owns its connection pool; the fixture owns a separate pool for teardown.
   const appDb = new Database(url.toString());
-  const app = await createApplication({ db: appDb });
+  const app = await createApplication({ db: appDb,auth:testAuth });
   const [{ id: run }] = await db.query(`INSERT INTO finance.ingestion_runs
     (type, source_file, period_start, period_end, scope_type, scope_codes, trigger_type, status, etl_version, finished_at)
     VALUES ('DAILY_EXPENSES', 'test.zip', '2026-09-30', '2026-09-30', 'MANAGEMENT', ARRAY['26421'], 'MANUAL', 'SUCCESS', 'test', now()) RETURNING id`);

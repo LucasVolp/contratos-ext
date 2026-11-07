@@ -186,3 +186,27 @@ test("consulta de importação valida intervalo ao sair do campo e mantém UASG 
   await expect(page.locator('[name="to"]')).toBeFocused();
   await expect(page.locator('[name="uasg"]')).toHaveValue("001234");
 });
+
+test("filtros opcionais de UASG não acusam campo obrigatório ao sair vazios", async ({
+  page,
+}) => {
+  for (const path of ["/pregoes", "/atas/publicadas"]) {
+    await page.goto(path);
+    const uasg = page.locator('[name="uasg"]');
+    await expect(page.locator('label[for="uasg"]')).toContainText("opcional");
+    await uasg.focus();
+    await uasg.blur();
+    await expect(uasg).not.toHaveAttribute("aria-invalid", "true");
+    await expect(page.locator("#uasg-error")).toHaveCount(0);
+    // Format is still checked once something is typed.
+    await uasg.fill("12");
+    await uasg.blur();
+    await expect(uasg).toHaveAttribute("aria-invalid", "true");
+  }
+  await page.goto("/contratos");
+  await page.getByRole("button", { name: "Filtros" }).click();
+  const filter = page.locator('[name="uasg"]');
+  await filter.focus();
+  await filter.blur();
+  await expect(page.locator("#uasg-error")).toHaveCount(0);
+});
