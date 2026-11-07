@@ -9,7 +9,7 @@ import (
 
 func migrated(t *testing.T) *sql.DB {
 	t.Helper()
-	return testdb.Isolated(t, testdb.Migration, testdb.ContractsMigration)
+	return testdb.Isolated(t, testdb.Migration, testdb.ContractsMigration, testdb.SyncMigration)
 }
 
 func TestContractNumberKey(t *testing.T) {
@@ -43,5 +43,20 @@ func TestContractPartsRejectUnknownPart(t *testing.T) {
 	testdb.Exec(t, db, `DELETE FROM public_sources.contracts`)
 	if got := testdb.Scalar(t, db, `SELECT count(*) FROM public_sources.contract_parts`); got != "0" {
 		t.Fatalf("parts not cascaded: %s", got)
+	}
+}
+
+func TestDailyRunsSchema(t *testing.T) {
+	db := migrated(t)
+	if _, err := db.Exec(`INSERT INTO public_sources.daily_runs (source, status, etl_version) VALUES ('CONTRATOS_GOV_BR', 'COMPLETED', 'test')`); err == nil {
+		t.Fatal("completed run without finished_at accepted")
+	}
+	testdb.Exec(t, db, `INSERT INTO public_sources.daily_runs (source, status, etl_version, finished_at) VALUES ('CONTRATOS_GOV_BR', 'COMPLETED', 'test', now())`)
+	if got := testdb.Scalar(t, db, `SELECT count(*) FROM public_sources.daily_runs WHERE unit_count = 0 AND failed_unit_count = 0`); got != "1" {
+		t.Fatalf("defaults = %s", got)
+	}
+	testdb.Exec(t, db, `INSERT INTO public_sources.capture_runs (source, trigger, target_type, target_code, etl_version) VALUES ('CONTRATOS_GOV_BR', 'SCHEDULED', 'MANAGEMENT_UNIT', '158148', 'test')`)
+	if got := testdb.Scalar(t, db, `SELECT count(*) FROM public_sources.capture_runs WHERE daily_run_id IS NULL`); got != "1" {
+		t.Fatalf("daily_run_id not nullable: %s", got)
 	}
 }

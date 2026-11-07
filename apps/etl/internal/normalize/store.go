@@ -27,6 +27,14 @@ type Summary struct {
 	Skipped    int `json:"skipped"`
 	Failed     int `json:"failed"`
 	BadDates   int `json:"badDates"`
+	// Failures lists every contract that ended FAILED, so a caller can report them.
+	Failures []Failure `json:"failures,omitempty"`
+}
+
+// Failure is one contract that could not be normalized.
+type Failure struct {
+	ExternalID int64  `json:"externalId"`
+	Error      string `json:"error"`
 }
 
 func (s *Summary) add(r ContractResult) {
@@ -37,6 +45,7 @@ func (s *Summary) add(r ContractResult) {
 		s.Skipped++
 	default:
 		s.Failed++
+		s.Failures = append(s.Failures, Failure{ExternalID: r.ExternalID, Error: r.Error})
 	}
 	s.BadDates += r.BadDates
 }
@@ -130,7 +139,7 @@ func (n *Normalizer) Contract(ctx context.Context, externalID int64) (ContractRe
 		return result, err
 	}
 	var m Mapped
-	header, headerResource, headerSeen, err := n.header(ctx, tx, id, &m)
+	header, headerResource, headerKey, headerSeen, err := n.header(ctx, tx, id, &m)
 	if errors.Is(err, sql.ErrNoRows) {
 		result.Status = "SKIPPED_NO_HEADER"
 		return result, nil
@@ -139,6 +148,10 @@ func (n *Normalizer) Contract(ctx context.Context, externalID int64) (ContractRe
 	if errors.As(err, &mapping) {
 		return failed(result, err), nil
 	}
+	if err != nil {
+		return result, err
+	}
+	headerState, err := n.partState(ctx, tx, headerKey)
 	if err != nil {
 		return result, err
 	}
@@ -158,7 +171,7 @@ func (n *Normalizer) Contract(ctx context.Context, externalID int64) (ContractRe
 	if err = n.writeContract(ctx, tx, header, headerResource, headerSeen); err != nil {
 		return result, err
 	}
-	if err = n.writePart(ctx, tx, externalID, "header", "AVAILABLE", sql.NullTime{Time: headerSeen, Valid: true}, sql.NullTime{}, sql.NullString{}, 1); err != nil {
+	if err = n.writePart(ctx, tx, externalID, "header", headerState.status, sql.NullTime{Time: headerSeen, Valid: true}, headerState.attemptAt, headerState.lastError, 1); err != nil {
 		return result, err
 	}
 	for i, p := range parts {
@@ -187,38 +200,45 @@ func failed(result ContractResult, err error) ContractResult {
 	return result
 }
 
-func (n *Normalizer) header(ctx context.Context, tx *sql.Tx, id string, m *Mapped) (Contract, string, time.Time, error) {
-	var payload []byte
-	var seen time.Time
+// header maps the freshest capture of the contract: its /id response or its
+// element in the newest listing. It also returns the request key it came from.
+func (n *Normalizer) header(ctx context.Context, tx *sql.Tx, id string, m *Mapped) (Contract, string, string, time.Time, error) {
+	var idPayload, listed []byte
+	var idSeen, listedSeen time.Time
 	err := tx.QueryRowContext(ctx, `SELECT payload, last_seen_at FROM public_sources.latest_captures
-		WHERE source = $1 AND resource = 'contract' AND request_key = '/api/contrato/id/' || $2`, n.Source, id).Scan(&payload, &seen)
-	if err == nil {
-		c, err := MapIDContract(payload, m)
+		WHERE source = $1 AND resource = 'contract' AND request_key = '/api/contrato/id/' || $2`, n.Source, id).Scan(&idPayload, &idSeen)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return Contract{}, "", "", time.Time{}, err
+	}
+	hasID := err == nil
+	var listedResource, listedKey string
+	err = tx.QueryRowContext(ctx, `SELECT element, c.resource, c.request_key, c.last_seen_at
+		FROM public_sources.latest_captures c
+		CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(c.payload) = 'array' THEN c.payload ELSE '[]'::jsonb END) element
+		WHERE c.source = $1 AND c.resource IN ('contracts_active_by_unit', 'contracts_inactive_by_unit') AND element->>'id' = $2
+		ORDER BY c.last_seen_at DESC, c.id DESC LIMIT 1`, n.Source, id).Scan(&listed, &listedResource, &listedKey, &listedSeen)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return Contract{}, "", "", time.Time{}, err
+	}
+	hasListed := err == nil
+	switch {
+	case !hasID && !hasListed:
+		return Contract{}, "", "", time.Time{}, sql.ErrNoRows
+	case hasID && (!hasListed || idSeen.After(listedSeen)):
+		c, err := MapIDContract(idPayload, m)
 		if err == nil && strconv.FormatInt(c.ExternalID, 10) != id {
 			err = fmt.Errorf("contracts: /id payload returned contract %d", c.ExternalID)
 		}
 		if err != nil {
-			return Contract{}, "", seen, mappingError{err}
+			return Contract{}, "", "", idSeen, mappingError{err}
 		}
-		return c, "contract", seen, nil
+		return c, "contract", "/api/contrato/id/" + id, idSeen, nil
 	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return Contract{}, "", seen, err
-	}
-	var resource string
-	err = tx.QueryRowContext(ctx, `SELECT element, c.resource, c.last_seen_at
-		FROM public_sources.latest_captures c
-		CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(c.payload) = 'array' THEN c.payload ELSE '[]'::jsonb END) element
-		WHERE c.source = $1 AND c.resource IN ('contracts_active_by_unit', 'contracts_inactive_by_unit') AND element->>'id' = $2
-		ORDER BY c.last_seen_at DESC, c.id DESC LIMIT 1`, n.Source, id).Scan(&payload, &resource, &seen)
+	c, err := MapListingContract(listed, m)
 	if err != nil {
-		return Contract{}, "", seen, err
+		return Contract{}, "", "", listedSeen, mappingError{err}
 	}
-	c, err := MapListingContract(payload, m)
-	if err != nil {
-		return Contract{}, "", seen, mappingError{err}
-	}
-	return c, resource, seen, nil
+	return c, listedResource, listedKey, listedSeen, nil
 }
 
 func (n *Normalizer) partState(ctx context.Context, tx *sql.Tx, key string) (partState, error) {
@@ -245,6 +265,11 @@ func (n *Normalizer) partState(ctx context.Context, tx *sql.Tx, key string) (par
 		state.status = "FAILED"
 	default:
 		state.status = "AVAILABLE"
+	}
+	if state.status == "NOT_FOUND" {
+		// The source no longer has this part, so an older capture must not
+		// keep its rows alive.
+		state.payload = nil
 	}
 	if state.status != "FAILED" {
 		state.lastError = sql.NullString{}
@@ -339,7 +364,12 @@ func (n *Normalizer) many(ctx context.Context, query string, args ...any) (Summa
 	for _, id := range ids {
 		result, err := n.Contract(ctx, id)
 		if err != nil {
-			return summary, fmt.Errorf("normalize contract %d: %w", id, err)
+			if ctx.Err() != nil {
+				return summary, fmt.Errorf("normalize contract %d: %w", id, err)
+			}
+			// A database error on one contract rolled back only its own
+			// transaction; the other contracts must still be normalized.
+			result = failed(ContractResult{ExternalID: id}, err)
 		}
 		summary.add(result)
 	}

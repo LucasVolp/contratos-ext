@@ -26,9 +26,9 @@ import (
 	"contracts-ext/etl/internal/sources/contratosgovbr"
 )
 
-const version = "0.2.0"
+const version = "0.3.0"
 
-var requiredMigrations = []string{"202611070001_public_sources_foundation", "202611080001_public_sources_contracts"}
+var requiredMigrations = []string{"202611070001_public_sources_foundation", "202611080001_public_sources_contracts", "202611090001_public_sources_contract_sync"}
 
 const usage = `usage:
   replicator sync -source CONTRATOS_GOV_BR (-unit <UG> | -contract <id>) [-inactive=true] [-trigger MANUAL|SCHEDULED] [-retries 3] [-interval 1s] [-normalize=true]

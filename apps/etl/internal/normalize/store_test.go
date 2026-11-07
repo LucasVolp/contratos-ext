@@ -3,6 +3,7 @@ package normalize_test
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"os"
 	"strings"
@@ -71,6 +72,34 @@ func (s *seeder) fullContract() {
 	s.file("contract_items", p+"itens", "itens.json")
 	s.file("contract_invoices", p+"faturas", "faturas.json")
 	s.file("contract_files", p+"arquivos", "arquivos.json")
+}
+
+func (s *seeder) notFound(resource, path string) {
+	s.t.Helper()
+	if _, err := s.store.Record(context.Background(), s.run, source, capture.Request{Resource: resource, Path: path}, capture.Result{Status: 404, NotFound: true}); err != nil {
+		s.t.Fatal(err)
+	}
+}
+
+// listingItem returns the listing fixture with the given fields overridden.
+func listingItem(t *testing.T, overrides map[string]any) string {
+	t.Helper()
+	data, err := os.ReadFile("testdata/listing_item.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var item map[string]any
+	if err := json.Unmarshal(data, &item); err != nil {
+		t.Fatal(err)
+	}
+	for k, v := range overrides {
+		item[k] = v
+	}
+	out, err := json.Marshal(item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
 }
 
 func (s *seeder) normalizer() *normalize.Normalizer {
@@ -209,5 +238,92 @@ func TestNormalizeUnitDeduplicates(t *testing.T) {
 	all, err := s.normalizer().All(context.Background())
 	if err != nil || all.Normalized != 1 {
 		t.Fatalf("all = %+v, err = %v", all, err)
+	}
+}
+
+func TestNormalizeSharedCommitmentAcrossContracts(t *testing.T) {
+	s := newSeeder(t)
+	s.body("contracts_active_by_unit", "/api/contrato/ug/158148", "["+listingItem(t, nil)+"]")
+	s.fullContract()
+	s.file("contract_commitments", "/api/contrato/13847/empenhos", "empenhos.json")
+	ctx := context.Background()
+	if result, err := s.normalizer().Contract(ctx, 1057026); err != nil || result.Status != "NORMALIZED" {
+		t.Fatalf("result = %+v, err = %v", result, err)
+	}
+	summary, err := s.normalizer().Unit(ctx, "158148")
+	if err != nil || summary.Normalized != 1 || summary.Failed != 0 {
+		t.Fatalf("summary = %+v, err = %v", summary, err)
+	}
+	got := s.scalar(`SELECT string_agg(contract_external_id::text, ',' ORDER BY contract_external_id) FROM public_sources.contract_commitments WHERE external_id = 8514191`)
+	if got != "13847,1057026" {
+		t.Fatalf("commitment owners = %s", got)
+	}
+}
+
+func TestNormalizeManyContinuesAfterContractDatabaseError(t *testing.T) {
+	s := newSeeder(t)
+	s.body("contracts_active_by_unit", "/api/contrato/ug/158148", "["+listingItem(t, nil)+","+listingItem(t, map[string]any{"id": 13848})+"]")
+	s.body("contract_commitments", "/api/contrato/13847/empenhos", `[{"id":1,"unidade_gestora":"158345","gestao":"26421","numero":"2022NE000001","empenhado":"1.000.000.000.000.000.000.000,00"}]`)
+	summary, err := s.normalizer().Unit(context.Background(), "158148")
+	if err != nil {
+		t.Fatalf("Unit returned %v", err)
+	}
+	if summary.Normalized != 1 || summary.Failed != 1 {
+		t.Fatalf("summary = %+v", summary)
+	}
+	if len(summary.Failures) != 1 || summary.Failures[0].ExternalID != 13847 || summary.Failures[0].Error == "" {
+		t.Fatalf("failures = %+v", summary.Failures)
+	}
+	if got := s.scalar(`SELECT string_agg(external_id::text, ',') FROM public_sources.contracts`); got != "13848" {
+		t.Fatalf("contracts = %s", got)
+	}
+}
+
+func TestNormalizeHeaderUsesFreshestCapture(t *testing.T) {
+	s := newSeeder(t)
+	s.file("contract", "/api/contrato/id/1057026", "id_contract.json")
+	listing := listingItem(t, map[string]any{"id": 1057026, "numero": "2026NE000234", "objeto": "OBJETO DA LISTAGEM MAIS RECENTE"})
+	s.body("contracts_active_by_unit", "/api/contrato/ug/158148", "["+listing+"]")
+	if result, err := s.normalizer().Contract(context.Background(), 1057026); err != nil || result.Status != "NORMALIZED" {
+		t.Fatalf("result = %+v, err = %v", result, err)
+	}
+	if got := s.scalar(`SELECT object || '|' || header_resource FROM public_sources.contracts`); got != "OBJETO DA LISTAGEM MAIS RECENTE|contracts_active_by_unit" {
+		t.Fatalf("contract = %s", got)
+	}
+}
+
+func TestNormalizeNotFoundPartClearsRows(t *testing.T) {
+	s := newSeeder(t)
+	s.fullContract()
+	n := s.normalizer()
+	if _, err := n.Contract(context.Background(), 1057026); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.scalar(`SELECT count(*) FROM public_sources.contract_guarantees`); got != "1" {
+		t.Fatalf("guarantees before = %s", got)
+	}
+	s.notFound("contract_guarantees", "/api/contrato/1057026/garantias")
+	if result, err := n.Contract(context.Background(), 1057026); err != nil || result.Status != "NORMALIZED" {
+		t.Fatalf("result = %+v, err = %v", result, err)
+	}
+	if got := s.scalar(`SELECT count(*) FROM public_sources.contract_guarantees`); got != "0" {
+		t.Fatalf("guarantees = %s", got)
+	}
+	if got := s.scalar(`SELECT status || '|' || row_count FROM public_sources.contract_parts WHERE part = 'guarantees'`); got != "NOT_FOUND|0" {
+		t.Fatalf("part = %s", got)
+	}
+}
+
+func TestNormalizeHeaderPartReflectsListingAttempt(t *testing.T) {
+	s := newSeeder(t)
+	s.body("contracts_active_by_unit", "/api/contrato/ug/158148", "["+listingItem(t, nil)+"]")
+	seen := s.scalar(`SELECT last_seen_at::text FROM public_sources.captures WHERE request_key = '/api/contrato/ug/158148'`)
+	s.failed("contracts_active_by_unit", "/api/contrato/ug/158148")
+	if result, err := s.normalizer().Contract(context.Background(), 13847); err != nil || result.Status != "NORMALIZED" {
+		t.Fatalf("result = %+v, err = %v", result, err)
+	}
+	got := s.scalar(`SELECT status || '|' || captured_at::text FROM public_sources.contract_parts WHERE part = 'header'`)
+	if got != "FAILED|"+seen {
+		t.Fatalf("header part = %s, want FAILED|%s", got, seen)
 	}
 }

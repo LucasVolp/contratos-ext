@@ -89,7 +89,7 @@ func TestExecuteRejectsUnknownCommand(t *testing.T) {
 }
 
 func TestExecuteCancelledRunIsRecorded(t *testing.T) {
-	db := testdb.Isolated(t, testdb.Migration, testdb.ContractsMigration)
+	db := testdb.Isolated(t, testdb.Migration, testdb.ContractsMigration, testdb.SyncMigration)
 	useDatabase(t, testdb.Scalar(t, db, "SELECT current_database()"))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -118,7 +118,7 @@ func TestExecuteCancelledRunIsRecorded(t *testing.T) {
 }
 
 func TestExecuteSyncsContract(t *testing.T) {
-	db := testdb.Isolated(t, testdb.Migration, testdb.ContractsMigration)
+	db := testdb.Isolated(t, testdb.Migration, testdb.ContractsMigration, testdb.SyncMigration)
 	useDatabase(t, testdb.Scalar(t, db, "SELECT current_database()"))
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/contrato/id/13847" {
@@ -164,7 +164,7 @@ func TestParseNormalizeValidation(t *testing.T) {
 }
 
 func TestExecuteSyncNormalizes(t *testing.T) {
-	db := testdb.Isolated(t, testdb.Migration, testdb.ContractsMigration)
+	db := testdb.Isolated(t, testdb.Migration, testdb.ContractsMigration, testdb.SyncMigration)
 	useDatabase(t, testdb.Scalar(t, db, "SELECT current_database()"))
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/contrato/id/13847" {
@@ -188,7 +188,7 @@ func TestExecuteSyncNormalizes(t *testing.T) {
 }
 
 func TestExecuteNormalizeWithoutSyncSkips(t *testing.T) {
-	db := testdb.Isolated(t, testdb.Migration, testdb.ContractsMigration)
+	db := testdb.Isolated(t, testdb.Migration, testdb.ContractsMigration, testdb.SyncMigration)
 	useDatabase(t, testdb.Scalar(t, db, "SELECT current_database()"))
 	var stdout, stderr bytes.Buffer
 	code := execute(context.Background(), []string{"normalize", "-source", "CONTRATOS_GOV_BR", "-contract", "999"}, &stdout, &stderr)
