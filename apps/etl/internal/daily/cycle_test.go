@@ -201,6 +201,17 @@ func TestDuePolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("refreshed", contratosgovbr.Listed{ID: 30, Element: []byte(element)}, false)
+	// A failed refresh keeps a fresh last_attempt_at, but must be retried on the next cycle.
+	testdb.Exec(t, cycle.DB, `UPDATE public_sources.contract_parts SET status = 'FAILED', last_error = 'source returned HTTP 500' WHERE contract_external_id = 30 AND part = 'guarantees'`)
+	check("failed part", contratosgovbr.Listed{ID: 30, Element: []byte(element)}, true)
+	before := s.count("/api/contrato/30/garantias")
+	if _, err := cycle.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.count("/api/contrato/30/garantias"); got != before+1 {
+		t.Fatalf("failed part requested %d times after the retry cycle, want %d", got, before+1)
+	}
+	check("retried", contratosgovbr.Listed{ID: 30, Element: []byte(element)}, false)
 	testdb.Exec(t, cycle.DB, `UPDATE public_sources.contract_parts SET last_attempt_at = now() - interval '31 days' WHERE contract_external_id = 30`)
 	check("stale parts", contratosgovbr.Listed{ID: 30, Element: []byte(element)}, true)
 }

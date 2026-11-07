@@ -22,7 +22,9 @@ const InactiveMaxAge = 30 * 24 * time.Hour
 // DuePolicy decides which listed contracts get their sub-resources captured:
 // active contracts always; inactive ones when never normalized, when their
 // listing element differs from the stored header, when a sub-resource part
-// is MISSING or absent, or when the oldest part is older than maxAge.
+// is MISSING, FAILED or absent, or when the oldest part is older than maxAge.
+// FAILED parts are retried on every cycle, since a failed attempt still
+// refreshes last_attempt_at.
 func DuePolicy(db *sql.DB, source string, now func() time.Time, maxAge time.Duration) contratosgovbr.DueFunc {
 	return func(ctx context.Context, c contratosgovbr.Listed) (bool, error) {
 		if c.Active {
@@ -32,10 +34,10 @@ func DuePolicy(db *sql.DB, source string, now func() time.Time, maxAge time.Dura
 		// sub-resource parts decide freshness.
 		var due bool
 		err := db.QueryRowContext(ctx, `SELECT c.source_data IS DISTINCT FROM $3::jsonb
-			OR p.part_count < $4 OR coalesce(p.missing, true) OR coalesce(p.oldest < $5, true)
+			OR p.part_count < $4 OR coalesce(p.unavailable, true) OR coalesce(p.oldest < $5, true)
 			FROM public_sources.contracts c
 			CROSS JOIN LATERAL (
-				SELECT count(*) AS part_count, bool_or(status = 'MISSING') AS missing,
+				SELECT count(*) AS part_count, bool_or(status IN ('MISSING', 'FAILED')) AS unavailable,
 				       min(coalesce(last_attempt_at, captured_at)) AS oldest
 				FROM public_sources.contract_parts
 				WHERE source = c.source AND contract_external_id = c.external_id AND part <> 'header'
