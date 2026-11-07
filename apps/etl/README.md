@@ -263,15 +263,26 @@ docker compose --profile sync up -d --build replicator    # same, as a container
   `-at` (default `03:00`) in `-timezone` (default `America/Sao_Paulo`; tzdata is
   built in). A cycle that fails is logged and the next one still runs. SIGTERM or
   SIGINT records a running cycle as `CANCELLED` and exits 0. Each log line is JSON.
-- **Policy per cycle:** for each UG, both listings are captured and normalized.
+- **Policy per cycle:** UGs go in order of their last good active listing, the
+  oldest first (never captured before any), then by UASG, so cycles interrupted
+  again and again still reach every UG. For each UG, both listings are captured
+  and normalized; listing headers come from that UG's two latest listings.
   Active contracts get all seven sub-resources every cycle. An inactive contract
   is refreshed only when it was never normalized, its listing element differs from
   the stored header, a sub-resource part is `MISSING`, `FAILED` or absent, or the
   oldest part is older than 30 days. A failed UG does not stop the cycle; the run
   records `unit_count` and `failed_unit_count`.
 - **One cycle at a time:** a PostgreSQL advisory lock per source
-  (`public_sources.daily:<source>`) keeps two processes from syncing together. With
-  `-once`, a held lock prints `another daily run is in progress` and exits 1.
+  (`public_sources.daily:<source>`) keeps two daily processes from syncing together.
+  With `-once`, a held lock prints `another daily run is in progress` and exits 1.
+  Holding the lock proves no other cycle is alive, so before starting, daily runs
+  left `RUNNING` by a crash (and their `RUNNING` capture runs) are recorded as
+  `FAILED` with error `interrupted`; the API's "running" state stays truthful.
+- **Only `daily` takes the run lock:** a manual `sync` or `normalize` may run while
+  a daily cycle is in progress. That is safe: every source request still waits on
+  the shared PostgreSQL pacing gate, and each contract is normalized in its own
+  transaction under a per-contract advisory transaction lock, so concurrent
+  writers serialize per contract and never leave a half-written snapshot.
 - **Pacing:** the same shared gate and limits as `sync` (`-interval`, `-retries`).
 - **Compose:** service `replicator` (image built from `apps/etl/Dockerfile`, non-root,
   `restart: unless-stopped`) waits for a healthy `api`, which applies the migrations.

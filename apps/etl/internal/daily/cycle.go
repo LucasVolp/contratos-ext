@@ -135,9 +135,16 @@ func (c *Cycle) runUnits(ctx context.Context, result *CycleResult) error {
 	return nil
 }
 
-// units returns the valid UASGs registered in the app, in order.
+// units returns the valid UASGs registered in the app, the ones whose last
+// good active listing is oldest first (never captured before any), then by
+// UASG, so cycles interrupted again and again do not starve the last units.
 func (c *Cycle) units(ctx context.Context) ([]string, error) {
-	rows, err := c.DB.QueryContext(ctx, `SELECT uasg FROM "Institution" ORDER BY uasg`)
+	rows, err := c.DB.QueryContext(ctx, `SELECT i.uasg FROM "Institution" i
+		LEFT JOIN LATERAL (
+			SELECT max(a.attempted_at) AS last_good_at FROM public_sources.capture_attempts a
+			WHERE a.source = $1 AND a.request_key = '/api/contrato/ug/' || i.uasg AND a.outcome IN ('CAPTURED', 'UNCHANGED')
+		) good ON true
+		ORDER BY good.last_good_at ASC NULLS FIRST, i.uasg`, contratosgovbr.Source)
 	if err != nil {
 		return nil, fmt.Errorf("read registered units: %w", err)
 	}

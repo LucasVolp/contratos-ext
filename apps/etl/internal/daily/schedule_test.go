@@ -137,3 +137,30 @@ func TestServeSkipsStartCycleAfterRecentCompletion(t *testing.T) {
 		t.Fatalf("daily runs = %s, want no start cycle after a recent completion", got)
 	}
 }
+
+func TestRunLockedMarksInterruptedRunsFailed(t *testing.T) {
+	cycle := newCycle(t, newSource())
+	db := cycle.DB
+	old := testdb.Scalar(t, db, `INSERT INTO public_sources.daily_runs (source, etl_version, started_at)
+		VALUES ($1, 'test', now() - interval '2 days') RETURNING id`, contratosgovbr.Source)
+	testdb.Exec(t, db, `INSERT INTO public_sources.capture_runs (source, trigger, target_type, target_code, etl_version, daily_run_id)
+		VALUES ($1, 'SCHEDULED', 'MANAGEMENT_UNIT', '158148', 'test', $2)`, contratosgovbr.Source, old)
+	other := testdb.Scalar(t, db, `INSERT INTO public_sources.daily_runs (source, etl_version) VALUES ('OTHER_SOURCE', 'test') RETURNING id`)
+
+	result, ran, err := cycle.RunLocked(context.Background())
+	if err != nil || !ran || result.Status != "COMPLETED" {
+		t.Fatalf("RunLocked: ran = %v, result = %+v, err = %v", ran, result, err)
+	}
+	if got := testdb.Scalar(t, db, `SELECT status || ' ' || coalesce(error, '') || ' ' || (finished_at IS NOT NULL) FROM public_sources.daily_runs WHERE id = $1`, old); got != "FAILED interrupted true" {
+		t.Fatalf("leftover daily run = %s, want FAILED interrupted", got)
+	}
+	if got := testdb.Scalar(t, db, `SELECT status || ' ' || coalesce(error, '') || ' ' || (finished_at IS NOT NULL) FROM public_sources.capture_runs WHERE daily_run_id = $1`, old); got != "FAILED interrupted true" {
+		t.Fatalf("leftover capture run = %s, want FAILED interrupted", got)
+	}
+	if got := testdb.Scalar(t, db, `SELECT status FROM public_sources.daily_runs WHERE id = $1`, other); got != "RUNNING" {
+		t.Fatalf("another source's run = %s, want it untouched", got)
+	}
+	if got := testdb.Scalar(t, db, `SELECT status FROM public_sources.daily_runs WHERE id = $1`, result.DailyRunID); got != "COMPLETED" {
+		t.Fatalf("new daily run = %s, want COMPLETED", got)
+	}
+}

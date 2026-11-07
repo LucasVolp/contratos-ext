@@ -238,3 +238,40 @@ func TestCycleCancelled(t *testing.T) {
 		t.Fatalf("cancelled unit capture run = %s", got)
 	}
 }
+
+func TestCycleOrdersUnitsByOldestGoodListing(t *testing.T) {
+	cycle := newCycle(t, newSource())
+	db := cycle.DB
+	unitOrder := func() string {
+		t.Helper()
+		result, err := cycle.Run(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		order := ""
+		for _, unit := range result.Units {
+			order += unit.Unit + " "
+		}
+		return order
+	}
+	if got := unitOrder(); got != "158148 158454 " {
+		t.Fatalf("never-captured units go in UASG order: order = %q", got)
+	}
+	// 158148 now has the newest good active listing, so 158454 goes first.
+	testdb.Exec(t, db, `UPDATE public_sources.capture_attempts SET attempted_at = now() + interval '1 hour'
+		WHERE request_key = '/api/contrato/ug/158148'`)
+	if got := unitOrder(); got != "158454 158148 " {
+		t.Fatalf("the unit with the oldest good listing goes first: order = %q", got)
+	}
+	// 158454 never had a good listing (only a failure); it goes before a unit
+	// whose good listing is a month old.
+	testdb.Exec(t, db, `UPDATE public_sources.capture_attempts SET attempted_at = now() - interval '30 days'
+		WHERE request_key = '/api/contrato/ug/158148'`)
+	testdb.Exec(t, db, `DELETE FROM public_sources.capture_attempts WHERE request_key = '/api/contrato/ug/158454'`)
+	run := testdb.Scalar(t, db, `SELECT max(id) FROM public_sources.capture_runs`)
+	testdb.Exec(t, db, `INSERT INTO public_sources.capture_attempts (run_id, source, resource, request_key, outcome, http_status, error)
+		VALUES ($1, $2, 'contracts_active_by_unit', '/api/contrato/ug/158454', 'FAILED', 500, 'source returned HTTP 500')`, run, contratosgovbr.Source)
+	if got := unitOrder(); got != "158454 158148 " {
+		t.Fatalf("a unit without a good listing goes first: order = %q", got)
+	}
+}

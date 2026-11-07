@@ -44,6 +44,9 @@ func RunOnStart(ctx context.Context, db *sql.DB, source string, now time.Time) (
 // RunLocked runs a cycle while holding the source's daily advisory lock, so two
 // replicator processes never sync the same source at once. It returns
 // ran=false, without recording anything, when another process holds the lock.
+// Holding the lock proves no other cycle of the source is alive, so daily runs
+// still RUNNING (and their RUNNING capture runs) were interrupted by a crash
+// and are first recorded as FAILED with error "interrupted".
 func (c *Cycle) RunLocked(ctx context.Context) (CycleResult, bool, error) {
 	conn, err := c.DB.Conn(ctx)
 	if err != nil {
@@ -68,8 +71,33 @@ func (c *Cycle) RunLocked(ctx context.Context) (CycleResult, bool, error) {
 			c.logger().Error("Could not release the daily lock; the connection was discarded", "error", unlockErr)
 		}
 	}()
+	if err := c.failInterrupted(ctx, conn); err != nil {
+		return CycleResult{Status: "FAILED"}, true, err
+	}
 	result, err := c.Run(ctx)
 	return result, true, err
+}
+
+// failInterrupted marks the source's leftover RUNNING daily runs, and their
+// RUNNING capture runs, as FAILED with error "interrupted". The caller must
+// hold the daily lock.
+func (c *Cycle) failInterrupted(ctx context.Context, conn *sql.Conn) error {
+	result, err := conn.ExecContext(ctx, `WITH interrupted AS (
+			UPDATE public_sources.daily_runs
+			SET status = 'FAILED', error = 'interrupted', finished_at = clock_timestamp()
+			WHERE source = $1 AND status = 'RUNNING'
+			RETURNING id
+		)
+		UPDATE public_sources.capture_runs
+		SET status = 'FAILED', error = 'interrupted', finished_at = clock_timestamp()
+		WHERE status = 'RUNNING' AND daily_run_id IN (SELECT id FROM interrupted)`, contratosgovbr.Source)
+	if err != nil {
+		return fmt.Errorf("record interrupted daily runs: %w", err)
+	}
+	if count, err := result.RowsAffected(); err == nil && count > 0 {
+		c.logger().Warn("Recorded interrupted capture runs as failed", "captureRuns", count)
+	}
+	return nil
 }
 
 // Serve runs the daily schedule until ctx ends: one cycle on start unless one
