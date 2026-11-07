@@ -18,6 +18,9 @@ import (
 // Migration is the API migration that creates the public_sources schema.
 const Migration = "202611070001_public_sources_foundation"
 
+// ContractsMigration is the API migration that creates the typed contract tables.
+const ContractsMigration = "202611080001_public_sources_contracts"
+
 // Isolated creates a random database on ETL_TEST_DATABASE_URL, applies the named
 // API migrations in order and drops the database when the test ends. Tests are
 // skipped when ETL_TEST_DATABASE_URL is unset.
