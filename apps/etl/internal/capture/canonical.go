@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"slices"
+	"strings"
 )
 
 // Canonicalize re-encodes a JSON document with sorted object keys, numbers kept
@@ -26,6 +28,9 @@ func Canonicalize(body []byte) ([]byte, string, error) {
 	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
 		return nil, "", fmt.Errorf("response has data after the JSON document")
 	}
+	if containsNUL(value) {
+		return nil, "", fmt.Errorf("response contains a NUL character, which PostgreSQL jsonb cannot store")
+	}
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
 	encoder.SetEscapeHTML(false)
@@ -35,6 +40,23 @@ func Canonicalize(body []byte) ([]byte, string, error) {
 	canonical := bytes.TrimSuffix(buffer.Bytes(), []byte("\n"))
 	sum := sha256.Sum256(canonical)
 	return canonical, hex.EncodeToString(sum[:]), nil
+}
+
+// containsNUL reports whether any decoded string or object key holds U+0000.
+func containsNUL(value any) bool {
+	switch v := value.(type) {
+	case string:
+		return strings.ContainsRune(v, 0)
+	case []any:
+		return slices.ContainsFunc(v, containsNUL)
+	case map[string]any:
+		for key, item := range v {
+			if strings.ContainsRune(key, 0) || containsNUL(item) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Request identifies one source request.

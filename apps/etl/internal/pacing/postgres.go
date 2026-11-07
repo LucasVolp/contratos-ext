@@ -41,7 +41,7 @@ func (gate *PostgresGate) update(ctx context.Context, change func(State, time.Ti
 	defer tx.Rollback()
 	var state State
 	var milliseconds int64
-	err = tx.QueryRowContext(ctx, `SELECT last_request_at, blocked_until, rate_limited_until, interval_ms
+	err = tx.QueryRowContext(ctx, `SELECT last_request_at, blocked_until, rate_limited_until, penalty_interval_ms
 		FROM public_sources.source_pacing WHERE source = $1 FOR UPDATE`, gate.Source).
 		Scan(&state.LastRequest, &state.BlockedUntil, &state.RateLimitedUntil, &milliseconds)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -50,14 +50,14 @@ func (gate *PostgresGate) update(ctx context.Context, change func(State, time.Ti
 	if err != nil {
 		return 0, fmt.Errorf("read pacing state: %w", err)
 	}
-	state.Interval = max(time.Duration(milliseconds)*time.Millisecond, gate.Policy.Minimum)
+	state.Interval = time.Duration(milliseconds) * time.Millisecond
 	var now time.Time
 	if err = tx.QueryRowContext(ctx, "SELECT clock_timestamp()").Scan(&now); err != nil {
 		return 0, err
 	}
 	state, delay := change(state, now)
 	_, err = tx.ExecContext(ctx, `UPDATE public_sources.source_pacing
-		SET last_request_at = $2, blocked_until = $3, rate_limited_until = $4, interval_ms = $5, updated_at = clock_timestamp()
+		SET last_request_at = $2, blocked_until = $3, rate_limited_until = $4, penalty_interval_ms = $5, updated_at = clock_timestamp()
 		WHERE source = $1`, gate.Source, state.LastRequest, state.BlockedUntil, state.RateLimitedUntil, state.Interval.Milliseconds())
 	if err != nil {
 		return 0, err

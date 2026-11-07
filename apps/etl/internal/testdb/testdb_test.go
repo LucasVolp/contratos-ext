@@ -8,8 +8,8 @@ import (
 
 func TestPublicSourcesMigration(t *testing.T) {
 	db := testdb.Isolated(t, testdb.Migration)
-	if got := testdb.Scalar(t, db, `SELECT interval_ms FROM public_sources.source_pacing WHERE source = 'CONTRATOS_GOV_BR'`); got != "1000" {
-		t.Fatalf("seed interval = %s, want 1000", got)
+	if got := testdb.Scalar(t, db, `SELECT penalty_interval_ms FROM public_sources.source_pacing WHERE source = 'CONTRATOS_GOV_BR'`); got != "0" {
+		t.Fatalf("seed penalty interval = %s, want 0", got)
 	}
 	if _, err := db.Exec(`INSERT INTO public_sources.capture_runs (source, trigger, target_type, target_code, etl_version, finished_at)
 		VALUES ('X', 'MANUAL', 'CONTRACT', '1', 't', now())`); err == nil {

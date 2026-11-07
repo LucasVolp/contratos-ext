@@ -46,7 +46,7 @@ func TestPostgresGatePersistsAcrossConnections(t *testing.T) {
 	if err := a.Block(ctx, 0); err != nil {
 		t.Fatal(err)
 	}
-	if got := testdb.Scalar(t, db, "SELECT interval_ms FROM public_sources.source_pacing WHERE source = $1", source); got != "2000" {
+	if got := testdb.Scalar(t, db, "SELECT penalty_interval_ms FROM public_sources.source_pacing WHERE source = $1", source); got != "2000" {
 		t.Fatalf("adaptive interval = %s ms, want 2000", got)
 	}
 	blocked := testdb.Scalar(t, db, "SELECT blocked_until::text FROM public_sources.source_pacing WHERE source = $1", source)
@@ -64,12 +64,25 @@ func TestPostgresGatePersistsAcrossConnections(t *testing.T) {
 		t.Fatal("fresh gate discarded persistent cooldown")
 	}
 	testdb.Exec(t, db, `UPDATE public_sources.source_pacing SET last_request_at = clock_timestamp() - interval '1 minute',
-		blocked_until = '1970-01-01', rate_limited_until = '1970-01-01' WHERE source = $1`, source)
+		blocked_until = '1970-01-01', rate_limited_until = clock_timestamp() - interval '1 minute' WHERE source = $1`, source)
 	if err := restarted.Wait(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if got := testdb.Scalar(t, db, "SELECT interval_ms FROM public_sources.source_pacing WHERE source = $1", source); got != "2000" {
+	if got := testdb.Scalar(t, db, "SELECT penalty_interval_ms FROM public_sources.source_pacing WHERE source = $1", source); got != "2000" {
 		t.Fatalf("restart reset the adaptive interval to %s ms", got)
+	}
+}
+
+func TestPostgresGateMinimumIsNotPersisted(t *testing.T) {
+	db := testdb.Isolated(t, testdb.Migration)
+	slow := policy
+	slow.Minimum = 30 * time.Second
+	gate := &pacing.PostgresGate{DB: db, Source: source, Policy: slow}
+	if err := gate.Wait(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := testdb.Scalar(t, db, "SELECT penalty_interval_ms FROM public_sources.source_pacing WHERE source = $1", source); got != "0" {
+		t.Fatalf("a run's -interval was persisted as %s ms", got)
 	}
 }
 

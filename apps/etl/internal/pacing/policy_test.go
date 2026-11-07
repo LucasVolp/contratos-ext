@@ -54,6 +54,35 @@ func TestPenalizeHonorsLongerRetryAfter(t *testing.T) {
 	}
 }
 
+func TestReserveDoesNotPersistMinimum(t *testing.T) {
+	t0 := time.Date(2026, 11, 7, 12, 0, 0, 0, time.UTC)
+	slow := Policy{Minimum: 30 * time.Second, Maximum: 30 * time.Second, BlockPause: time.Minute}
+	state, _ := State{}.Reserve(t0, slow)
+	if state.Interval != 0 {
+		t.Fatalf("a run's minimum leaked into the shared penalty: %v", state.Interval)
+	}
+	// A later run with the default minimum is not slowed by the earlier 30s run.
+	if _, delay := state.Reserve(t0.Add(2*time.Second), testPolicy); delay != 0 {
+		t.Fatalf("later default run waits %v", delay)
+	}
+}
+
+func TestPenaltyDecaysAfterQuietPeriod(t *testing.T) {
+	t0 := time.Date(2026, 11, 7, 12, 0, 0, 0, time.UTC)
+	penalized := State{}.Penalize(t0, 0, testPolicy)
+	if penalized.Interval != 2*time.Second {
+		t.Fatalf("penalty = %v", penalized.Interval)
+	}
+	soon, _ := penalized.Reserve(penalized.RateLimitedUntil.Add(time.Minute), testPolicy)
+	if soon.Interval != 2*time.Second {
+		t.Fatalf("penalty decayed too early: %v", soon.Interval)
+	}
+	later, _ := penalized.Reserve(penalized.RateLimitedUntil.Add(PenaltyDecay+time.Second), testPolicy)
+	if later.Interval != 0 {
+		t.Fatalf("penalty did not decay: %v", later.Interval)
+	}
+}
+
 func TestPolicyValidate(t *testing.T) {
 	if err := testPolicy.Validate(); err != nil {
 		t.Fatalf("valid policy rejected: %v", err)

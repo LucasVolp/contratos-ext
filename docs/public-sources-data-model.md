@@ -22,7 +22,7 @@ sections 4.1 and 4.8.
 
 | Object | Purpose |
 |---|---|
-| `source_pacing` | One row per source: last request time, `blocked_until`, `rate_limited_until`, current `interval_ms`. Shared by every replicator process using this database. Seeded with `CONTRATOS_GOV_BR` at 1000 ms. |
+| `source_pacing` | One row per source: last request time, `blocked_until`, `rate_limited_until` and `penalty_interval_ms` (interval earned by blocks; 0 = none). Each run applies its own minimum on top and never stores it. Shared by every replicator process using this database. Seeded with `CONTRATOS_GOV_BR`. |
 | `capture_runs` | One row per sync: `source`, `trigger` (`MANUAL`, `SCHEDULED`, `REQUESTED` reserved for screen-initiated syncs), `target_type` (`MANAGEMENT_UNIT`, `CONTRACT`), `target_code`, `status` (`RUNNING`, `SUCCEEDED`, `PARTIAL`, `FAILED`), counters, `error`, `etl_version`, start/finish times. `finished_at` is set exactly when the status is not `RUNNING`. |
 | `captures` | One row per distinct content received for a request key: `resource` (stable name such as `contract_commitments`), `request_key` (path plus sorted query), `content_hash` (SHA-256 of the canonical JSON), `payload` (jsonb), `first_captured_at`, `last_seen_at`, first and last run. Unique on `(source, request_key, content_hash)`. |
 | `capture_attempts` | One row per request: `outcome`, `http_status`, `error`, `attempted_at` and `capture_id` when there was content. |
@@ -59,9 +59,10 @@ cancelled (`error = 'cancelled'`).
 
 ## Pacing
 
-Contratos.gov.br: minimum 1 s between requests, interval doubled on each new
-block up to 30 s, 5m01s cooldown after HTTP 429 or a WAF header, longer
-`Retry-After` honored. The gate only coordinates processes using this database;
+Contratos.gov.br: minimum 1 s between requests (per run, `-interval`), penalty
+interval doubled on each new block up to 30 s, 5m01s cooldown after HTTP 429 or a
+WAF header, longer `Retry-After` honored up to 1 hour. The penalty is dropped one
+hour after the cooldown ends without a new block. The gate only coordinates processes using this database;
 other clients on the same public IP are not paced by it.
 
 ## Growth

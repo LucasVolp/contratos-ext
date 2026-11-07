@@ -9,6 +9,10 @@ import (
 	"time"
 )
 
+// PenaltyDecay is how long after a cooldown ends, without a new block, the
+// doubled interval is dropped and the policy minimum applies again.
+const PenaltyDecay = time.Hour
+
 // Policy holds the pacing limits of one source.
 type Policy struct {
 	Minimum    time.Duration // smallest interval between requests
@@ -30,7 +34,9 @@ func (p Policy) Validate() error {
 	return nil
 }
 
-// State is the shared pacing state of one source.
+// State is the shared pacing state of one source. Interval is only the penalty
+// interval earned by blocks (zero when none); a run's own minimum is applied on
+// top of it and never stored, so one slow run cannot slow later ones.
 type State struct {
 	LastRequest      sql.NullTime
 	BlockedUntil     time.Time
@@ -38,12 +44,15 @@ type State struct {
 	Interval         time.Duration
 }
 
-// Reserve claims a request slot at now, or returns how long to wait first.
+// Reserve claims a request slot at now, or returns how long to wait first. A
+// penalty older than PenaltyDecay past its cooldown is dropped.
 func (s State) Reserve(now time.Time, p Policy) (State, time.Duration) {
-	s.Interval = max(s.Interval, p.Minimum)
+	if s.Interval > 0 && now.After(s.RateLimitedUntil.Add(PenaltyDecay)) {
+		s.Interval = 0
+	}
 	earliest := s.BlockedUntil
 	if s.LastRequest.Valid {
-		earliest = later(earliest, s.LastRequest.Time.Add(s.Interval))
+		earliest = later(earliest, s.LastRequest.Time.Add(max(s.Interval, p.Minimum)))
 	}
 	if earliest.After(now) {
 		return s, earliest.Sub(now)

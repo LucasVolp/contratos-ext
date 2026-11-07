@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"slices"
 	"strconv"
@@ -15,6 +14,10 @@ import (
 
 	"contracts-ext/etl/internal/pacing"
 )
+
+// MaxRetryAfter caps a source's Retry-After so one bad header cannot freeze
+// the source for every process.
+const MaxRetryAfter = time.Hour
 
 // ErrBlocked marks a rate-limit (HTTP 429) or WAF response.
 var ErrBlocked = errors.New("source rate limit or WAF block")
@@ -155,16 +158,17 @@ func isBlock(response *http.Response) bool {
 	return response.StatusCode == http.StatusTooManyRequests || response.Header.Get("X-Amzn-Waf-Action") != ""
 }
 
-// retryAfter parses a Retry-After header in seconds or HTTP-date form.
+// retryAfter parses a Retry-After header in seconds or HTTP-date form, capped
+// at MaxRetryAfter.
 func retryAfter(value string, now time.Time) time.Duration {
 	if seconds, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64); err == nil && seconds > 0 {
-		if seconds > math.MaxInt64/int64(time.Second) {
-			return time.Duration(math.MaxInt64)
+		if seconds > int64(MaxRetryAfter/time.Second) {
+			return MaxRetryAfter
 		}
 		return time.Duration(seconds) * time.Second
 	}
 	if date, err := http.ParseTime(value); err == nil && date.After(now) {
-		return date.Sub(now)
+		return min(date.Sub(now), MaxRetryAfter)
 	}
 	return 0
 }

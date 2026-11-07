@@ -7,11 +7,11 @@ CREATE TABLE public_sources.source_pacing (
     last_request_at timestamptz,
     blocked_until timestamptz NOT NULL DEFAULT '1970-01-01T00:00:00Z',
     rate_limited_until timestamptz NOT NULL DEFAULT '1970-01-01T00:00:00Z',
-    interval_ms integer NOT NULL CHECK (interval_ms BETWEEN 100 AND 600000),
+    penalty_interval_ms integer NOT NULL DEFAULT 0 CHECK (penalty_interval_ms BETWEEN 0 AND 600000),
     updated_at timestamptz NOT NULL DEFAULT now()
 );
-INSERT INTO public_sources.source_pacing (source, interval_ms) VALUES ('CONTRATOS_GOV_BR', 1000);
-COMMENT ON TABLE public_sources.source_pacing IS 'Persistent per-source request spacing and cooldown shared by replicator processes using this database. Written by the replicator only.';
+INSERT INTO public_sources.source_pacing (source) VALUES ('CONTRATOS_GOV_BR');
+COMMENT ON TABLE public_sources.source_pacing IS 'Persistent per-source request spacing and cooldown shared by replicator processes using this database. penalty_interval_ms is the interval earned by blocks (0 = none); each run applies its own minimum on top and never stores it. Written by the replicator only.';
 
 CREATE TABLE public_sources.capture_runs (
     id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

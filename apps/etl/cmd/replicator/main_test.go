@@ -69,6 +69,18 @@ func TestExecuteRequiresMigration(t *testing.T) {
 	}
 }
 
+func TestExecuteReportsConnectionErrors(t *testing.T) {
+	if os.Getenv("ETL_TEST_DATABASE_URL") == "" {
+		t.Skip("ETL_TEST_DATABASE_URL is required for PostgreSQL integration tests")
+	}
+	useDatabase(t, "database_that_does_not_exist")
+	var stdout, stderr bytes.Buffer
+	code := execute(context.Background(), []string{"sync", "-source", "CONTRATOS_GOV_BR", "-unit", "158148"}, &stdout, &stderr)
+	if code != 1 || strings.Contains(stderr.String(), "db:migrate") || !strings.Contains(stderr.String(), "connect to PostgreSQL") {
+		t.Fatalf("code = %d, stderr = %q", code, stderr.String())
+	}
+}
+
 func TestExecuteRejectsUnknownCommand(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	if code := execute(context.Background(), []string{"normalize"}, &stdout, &stderr); code != 1 || !strings.Contains(stderr.String(), "usage") {
@@ -79,7 +91,6 @@ func TestExecuteRejectsUnknownCommand(t *testing.T) {
 func TestExecuteCancelledRunIsRecorded(t *testing.T) {
 	db := testdb.Isolated(t, testdb.Migration)
 	useDatabase(t, testdb.Scalar(t, db, "SELECT current_database()"))
-	testdb.Exec(t, db, "UPDATE public_sources.source_pacing SET interval_ms = 100")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

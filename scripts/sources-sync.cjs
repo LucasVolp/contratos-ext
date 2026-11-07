@@ -6,8 +6,9 @@ const root = resolve(__dirname, "..");
 const envFile = resolve(root, ".env");
 if (existsSync(envFile)) process.loadEnvFile(envFile);
 
-const args = process.argv.slice(2);
-if (args[0] === "--") args.shift();
+// `pnpm sources:sync -- -source …` inserts "--" after the subcommand; Go's flag
+// parser would treat everything after it as positional arguments.
+const args = process.argv.slice(2).filter((arg) => arg !== "--");
 const result = spawnSync("go", ["run", "./cmd/replicator", ...args], {
   cwd: resolve(root, "apps/etl"),
   stdio: "inherit",

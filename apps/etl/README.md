@@ -219,9 +219,11 @@ pnpm sources:sync -source CONTRATOS_GOV_BR -contract 13847
   plus the same sub-resources. Only public `/api/contrato/...` endpoints are used.
 - Requests start at least **1 second** apart (`-interval`, whole milliseconds,
   1s–30s). HTTP 429 or an `X-Amzn-Waf-Action` header starts a **5m01s** cooldown
-  and doubles the interval up to 30s; a longer `Retry-After` is honored. State is
-  persisted per source in `public_sources.source_pacing`, so concurrent processes
-  using this database share one pace.
+  and doubles a shared penalty interval up to 30s; a longer `Retry-After` is
+  honored, capped at 1 hour. The penalty is dropped one hour after the cooldown
+  ends without a new block. `-interval` applies to that run only and is never
+  stored. State is persisted per source in `public_sources.source_pacing`, so
+  concurrent processes using this database share one pace.
 - At most three retries after the first attempt (`-retries` 0–3) for network
   errors, HTTP 408/5xx and blocks. HTTP 404 is recorded as `NOT_FOUND`, not
   retried. A 200 response that is not JSON (for example a WAF challenge page),

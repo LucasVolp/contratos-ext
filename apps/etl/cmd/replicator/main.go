@@ -63,8 +63,16 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	db.SetMaxOpenConns(2)
 	ping, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+	if err = db.PingContext(ping); err != nil {
+		return fail(fmt.Errorf("connect to PostgreSQL: %w", err))
+	}
 	var installed bool
-	if err = db.QueryRowContext(ping, `SELECT EXISTS (SELECT 1 FROM public._sql_migrations WHERE name = $1)`, requiredMigration).Scan(&installed); err != nil || !installed {
+	err = db.QueryRowContext(ping, `SELECT to_regclass('public._sql_migrations') IS NOT NULL
+		AND EXISTS (SELECT 1 FROM public._sql_migrations WHERE name = $1)`, requiredMigration).Scan(&installed)
+	if err != nil {
+		return fail(fmt.Errorf("check installed migrations: %w", err))
+	}
+	if !installed {
 		return fail(fmt.Errorf("required migration %s is not installed; run pnpm db:migrate before syncing", requiredMigration))
 	}
 	base, err := url.Parse(sourceBaseURL)

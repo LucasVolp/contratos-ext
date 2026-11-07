@@ -40,6 +40,19 @@ func TestCanonicalizeRejectsNonJSON(t *testing.T) {
 	}
 }
 
+func TestCanonicalizeRejectsNULCharacters(t *testing.T) {
+	// PostgreSQL jsonb cannot store U+0000; such a response must fail on its own
+	// instead of aborting the whole run at the store.
+	for _, body := range []string{`{"a":"x\u0000y"}`, `{"a\u0000":1}`, `[["\u0000"]]`} {
+		if _, _, err := Canonicalize([]byte(body)); err == nil {
+			t.Fatalf("accepted %s", body)
+		}
+	}
+	if _, _, err := Canonicalize([]byte(`{"a":"literal \\u0000 text"}`)); err != nil {
+		t.Fatalf("rejected an escaped backslash sequence: %v", err)
+	}
+}
+
 func TestRequestKeySortsQuery(t *testing.T) {
 	r := Request{Path: "/api/x", Query: url.Values{"b": {"2"}, "a": {"1"}}}
 	if got := r.Key(); got != "/api/x?a=1&b=2" {

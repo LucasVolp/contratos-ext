@@ -172,4 +172,11 @@ func TestRetryAfterParsesSecondsAndDates(t *testing.T) {
 	if got := retryAfter("soon", now); got != 0 {
 		t.Fatalf("invalid = %v", got)
 	}
+	// An absurd header must not freeze the source for every process.
+	if got := retryAfter("1000000000", now); got != MaxRetryAfter {
+		t.Fatalf("huge seconds = %v, want %v", got, MaxRetryAfter)
+	}
+	if got := retryAfter(now.AddDate(30, 0, 0).Format(http.TimeFormat), now); got != MaxRetryAfter {
+		t.Fatalf("far date = %v, want %v", got, MaxRetryAfter)
+	}
 }
