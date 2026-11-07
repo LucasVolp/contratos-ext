@@ -36,6 +36,7 @@ function cell(row: DataRow, column: Column) {
     return (
       <a href={external} target="_blank" rel="noopener noreferrer">
         {value ? String(value) : (column.linkText ?? external)}
+        <span className="sr-only"> (abre em nova aba)</span>
       </a>
     );
   if (column.format) return column.format(value, row);

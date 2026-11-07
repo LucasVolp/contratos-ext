@@ -15,7 +15,7 @@ Atas: listagem documental com identidade de folha/página e total/itens, ação 
 ## Rotas e acessibilidade
 
 - `/` redireciona `/contratos`.
-- `/contratos`, `/contratos/novo`, `/contratos/importar`, `/contratos/[id]`, `/contratos/[id]/editar`.
+- `/contratos` e `/contratos/[externalId]` (somente leitura da réplica diária do Contratos.gov.br; só as observações internas são editáveis).
 - `/atas`, `/atas/nova`, `/atas/importar`, `/atas/[id]`, `/atas/[id]/editar`.
 - Busca com rótulo acessível exato `Buscar contratos` / `Buscar atas`.
 - Download DOCX com botão rótulo `Baixar DOCX`, PDF `Baixar PDF`.

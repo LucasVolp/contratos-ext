@@ -5,5 +5,5 @@ export default async function Page({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  return <DetailPage id={await recordId(params)} records />;
+  return <DetailPage id={await recordId(params)} />;
 }

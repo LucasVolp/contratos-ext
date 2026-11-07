@@ -150,12 +150,16 @@ export function Empty({
   title = "Nenhum registro encontrado.",
   description,
   actionLabel,
+  action,
 }: {
   kind: string;
-  href: string;
+  /** Where the next useful action leads; omitted when `action` is given or none applies. */
+  href?: string;
   title?: string;
   description?: string;
   actionLabel?: string;
+  /** A next action that is not a link (e.g. clearing filters). */
+  action?: React.ReactNode;
 }) {
   return (
     <div className="empty">
@@ -164,10 +168,13 @@ export function Empty({
         {description ||
           `Cadastre ${kind} ou ajuste os filtros para encontrar o que procura.`}
       </p>
-      <Link href={href} className="button">
-        {!actionLabel && <Plus size={16} />}{" "}
-        {actionLabel || `Adicionar ${kind}`}
-      </Link>
+      {action}
+      {href && (
+        <Link href={href} className="button">
+          {!actionLabel && <Plus size={16} />}{" "}
+          {actionLabel || `Adicionar ${kind}`}
+        </Link>
+      )}
     </div>
   );
 }

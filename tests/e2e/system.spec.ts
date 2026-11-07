@@ -1,11 +1,20 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 const suffix = Date.now().toString(36);
+// Contracts come only from the daily replica, so the contract list is mocked.
 const contract = {
-  number: `QA-${suffix}`, object: 'Aquisição de materiais para verificação de persistência',
+  externalId: '13847', number: `QA-${suffix}`, object: 'Aquisição de materiais para verificação de persistência',
   supplierName: 'Fornecedor de teste automatizado', supplierDocument: '11222333000181',
   uasg: '999999', unitName: 'Unidade de teste', startDate: '2026-01-01', endDate: '2026-12-31',
-  initialValue: '1250.10', globalValue: '1250.10',
+  globalValue: '1250.100000', status: 'ACTIVE',
 };
+const contractList = {
+  data: [contract], total: 1, page: 1, limit: 12,
+  stats: { count: 1, totalValue: '1250.1', expiringCount: 0, vigency: { active: 1, expiring: 0, ended: 0, upcoming: 0, unknown: 0, activeValue: '1250.1' } },
+  sync: { lastCompletedAt: '2026-11-07T06:42:00.000Z', running: false, staleUnits: [] },
+};
+const mockContracts = (page: Page) =>
+  page.route(url => url.pathname === '/api/contracts', route =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(contractList) }));
 const record = {
   number: `ATA-QA-${suffix}`, object: 'Materiais de expediente para teste documental', uasg: '999999',
   processNumber: '12345.001234/2026-01', purchaseNumber: '90001', purchaseYear: 2026,
@@ -20,24 +29,10 @@ const record = {
     { number: 2, description: 'Caneta esferográfica azul', brand: 'Teste', model: 'Azul', unit: 'unidade', quantity: '10', minimumQuantity: '1', unitPrice: '2.50', warranty: '12 meses' },
   ],
 };
-let contractId: string;
 let recordId: string;
 test.describe.serial('Sistema independente', () => {
   test.afterAll(async ({ request }) => {
-    if (contractId) await request.delete(`/api/contracts/${contractId}`);
     if (recordId) await request.delete(`/api/records/${recordId}`);
-  });
-  test('API persiste contrato e rejeita vigência invertida', async ({ request }) => {
-    const invalid = await request.post('/api/contracts', { data: { ...contract, startDate: '2027-01-01' } });
-    expect(invalid.status()).toBe(400);
-    const created = await request.post('/api/contracts', { data: contract });
-    expect(created.status(), await created.text()).toBe(201);
-    const body = await created.json(); contractId = body.id;
-    expect(body.globalValue).toBe('1250.1');
-    const duplicate = await request.post('/api/contracts', { data: contract });
-    expect(duplicate.status()).toBe(409);
-    const list = await request.get(`/api/contracts?search=${contract.number}`);
-    const result = await list.json(); expect(result.total).toBe(1); expect(result.data[0].id).toBe(contractId);
   });
   test('API calcula totais decimais e identifica pendências da ata', async ({ request }) => {
     const draft = await request.post('/api/records', { data: { number: `RASC-${suffix}`, object: 'Rascunho', uasg: '999999', items: [] } });
@@ -62,7 +57,8 @@ test.describe.serial('Sistema independente', () => {
     const history = await request.get(`/api/records/${recordId}/exports`);
     const exports = await history.json(); expect(exports.length).toBe(2); expect(exports.map((e: {format: string}) => e.format).sort()).toEqual(['docx', 'pdf']);
   });
-  test('contratos disponíveis na interface com busca real', async ({ page }) => {
+  test('contratos da réplica disponíveis na interface com busca', async ({ page }) => {
+    await mockContracts(page);
     await page.goto('/contratos');
     // The sidebar shows the purchase phases in order; contracts are the third one.
     await expect(page.getByRole('link', { name: /Fase 3: Contrato/ })).toHaveAttribute('aria-current', 'page');
@@ -74,8 +70,7 @@ test.describe.serial('Sistema independente', () => {
     await expect(summary.getByRole('img')).toHaveAttribute('aria-label', '1 em vigor, 0 vencem em 30 dias, 0 encerrados, 0 a iniciar ou sem data');
     await expect(summary.getByRole('link', { name: /Novo ciclo/ })).toHaveAttribute('href', '/pregoes');
     await expect(page.getByText(contract.number, { exact: true })).toBeVisible();
-    await page.getByRole('link', { name: new RegExp(contract.number) }).first().click();
-    await expect(page.getByText(contract.object, { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: contract.number, exact: true })).toHaveAttribute('href', `/contratos/${contract.externalId}`);
   });
   test('documentos mostram prontidão e exportação no resumo', async ({ page }) => {
     await page.goto('/atas');
@@ -94,17 +89,17 @@ test.describe.serial('Sistema independente', () => {
   });
   test('navegação móvel mantém módulos e não extrapola viewport', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
+    await mockContracts(page);
     await page.goto('/contratos'); await expect(page.getByRole('button', { name: 'Trocar de usuário' })).toBeVisible();
     await expect(page.getByRole('table')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     await page.goto(`/atas/${recordId}`); await expect(page.getByRole('button', { name: /baixar docx/i })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   });
-  test('edição e exclusão persistem e rotas inexistentes respondem 404', async ({ request }) => {
-    const update = await request.put(`/api/contracts/${contractId}`, { data: { ...contract, globalValue: '1300.50' } }); expect(update.ok()).toBe(true);
-    const reload = await request.get(`/api/contracts/${contractId}`); expect((await reload.json()).globalValue).toBe('1300.5');
-    expect((await request.delete(`/api/contracts/${contractId}`)).ok()).toBe(true);
+  test('exclusão da ata persiste e a API não cria nem altera contratos', async ({ request }) => {
     expect((await request.delete(`/api/records/${recordId}`)).ok()).toBe(true);
-    expect((await request.get(`/api/contracts/${contractId}`)).status()).toBe(404);
+    expect((await request.get(`/api/records/${recordId}`)).status()).toBe(404);
+    expect((await request.post('/api/contracts', { data: contract })).status()).toBe(404);
+    expect((await request.post('/api/contracts/import', { data: { uasg: '999999' } })).status()).toBe(404);
   });
 });

@@ -15,11 +15,11 @@ import {
 
 /** One part of the Contratos.gov.br replica (terms, items, invoices…). */
 export function SourcePartSection({
-  contractId,
+  externalId,
   part,
   state,
 }: {
-  contractId: string;
+  externalId: string;
   part: SourcePart;
   state: SourcePartState;
 }) {
@@ -33,13 +33,13 @@ export function SourcePartSection({
   useEffect(() => {
     if (!load) return;
     const controller = new AbortController();
-    getContractSourcePart(contractId, part, page, controller.signal)
+    getContractSourcePart(externalId, part, page, controller.signal)
       .then(setResult)
       .catch((e: Error) => {
         if (!controller.signal.aborted) setError(e.message);
       });
     return () => controller.abort();
-  }, [contractId, part, page, attempt, load]);
+  }, [externalId, part, page, attempt, load]);
 
   const empty = state.status === "AVAILABLE" && state.rowCount === 0;
   return (

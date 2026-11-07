@@ -894,7 +894,8 @@ td:first-child {
 }
 .value-summary {
   display: flex;
-  gap: 70px;
+  flex-wrap: wrap;
+  gap: 18px 70px;
   padding: 27px 0;
   border-top: 1px solid var(--line);
 }
@@ -4277,4 +4278,66 @@ main.session-loading {
 /* Workspace skip-link targets receive keyboard focus without a page-sized ring. */
 #conteudo:focus {
   outline: none;
+}
+/* SyncNotice: origin and freshness of the contract replica */
+.sync-notice {
+  min-height: 20px;
+  margin: -8px 0 18px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.sync-notice p,
+.sync-notice li {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  overflow-wrap: anywhere;
+}
+.sync-notice svg {
+  flex: none;
+  margin-top: 2px;
+}
+.sync-notice ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.sync-notice li {
+  color: var(--ink);
+  border-left: 2px solid var(--accent);
+  padding-left: 8px;
+}
+.sync-notice li svg {
+  color: var(--accent);
+}
+/* ContractNotes: internal notes, the only editable part of a contract */
+.contract-notes h2 {
+  font-size: 25px;
+}
+.contract-notes textarea {
+  width: 100%;
+  margin-top: 16px;
+  min-height: 120px;
+}
+.contract-notes .field-error {
+  display: block;
+  margin-top: 6px;
+}
+.contract-notes-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+}
+.contract-notes-actions p {
+  font-size: 12px;
+  margin: 0;
+}
+.contract-notes form > p {
+  margin-top: 8px;
+  font-size: 12px;
 }

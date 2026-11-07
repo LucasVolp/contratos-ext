@@ -42,9 +42,7 @@ export function Field({
   const key = name.replace(/^item-(\d+)-(.+)$/, "items.$1.$2");
   const message = context.errors[key] || error || localError;
   const documentField = name.endsWith("Document");
-  const monetary =
-    ["initialValue", "globalValue"].includes(name) ||
-    name.endsWith("-unitPrice");
+  const monetary = name.endsWith("-unitPrice");
   const help =
     hint ||
     (documentField

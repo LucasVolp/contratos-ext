@@ -2,6 +2,7 @@ import { api } from "@/lib/api";
 import type { Page } from "@/lib/finance-types";
 import type { Column, DataRow } from "@/components/ui/data-table";
 import { formatSourceQuantity } from "@/lib/decimal-display";
+import { dateTime } from "@/lib/contracts-api";
 
 export type SourcePart = "history" | "items" | "invoices" | "guarantees" | "responsibles" | "files";
 export type PartStatus = "AVAILABLE" | "NOT_FOUND" | "FAILED" | "MISSING";
@@ -12,32 +13,11 @@ export type SourcePartState = {
   lastAttemptAt: string | null;
   rowCount: number;
 };
-export type SourceContract = {
-  externalId: string;
-  number: string;
-  status: string | null;
-  processNumber: string | null;
-  modality: string | null;
-  startDate: string | null;
-  endDate: string | null;
-  globalValue: string | null;
-  capturedAt: string;
-};
-export type SourceSummary = {
-  resolution: "RESOLVED" | "NOT_FOUND" | "AMBIGUOUS";
-  candidateCount: number;
-  source: SourceContract | null;
-  parts: SourcePartState[];
-};
-
 /** Display order of the parts exposed on the contract screen. */
 export const sourceParts: SourcePart[] = ["history", "items", "invoices", "guarantees", "responsibles", "files"];
 
-export const getContractSource = (id: string, signal?: AbortSignal) =>
-  api<SourceSummary>(`/contracts/${id}/source`, { signal });
-
-export const getContractSourcePart = (id: string, part: SourcePart, page: number, signal?: AbortSignal) =>
-  api<Page<DataRow>>(`/contracts/${id}/source/${part}?page=${page}`, { signal });
+export const getContractSourcePart = (externalId: string, part: SourcePart, page: number, signal?: AbortSignal) =>
+  api<Page<DataRow>>(`/contracts/${externalId}/source/${part}?page=${page}`, { signal });
 
 export const partTitles: Record<SourcePart, string> = {
   history: "Termos e aditivos",
@@ -102,7 +82,7 @@ export const partColumns: Record<SourcePart, Column[]> = {
 };
 
 const stamp = (value: string | null) =>
-  value ? new Date(value).toLocaleString("pt-BR") : "data não informada";
+  value ? dateTime(value) : "data não informada";
 
 /** Plain-language freshness of one part, as the source last answered it. */
 export function freshness(state: SourcePartState): string {

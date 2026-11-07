@@ -1,21 +1,5 @@
 import { formatMoney, compactMoney } from "./decimal-display";
 import { parseDecimal } from "@contracts/validation";
-export type Contract = {
-  id: string;
-  number: string;
-  object: string;
-  supplierName: string;
-  supplierDocument: string;
-  uasg: string;
-  unitName: string;
-  startDate: string | null;
-  endDate: string | null;
-  initialValue: string;
-  globalValue: string;
-  status: string;
-  source: string;
-  lastSyncedAt?: string;
-};
 export type Item = {
   id?: string;
   number: number;
@@ -155,11 +139,8 @@ export const labels: Record<string, string> = {
   supplierName: "Razão social do fornecedor",
   supplierDocument: "CNPJ / CPF do fornecedor",
   supplierRepresentative: "Representante do fornecedor",
-  unitName: "Unidade",
   startDate: "Início da vigência",
   endDate: "Fim da vigência",
-  initialValue: "Valor inicial",
-  globalValue: "Valor global",
   description: "Descrição",
   unit: "Unidade de fornecimento",
   quantity: "Quantidade",
