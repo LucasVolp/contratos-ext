@@ -327,7 +327,7 @@ Branch `feat/contract-normalization` is stacked on `feat/replicator-foundation` 
 - [ ] **Step 4: Update the docs:**
   - **Data model doc:** the new tables, part statuses, header precedence and `contract_number_key`.
   - **ETL README:** the `normalize` command and `-normalize`.
-  - **Spec 4.2:** replace "origin UG (`unidade_gestora_origem`)" with "managing UG (`contratante.orgao.unidade_gestora` / `unidade_codigo`), which is what the current import stores as `Contract.uasg`". Add the evidence (contract 1057026: managing 158148, origin 158533).
+  - **Spec 4.2:** replace "origin UG (`unidade_gestora_origem`)" with "managing UG (`contratante.orgao.unidade_gestora` / `unidade_codigo`), which is what the current import stores as `Contract.uasg`". Add the evidence (contract 1057026: managing 158148, origin 158533). Also record that resolution is computed at read time (managing UG plus `contract_number_key`, step 2b), so no Contratos.gov.br id is stored on `Contract`. `Contract.externalId` already holds the PNCP control number.
 
 - [ ] **Step 5: Full verification:**
   - Run `cd apps/etl && go vet ./... && ETL_TEST_DATABASE_URL=… go test -race ./... -count=1`. Expected: PASS.
