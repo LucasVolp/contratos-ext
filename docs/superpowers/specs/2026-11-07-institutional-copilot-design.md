@@ -160,6 +160,15 @@ number. Phase 1 resolves each contract to its Contratos.gov.br id:
    same identity, following the existing rule that manual entries are
    preserved and conflicts are explicit.
 
+**Coexistence with the current import (decided with the user, 2026-11-07).**
+The API's direct contract import (Compras.gov.br Dados Abertos,
+`/modulo-contratos/1_consultarContratos` in `apps/api/src/compras.ts`) keeps
+working in parallel for now. Both paths write to the same `Contract` identity
+(origin UG + number); the replicator path links rows to their Contratos.gov.br
+id and adds the enrichment. Retiring the direct import, and moving the Dados
+Abertos fields only it provides (PNCP control number, purchase id) into an ETL
+connector, is a later decision.
+
 Identity rules (designer's call):
 
 - The Contratos.gov.br contract id is the external key once resolved. Lookup
