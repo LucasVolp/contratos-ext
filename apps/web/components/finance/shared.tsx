@@ -1,4 +1,14 @@
 "use client";
+import {
+  Table,
+  TableCaption,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from "@/components/ui/table";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatSourceDecimal } from "@/lib/decimal-display";
@@ -118,22 +128,22 @@ export function FinanceTable({
       aria-label={caption}
       tabIndex={0}
     >
-      <table className="finance-table">
-        <caption className="sr-only">{caption}</caption>
-        <thead>
-          <tr>
+      <Table className="finance-table">
+        <TableCaption className="sr-only">{caption}</TableCaption>
+        <TableHeader>
+          <TableRow>
             {columns.map((c) => (
-              <th key={c.key} scope="col">
+              <TableHead key={c.key} scope="col">
                 {c.label}
-              </th>
+              </TableHead>
             ))}
-          </tr>
-        </thead>
-        <tbody>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {rows.map((row, i) => (
-            <tr key={String(row.allocationId || row.id || i)}>
+            <TableRow key={String(row.allocationId || row.id || i)}>
               {columns.map((c) => (
-                <td
+                <TableCell
                   key={c.key}
                   className={c.money ? "finance-money" : undefined}
                 >
@@ -152,12 +162,12 @@ export function FinanceTable({
                   ) : (
                     display(row[c.key])
                   )}
-                </td>
+                </TableCell>
               ))}
-            </tr>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }

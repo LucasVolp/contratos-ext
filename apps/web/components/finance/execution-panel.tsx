@@ -1,4 +1,6 @@
 "use client";
+import { Button } from "@/components/ui/button";
+
 import Link from "next/link";
 import { useState } from "react";
 import { ArrowRight, Table2, X } from "lucide-react";
@@ -217,7 +219,7 @@ export function ExecutionPanel() {
                   />
                 </section>
                 <div className="panel-detail-action">
-                  <button
+                  <Button
                     className="button secondary"
                     type="button"
                     aria-expanded={details}
@@ -226,7 +228,7 @@ export function ExecutionPanel() {
                   >
                     <Table2 size={15} aria-hidden="true" />
                     {details ? "Ocultar detalhamento" : "Ver detalhamento"}
-                  </button>
+                  </Button>
                   <span>
                     Totais e gráficos consideram todo o recorte selecionado.
                   </span>

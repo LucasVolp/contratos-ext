@@ -1,7 +1,19 @@
 "use client";
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from "@/components/ui/table";
+
+import { Button } from "@/components/ui/button";
+import { SearchField } from "@/components/ui/search-field";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Search, ArrowUpRight, RefreshCw } from "lucide-react";
+import { ArrowUpRight, RefreshCw } from "lucide-react";
 import { validateFilters, FieldErrors } from "@contracts/validation";
 import { api, ApiError, currency, date, validationSummary } from "@/lib/api";
 import {
@@ -96,7 +108,7 @@ export function CatalogList({ records = false }: { records?: boolean }) {
           </>
         }
       >
-        <button
+        <Button
           type="button"
           className="button"
           aria-expanded={refreshing}
@@ -104,7 +116,7 @@ export function CatalogList({ records = false }: { records?: boolean }) {
         >
           <RefreshCw size={16} />
           Atualizar do Compras.gov
-        </button>
+        </Button>
       </PageBar>
       {refreshing && (
         <CatalogRefresh
@@ -123,18 +135,16 @@ export function CatalogList({ records = false }: { records?: boolean }) {
       )}
       <section className="registry">
         <div className="filters">
-          <div className="search-field">
-            <Search size={18} />
-            <input
-              aria-label={records ? "Buscar atas publicadas" : "Buscar pregões"}
-              placeholder="Buscar número, objeto ou organização…"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-            />
-          </div>
+          <SearchField
+            id="catalog-search"
+            label={records ? "Buscar atas publicadas" : "Buscar pregões"}
+            placeholder="Buscar número, objeto ou organização…"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+          />
         </div>
         <FormValidation.Provider
           value={{
@@ -177,9 +187,9 @@ export function CatalogList({ records = false }: { records?: boolean }) {
               value={filters.to}
               onChange={(k, v) => setFilters((old) => ({ ...old, [k]: v }))}
             />
-            <button className="button secondary" type="submit">
+            <Button className="button secondary" type="submit">
               Aplicar filtros
-            </button>
+            </Button>
           </form>
           {Object.keys(errors).length > 0 && (
             <div className="catalog-inline-error" role="alert">
@@ -200,7 +210,7 @@ export function CatalogList({ records = false }: { records?: boolean }) {
                 pelo período desejado ou ajuste os filtros.
               </p>
               {!refreshing && (
-                <button
+                <Button
                   type="button"
                   className="button"
                   onClick={() => {
@@ -210,30 +220,34 @@ export function CatalogList({ records = false }: { records?: boolean }) {
                 >
                   <RefreshCw size={16} />
                   Atualizar do Compras.gov
-                </button>
+                </Button>
               )}
             </div>
           ) : (
             <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>{records ? "Ata / objeto" : "Pregão / objeto"}</th>
-                    <th>Organização</th>
-                    <th>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>
+                      {records ? "Ata / objeto" : "Pregão / objeto"}
+                    </TableHead>
+                    <TableHead>Organização</TableHead>
+                    <TableHead>
                       {records ? "Vigência / compra" : "Publicação / SRP"}
-                    </th>
-                    <th>Valor {records ? "total" : "estimado"}</th>
-                    <th>Última consulta</th>
-                    <th>
+                    </TableHead>
+                    <TableHead>
+                      Valor {records ? "total" : "estimado"}
+                    </TableHead>
+                    <TableHead>Última consulta</TableHead>
+                    <TableHead>
                       <span className="sr-only">Abrir</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {data.data.map((entry) => (
-                    <tr key={entry.id}>
-                      <td>
+                    <TableRow key={entry.id}>
+                      <TableCell>
                         <Link
                           className="record-number"
                           href={`${root}/${entry.id}`}
@@ -244,14 +258,14 @@ export function CatalogList({ records = false }: { records?: boolean }) {
                           {known(entry.object)}
                         </div>
                         <span className="tiny-label">UASG {entry.uasg}</span>
-                      </td>
-                      <td>
+                      </TableCell>
+                      <TableCell>
                         {known(entry.organizationName)}
                         <small className="date-end">
                           {known(entry.unitName)}
                         </small>
-                      </td>
-                      <td>
+                      </TableCell>
+                      <TableCell>
                         {records ? (
                           <>
                             {date((entry as PublicRecordSummary).startDate)}
@@ -279,18 +293,18 @@ export function CatalogList({ records = false }: { records?: boolean }) {
                             </small>
                           </>
                         )}
-                      </td>
-                      <td className="amount">
+                      </TableCell>
+                      <TableCell className="amount">
                         {currency(
                           records
                             ? (entry as PublicRecordSummary).totalValue
                             : (entry as PurchaseSummary).estimatedValue,
                         )}
-                      </td>
-                      <td className="catalog-timestamp">
+                      </TableCell>
+                      <TableCell className="catalog-timestamp">
                         {stamp(entry.lastSyncedAt)}
-                      </td>
-                      <td>
+                      </TableCell>
+                      <TableCell>
                         <Link
                           className="row-arrow"
                           href={`${root}/${entry.id}`}
@@ -298,11 +312,11 @@ export function CatalogList({ records = false }: { records?: boolean }) {
                         >
                           <ArrowUpRight size={18} />
                         </Link>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
         </div>
@@ -317,7 +331,8 @@ export function CatalogList({ records = false }: { records?: boolean }) {
       </section>
       <p className="catalog-footnote">
         As buscas acima consultam apenas os registros já salvos. A fonte pública
-        é consultada ao abrir os detalhes e pelas ações de consulta e atualização.
+        é consultada ao abrir os detalhes e pelas ações de consulta e
+        atualização.
       </p>
     </>
   );

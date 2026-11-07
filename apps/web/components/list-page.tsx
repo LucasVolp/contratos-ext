@@ -1,4 +1,16 @@
 "use client";
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from "@/components/ui/table";
+
+import { Label } from "@/components/ui/label";
+import { SearchField } from "@/components/ui/search-field";
+
 import { CatalogTabs } from "./catalog/catalog-tabs";
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -6,7 +18,6 @@ import {
   ArrowDownToLine,
   ArrowUpRight,
   Plus,
-  Search,
   SlidersHorizontal,
 } from "lucide-react";
 import {
@@ -113,33 +124,35 @@ export function ListPage({ records = false }: { records?: boolean }) {
       )}
       <section className="registry">
         <div className="filters">
-          <div className="search-field">
-            <Search size={18} />
-            <input
-              aria-label={records ? "Buscar atas" : "Buscar contratos"}
-              placeholder={
-                records
-                  ? "Buscar número, objeto ou fornecedor…"
-                  : "Buscar número, objeto ou fornecedor…"
-              }
-              value={search}
-              onChange={(e) => filter(setSearch, e.target.value)}
-            />
-          </div>
+          <SearchField
+            id="records-search"
+            label={records ? "Buscar atas" : "Buscar contratos"}
+            placeholder={
+              records
+                ? "Buscar número, objeto ou fornecedor…"
+                : "Buscar número, objeto ou fornecedor…"
+            }
+            value={search}
+            onChange={(e) => filter(setSearch, e.target.value)}
+          />
           {!records && (
             <>
-              <select
-                aria-label="Filtrar por situação"
-                value={status}
-                onChange={(e) => filter(setStatus, e.target.value)}
-              >
-                <option value="">Todas as situações</option>
-                {Object.entries(statusLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+              <div className="filter-field">
+                <Label htmlFor="contract-status">Situação</Label>
+                <select
+                  id="contract-status"
+                  aria-label="Filtrar por situação"
+                  value={status}
+                  onChange={(e) => filter(setStatus, e.target.value)}
+                >
+                  <option value="">Todas as situações</option>
+                  {Object.entries(statusLabels).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <button
                 className="filter-toggle"
                 aria-expanded={advanced}
@@ -203,23 +216,25 @@ export function ListPage({ records = false }: { records?: boolean }) {
             />
           ) : (
             <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>{records ? "Ata / objeto" : "Contrato / objeto"}</th>
-                    <th>Fornecedor</th>
-                    <th>{records ? "Itens" : "Vigência"}</th>
-                    <th>Valor {records ? "total" : "global"}</th>
-                    {!records && <th>Situação</th>}
-                    <th>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>
+                      {records ? "Ata / objeto" : "Contrato / objeto"}
+                    </TableHead>
+                    <TableHead>Fornecedor</TableHead>
+                    <TableHead>{records ? "Itens" : "Vigência"}</TableHead>
+                    <TableHead>Valor {records ? "total" : "global"}</TableHead>
+                    {!records && <TableHead>Situação</TableHead>}
+                    <TableHead>
                       <span className="sr-only">Abrir</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {data.data.map((entry) => (
-                    <tr key={entry.id}>
-                      <td>
+                    <TableRow key={entry.id}>
+                      <TableCell>
                         <Link
                           className="record-number"
                           href={`${root}/${entry.id}`}
@@ -228,8 +243,8 @@ export function ListPage({ records = false }: { records?: boolean }) {
                         </Link>
                         <div className="object-summary">{entry.object}</div>
                         <span className="tiny-label">UASG {entry.uasg}</span>
-                      </td>
-                      <td>
+                      </TableCell>
+                      <TableCell>
                         <div className="supplier">
                           <span className="initials">
                             {String(entry.supplierName || "—")
@@ -245,8 +260,8 @@ export function ListPage({ records = false }: { records?: boolean }) {
                             </small>
                           </div>
                         </div>
-                      </td>
-                      <td>
+                      </TableCell>
+                      <TableCell>
                         {records ? (
                           `${(entry as RecordData).items?.length ?? 0} itens`
                         ) : (
@@ -257,20 +272,20 @@ export function ListPage({ records = false }: { records?: boolean }) {
                             </small>
                           </>
                         )}
-                      </td>
-                      <td className="amount">
+                      </TableCell>
+                      <TableCell className="amount">
                         {currency(
                           records
                             ? (entry as RecordData).totalValue
                             : (entry as Contract).globalValue,
                         )}
-                      </td>
+                      </TableCell>
                       {!records && (
-                        <td>
+                        <TableCell>
                           <Status status={String(entry.status)} />
-                        </td>
+                        </TableCell>
                       )}
-                      <td>
+                      <TableCell>
                         <Link
                           className="row-arrow"
                           aria-label={`Abrir ${entry.number}`}
@@ -278,11 +293,11 @@ export function ListPage({ records = false }: { records?: boolean }) {
                         >
                           <ArrowUpRight size={18} />
                         </Link>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
         </div>

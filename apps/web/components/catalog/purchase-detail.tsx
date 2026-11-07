@@ -1,4 +1,6 @@
 "use client";
+import { Button } from "@/components/ui/button";
+
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
@@ -32,7 +34,9 @@ function PurchaseDetailPageContent({ id }: { id: string }) {
     async function load() {
       let cached = false;
       try {
-        const value = await api<PurchaseDetail>(`/purchases/${id}`, { signal: c.signal });
+        const value = await api<PurchaseDetail>(`/purchases/${id}`, {
+          signal: c.signal,
+        });
         if (c.signal.aborted) return;
         cached = true;
         setData(value);
@@ -42,10 +46,14 @@ function PurchaseDetailPageContent({ id }: { id: string }) {
       }
       if (c.signal.aborted) return;
       try {
-        const result = await api<{ data: PurchaseDetail; errors: { details?: string; records?: string } }>(
-          `/purchases/${id}/ensure-details`,
-          { method: "POST", body: "{}", signal: c.signal },
-        );
+        const result = await api<{
+          data: PurchaseDetail;
+          errors: { details?: string; records?: string };
+        }>(`/purchases/${id}/ensure-details`, {
+          method: "POST",
+          body: "{}",
+          signal: c.signal,
+        });
         if (c.signal.aborted) return;
         cached = true;
         setData(result.data);
@@ -71,7 +79,11 @@ function PurchaseDetailPageContent({ id }: { id: string }) {
     setBusy("details");
     setActionError("");
     try {
-      const value = await api<PurchaseDetail>(`/purchases/${id}/refresh`, { method: "POST", body: "{}", signal });
+      const value = await api<PurchaseDetail>(`/purchases/${id}/refresh`, {
+        method: "POST",
+        body: "{}",
+        signal,
+      });
       if (!signal.aborted) setData(value);
     } catch (e) {
       if (!signal.aborted) setActionError((e as Error).message);
@@ -88,7 +100,11 @@ function PurchaseDetailPageContent({ id }: { id: string }) {
       const value = await api<{
         records: PublicRecordSummary[];
         recordsLookup?: RecordsLookup;
-      }>(`/purchases/${id}/records/refresh`, { method: "POST", body: "{}", signal });
+      }>(`/purchases/${id}/records/refresh`, {
+        method: "POST",
+        body: "{}",
+        signal,
+      });
       if (signal.aborted) return;
       setData((old) =>
         old
@@ -121,17 +137,22 @@ function PurchaseDetailPageContent({ id }: { id: string }) {
         description="Fonte: Compras.gov.br · dados salvos no arquivo local"
         back="/pregoes"
       >
-        <button
+        <Button
+          type="submit"
           className="button secondary"
           onClick={refresh}
           disabled={!!busy || updating}
         >
           <RefreshCw size={16} />
           {busy === "details" ? "Atualizando…" : "Atualizar detalhes"}
-        </button>
+        </Button>
       </PageHead>
       <div aria-live="polite">
-        {updating && <p className="catalog-notice" role="status">Atualizando dados públicos automaticamente…</p>}
+        {updating && (
+          <p className="catalog-notice" role="status">
+            Atualizando dados públicos automaticamente…
+          </p>
+        )}
         {actionError && <ErrorState message={actionError} retry={refresh} />}
       </div>
       <div className="catalog-detail">
@@ -221,7 +242,8 @@ function PurchaseDetailPageContent({ id }: { id: string }) {
               </p>
             </div>
             {data.srp === true && (
-              <button
+              <Button
+                type="submit"
                 className="button secondary"
                 onClick={linked}
                 disabled={!!busy || updating}
@@ -230,7 +252,7 @@ function PurchaseDetailPageContent({ id }: { id: string }) {
                 {busy === "records"
                   ? "Consultando…"
                   : "Consultar atas vinculadas"}
-              </button>
+              </Button>
             )}
           </div>
           {data.srp !== true && (

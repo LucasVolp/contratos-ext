@@ -11,3 +11,4 @@ tests/.auth/
 apps/api/src/generated/
 .DS_Store
 data/finance/
+docs/prototypes/

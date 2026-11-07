@@ -1,4 +1,7 @@
 "use client";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
@@ -25,7 +28,9 @@ function PrepareDocumentContent({ id }: { id: string }) {
     async function load() {
       let cached = false;
       try {
-        const value = await api<PublicRecordDetail>(`/public-records/${id}`, { signal: c.signal });
+        const value = await api<PublicRecordDetail>(`/public-records/${id}`, {
+          signal: c.signal,
+        });
         if (c.signal.aborted) return;
         cached = true;
         setData(value);
@@ -35,10 +40,14 @@ function PrepareDocumentContent({ id }: { id: string }) {
       }
       if (c.signal.aborted) return;
       try {
-        const result = await api<{ data: PublicRecordDetail; errors: { details?: string; records?: string } }>(
-          `/public-records/${id}/ensure-details`,
-          { method: "POST", body: "{}", signal: c.signal },
-        );
+        const result = await api<{
+          data: PublicRecordDetail;
+          errors: { details?: string; records?: string };
+        }>(`/public-records/${id}/ensure-details`, {
+          method: "POST",
+          body: "{}",
+          signal: c.signal,
+        });
         if (c.signal.aborted) return;
         cached = true;
         setData(result.data);
@@ -109,7 +118,7 @@ function PrepareDocumentContent({ id }: { id: string }) {
             e complemente as informações no editor antes de exportar.
           </p>
           <div className="field">
-            <label htmlFor="supplierDocument">Fornecedor</label>
+            <Label htmlFor="supplierDocument">Fornecedor</Label>
             <select
               id="supplierDocument"
               name="supplierDocument"
@@ -152,18 +161,34 @@ function PrepareDocumentContent({ id }: { id: string }) {
           </div>
           {!data.detailsSyncedAt && (
             <p className="catalog-notice">
-              Os fornecedores serão carregados automaticamente antes de preparar o documento.
+              Os fornecedores serão carregados automaticamente antes de preparar
+              o documento.
             </p>
           )}
-          {data.detailsSyncedAt && !data.suppliers.length && !updating && !metadataError && (
-            <p className="catalog-notice">
-              A última consulta não informou fornecedores. Atualize os detalhes
-              na ficha da ata para tentar novamente.
-            </p>
-          )}
+          {data.detailsSyncedAt &&
+            !data.suppliers.length &&
+            !updating &&
+            !metadataError && (
+              <p className="catalog-notice">
+                A última consulta não informou fornecedores. Atualize os
+                detalhes na ficha da ata para tentar novamente.
+              </p>
+            )}
           <div aria-live="polite">
-            {updating && <p className="catalog-notice" role="status">Atualizando fornecedores automaticamente…</p>}
-            {metadataError && <ErrorState message={metadataError} retry={() => { setUpdating(true); setReload((n) => n + 1); }} />}
+            {updating && (
+              <p className="catalog-notice" role="status">
+                Atualizando fornecedores automaticamente…
+              </p>
+            )}
+            {metadataError && (
+              <ErrorState
+                message={metadataError}
+                retry={() => {
+                  setUpdating(true);
+                  setReload((n) => n + 1);
+                }}
+              />
+            )}
             {actionError && (
               <ErrorState
                 message={actionError}
@@ -173,13 +198,18 @@ function PrepareDocumentContent({ id }: { id: string }) {
               />
             )}
           </div>
-          <button
+          <Button
             type="submit"
             className="button"
-            disabled={busy || updating || !data.detailsSyncedAt || !data.suppliers.length}
+            disabled={
+              busy ||
+              updating ||
+              !data.detailsSyncedAt ||
+              !data.suppliers.length
+            }
           >
             {busy ? "Preparando…" : "Preparar documento"}
-          </button>
+          </Button>
         </form>
         <aside className="import-note">
           <h2>

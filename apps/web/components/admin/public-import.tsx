@@ -1,4 +1,8 @@
 "use client";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+
 import { useState } from "react";
 import { Download, Search } from "lucide-react";
 import { api, ApiError, validationSummary } from "@/lib/api";
@@ -17,14 +21,19 @@ type Unit = {
 };
 type Organ = { document: string | null; name: string | null; units: Unit[] };
 /** Finds a public body in Compras.gov (by UASG, CNPJ or name + UF) and registers its UASGs. */
-export function PublicImport({ onImported }: { onImported: (message: string) => void }) {
+export function PublicImport({
+  onImported,
+}: {
+  onImported: (message: string) => void;
+}) {
   const [query, setQuery] = useState({ q: "", uf: "" }),
     [errors, setErrors] = useState<Record<string, string>>({}),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [result, setResult] = useState<{ organs: Organ[]; truncated: boolean } | null>(
-      null,
-    );
+    [result, setResult] = useState<{
+      organs: Organ[];
+      truncated: boolean;
+    } | null>(null);
   async function search(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -57,18 +66,20 @@ export function PublicImport({ onImported }: { onImported: (message: string) => 
             <h2>Adicionar instituições de outro órgão</h2>
             <p>
               Informe uma UASG (ex.: 158349, reitoria do IFSP), o CNPJ do órgão
-              ou parte do nome com a UF. Todas as UASGs ativas do órgão
-              aparecem para cadastro.
+              ou parte do nome com a UF. Todas as UASGs ativas do órgão aparecem
+              para cadastro.
             </p>
           </div>
           <div className="field">
-            <label htmlFor="q">UASG, CNPJ ou nome</label>
-            <input
+            <Label htmlFor="q">UASG, CNPJ ou nome</Label>
+            <Input
               id="q"
               name="q"
               value={query.q}
               aria-invalid={!!errors.q}
-              onChange={(e) => setQuery((old) => ({ ...old, q: e.target.value }))}
+              onChange={(e) =>
+                setQuery((old) => ({ ...old, q: e.target.value }))
+              }
             />
             {errors.q && (
               <small className="field-error" role="alert">
@@ -77,15 +88,17 @@ export function PublicImport({ onImported }: { onImported: (message: string) => 
             )}
           </div>
           <div className="field">
-            <label htmlFor="uf">
+            <Label htmlFor="uf">
               UF <span>para busca por nome</span>
-            </label>
+            </Label>
             <select
               id="uf"
               name="uf"
               value={query.uf}
               aria-invalid={!!errors.uf}
-              onChange={(e) => setQuery((old) => ({ ...old, uf: e.target.value }))}
+              onChange={(e) =>
+                setQuery((old) => ({ ...old, uf: e.target.value }))
+              }
             >
               <option value="">—</option>
               {UFS.map((uf) => (
@@ -98,10 +111,10 @@ export function PublicImport({ onImported }: { onImported: (message: string) => 
               </small>
             )}
           </div>
-          <button type="submit" className="button" disabled={busy}>
+          <Button type="submit" className="button" disabled={busy}>
             <Search size={16} />
             {busy ? "Buscando…" : "Buscar"}
-          </button>
+          </Button>
         </form>
       </FormValidation.Provider>
       <div aria-live="polite">
@@ -133,7 +146,9 @@ function OrganCard({
   onImported: (message: string) => void;
 }) {
   const fresh = organ.units.filter((u) => !u.registered);
-  const [selected, setSelected] = useState(() => new Set(fresh.map((u) => u.uasg))),
+  const [selected, setSelected] = useState(
+      () => new Set(fresh.map((u) => u.uasg)),
+    ),
     [organization, setOrganization] = useState(
       organ.units.find((u) => u.organization)?.organization ?? "",
     ),
@@ -152,18 +167,19 @@ function OrganCard({
     setBusy(true);
     setError("");
     try {
-      const value = await api<{ created: number; existing: number; organization: string }>(
-        "/institutions/import",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            organization,
-            units: organ.units
-              .filter((u) => selected.has(u.uasg))
-              .map(({ uasg, name }) => ({ uasg, name })),
-          }),
-        },
-      );
+      const value = await api<{
+        created: number;
+        existing: number;
+        organization: string;
+      }>("/institutions/import", {
+        method: "POST",
+        body: JSON.stringify({
+          organization,
+          units: organ.units
+            .filter((u) => selected.has(u.uasg))
+            .map(({ uasg, name }) => ({ uasg, name })),
+        }),
+      });
       setDone(true);
       onImported(
         `${value.organization}: ${value.created} UASGs cadastradas${value.existing ? `, ${value.existing} já existiam` : ""}. Escolha “${value.organization}” na abrangência de Pregões para atualizar.`,
@@ -194,7 +210,7 @@ function OrganCard({
       <ul>
         {organ.units.map((unit) => (
           <li key={unit.uasg}>
-            <label className="checkbox">
+            <Label className="checkbox">
               <input
                 type="checkbox"
                 disabled={unit.registered || done}
@@ -208,7 +224,7 @@ function OrganCard({
                   {unit.registered && " · já cadastrada"}
                 </small>
               </span>
-            </label>
+            </Label>
           </li>
         ))}
       </ul>
@@ -216,8 +232,10 @@ function OrganCard({
         <FormValidation.Provider value={{ errors }}>
           <div className="organ-card-actions">
             <div className="field">
-              <label htmlFor={`org-${organ.document}`}>Sigla da organização</label>
-              <input
+              <Label htmlFor={`org-${organ.document}`}>
+                Sigla da organização
+              </Label>
+              <Input
                 id={`org-${organ.document}`}
                 value={organization}
                 placeholder="Ex.: IFSP"
@@ -230,7 +248,7 @@ function OrganCard({
                 </small>
               )}
             </div>
-            <button
+            <Button
               type="button"
               className="button"
               disabled={busy || !selected.size}
@@ -238,7 +256,7 @@ function OrganCard({
             >
               <Download size={16} />
               {busy ? "Cadastrando…" : `Cadastrar ${selected.size} UASGs`}
-            </button>
+            </Button>
           </div>
           {error && <ErrorState message={error} />}
         </FormValidation.Provider>

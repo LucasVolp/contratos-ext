@@ -1,4 +1,6 @@
 "use client";
+import { Button } from "@/components/ui/button";
+
 import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { Field, FormValidation, focusInvalid } from "@/components/ui";
@@ -46,10 +48,10 @@ export function CommitmentFilters({
             value={values.search}
             onChange={update}
           />
-          <button className="button" type="submit">
+          <Button className="button" type="submit">
             <Search size={15} aria-hidden="true" />
             Buscar
-          </button>
+          </Button>
         </div>
         <details className="panel-search-advanced">
           <summary>Filtros adicionais</summary>
@@ -82,9 +84,9 @@ export function CommitmentFilters({
               onChange={update}
             />
           </div>
-          <button className="button secondary" type="submit">
+          <Button className="button secondary" type="submit">
             Aplicar filtros
-          </button>
+          </Button>
           <p className="panel-footnote">
             A natureza seleciona empenhos completos. Os valores incluem todos os
             itens e movimentos de cada documento.

@@ -1,4 +1,6 @@
 "use client";
+import { Button } from "@/components/ui/button";
+
 import { useState } from "react";
 import { KeyRound } from "lucide-react";
 import { api, ApiError, validationSummary } from "@/lib/api";
@@ -12,7 +14,10 @@ import {
 } from "@/components/ui";
 export default function AccountPage() {
   const { viewer } = useSession();
-  const [values, setValues] = useState({ currentPassword: "", newPassword: "" }),
+  const [values, setValues] = useState({
+      currentPassword: "",
+      newPassword: "",
+    }),
     [errors, setErrors] = useState<Record<string, string>>({}),
     [error, setError] = useState(""),
     [done, setDone] = useState(false),
@@ -63,8 +68,8 @@ export default function AccountPage() {
           <div>
             {viewer.allInstitutions ? (
               <p>
-                Como gestor geral, você acessa <strong>todas as instituições</strong>{" "}
-                e administra usuários.
+                Como gestor geral, você acessa{" "}
+                <strong>todas as instituições</strong> e administra usuários.
               </p>
             ) : viewer.institutions.length ? (
               <ul className="account-institutions">
@@ -74,8 +79,8 @@ export default function AccountPage() {
               </ul>
             ) : (
               <p className="muted">
-                Nenhuma instituição vinculada. Peça ao gestor geral para vincular
-                a sua conta.
+                Nenhuma instituição vinculada. Peça ao gestor geral para
+                vincular a sua conta.
               </p>
             )}
           </div>
@@ -87,7 +92,10 @@ export default function AccountPage() {
                 <span>02</span>
                 <div>
                   <h2>Senha</h2>
-                  <p>Ao trocar, as sessões abertas em outros navegadores são encerradas.</p>
+                  <p>
+                    Ao trocar, as sessões abertas em outros navegadores são
+                    encerradas.
+                  </p>
                 </div>
               </div>
               {viewer.impersonator ? (
@@ -123,10 +131,10 @@ export default function AccountPage() {
                     )}
                   </div>
                   <div className="wide">
-                    <button type="submit" className="button" disabled={busy}>
+                    <Button type="submit" className="button" disabled={busy}>
                       <KeyRound size={16} />
                       {busy ? "Salvando…" : "Alterar senha"}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}

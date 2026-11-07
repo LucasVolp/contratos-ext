@@ -1,4 +1,7 @@
 "use client";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -262,7 +265,7 @@ export function Editor({
                   {field("purchaseNumber")}
                   {field("purchaseYear", { type: "number" })}
                   <div className="field">
-                    <label htmlFor="modality">Modalidade</label>
+                    <Label htmlFor="modality">Modalidade</Label>
                     <select
                       id="modality"
                       name="modality"
@@ -280,7 +283,7 @@ export function Editor({
               {field("startDate", { type: "date" })}
               {field("endDate", { type: "date" })}
               {records && (
-                <label className="checkbox wide">
+                <Label className="checkbox wide">
                   <input
                     type="checkbox"
                     name="renewable"
@@ -290,7 +293,7 @@ export function Editor({
                     }
                   />
                   A vigência desta ata pode ser prorrogada
-                </label>
+                </Label>
               )}
             </div>
           </section>
@@ -447,7 +450,7 @@ export function Editor({
                   </details>
                 ))}
               </div>
-              <button
+              <Button
                 type="button"
                 className="button secondary"
                 onClick={() =>
@@ -459,7 +462,7 @@ export function Editor({
               >
                 <Plus size={16} />
                 Adicionar item
-              </button>
+              </Button>
             </section>
           ) : (
             <section className="form-section">
@@ -504,14 +507,14 @@ export function Editor({
               >
                 Cancelar
               </Link>
-              <button className="button" type="submit" disabled={busy}>
+              <Button className="button" type="submit" disabled={busy}>
                 <Save size={16} />
                 {busy
                   ? "Salvando…"
                   : records
                     ? "Salvar ata"
                     : "Salvar contrato"}
-              </button>
+              </Button>
             </div>
           </footer>
         </form>

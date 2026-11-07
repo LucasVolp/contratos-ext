@@ -1,3 +1,12 @@
+import {
+  Table,
+  TableCaption,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from "@/components/ui/table";
 import { currency } from "@/lib/api";
 import { chartRatio, chartUnits, compactMoney } from "@/lib/decimal-display";
 import type { ExecutionBreakdowns } from "@/lib/finance-types";
@@ -142,33 +151,33 @@ export function TrendChart({ rows }: { rows: ExecutionBreakdowns["monthly"] }) {
           role="region"
           aria-label="Valores mensais"
         >
-          <table>
-            <caption className="sr-only">
+          <Table>
+            <TableCaption className="sr-only">
               Valores mensais da execução financeira
-            </caption>
-            <thead>
-              <tr>
-                <th>Mês</th>
+            </TableCaption>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Mês</TableHead>
                 {executionStages.map((s) => (
-                  <th key={s.key}>{s.label}</th>
+                  <TableHead key={s.key}>{s.label}</TableHead>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {rows.map((row) => (
-                <tr key={row.month}>
-                  <th scope="row">{monthLabel(row.month)}</th>
+                <TableRow key={row.month}>
+                  <TableHead scope="row">{monthLabel(row.month)}</TableHead>
                   {executionStages.map((s) => (
-                    <td key={s.key}>
+                    <TableCell key={s.key}>
                       {row.summary.sourceRowCount
                         ? currency(row.summary[s.key])
                         : "Sem registros"}
-                    </td>
+                    </TableCell>
                   ))}
-                </tr>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </details>
       <p className="panel-footnote">

@@ -1,6 +1,18 @@
 "use client";
+import {
+  Table,
+  TableCaption,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from "@/components/ui/table";
+
+import { SearchField } from "@/components/ui/search-field";
+import { Label } from "@/components/ui/label";
+
 import { useRef, useState } from "react";
-import { Search } from "lucide-react";
 import { currency, date } from "@/lib/api";
 import { PurchaseItem, known, quantity, document } from "@/lib/catalog-api";
 import { Pager } from "../ui";
@@ -52,7 +64,8 @@ export function PurchaseItems({
       </div>
       {!detailsSyncedAt && (
         <p className="catalog-notice">
-          Os detalhes serão carregados automaticamente. Se a consulta falhar, tente atualizar os detalhes novamente.
+          Os detalhes serão carregados automaticamente. Se a consulta falhar,
+          tente atualizar os detalhes novamente.
         </p>
       )}
       {detailsSyncedAt && !items.length && !updating && !error && (
@@ -63,19 +76,17 @@ export function PurchaseItems({
       {detailsSyncedAt && items.length > 0 && (
         <>
           <div className="purchase-item-controls">
-            <div className="search-field">
-              <Search size={18} />
-              <input
-                aria-label="Buscar itens do pregão"
-                placeholder="Número, descrição ou fornecedor…"
-                value={search}
-                onChange={(event) => {
-                  setSearch(event.target.value);
-                  setPage(1);
-                }}
-              />
-            </div>
-            <label htmlFor="purchase-items-size">
+            <SearchField
+              id="purchase-items-search"
+              label="Buscar itens do pregão"
+              placeholder="Número, descrição ou fornecedor…"
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
+            />
+            <Label htmlFor="purchase-items-size">
               Itens por página
               <select
                 id="purchase-items-size"
@@ -91,7 +102,7 @@ export function PurchaseItems({
                   </option>
                 ))}
               </select>
-            </label>
+            </Label>
           </div>
           {filtered.length > 0 ? (
             <nav aria-label="Paginação dos itens">
@@ -147,35 +158,39 @@ export function PurchaseItems({
             </p>
           ) : (
             <div className="table-scroll">
-              <table className="result-table">
-                <caption>
+              <Table className="result-table">
+                <TableCaption>
                   Resultados informados para o item {item.number}
-                </caption>
-                <thead>
-                  <tr>
-                    <th>Fornecedor</th>
-                    <th>Quantidade</th>
-                    <th>Preço unitário</th>
-                    <th>Total</th>
-                    <th>Resultado</th>
-                  </tr>
-                </thead>
-                <tbody>
+                </TableCaption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fornecedor</TableHead>
+                    <TableHead>Quantidade</TableHead>
+                    <TableHead>Preço unitário</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Resultado</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {item.results.map((result, i) => (
-                    <tr
+                    <TableRow
                       key={`${result.externalId}-${i}`}
                       className={result.cancelled ? "cancelled-result" : ""}
                     >
-                      <td>
+                      <TableCell>
                         <strong>{known(result.supplierName)}</strong>
                         <small className="date-end">
                           {document(result.supplierDocument)}
                         </small>
-                      </td>
-                      <td>{quantity(result.quantity)}</td>
-                      <td className="amount">{currency(result.unitPrice)}</td>
-                      <td className="amount">{currency(result.totalValue)}</td>
-                      <td>
+                      </TableCell>
+                      <TableCell>{quantity(result.quantity)}</TableCell>
+                      <TableCell className="amount">
+                        {currency(result.unitPrice)}
+                      </TableCell>
+                      <TableCell className="amount">
+                        {currency(result.totalValue)}
+                      </TableCell>
+                      <TableCell>
                         {result.cancelled ? (
                           <>
                             <span className="status expired">
@@ -194,11 +209,11 @@ export function PurchaseItems({
                             </small>
                           </>
                         )}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
         </article>

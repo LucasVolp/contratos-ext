@@ -1,6 +1,19 @@
 "use client";
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from "@/components/ui/table";
+
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { SearchField } from "@/components/ui/search-field";
+
 import { useEffect, useMemo, useState } from "react";
-import { LogIn, Pencil, Plus, Save, Search } from "lucide-react";
+import { LogIn, Pencil, Plus, Save } from "lucide-react";
 import { api, ApiError, validationSummary } from "@/lib/api";
 import {
   Institution,
@@ -55,10 +68,7 @@ export function UsersAdmin() {
     [formKey, setFormKey] = useState(0),
     [message, setMessage] = useState("");
   useEffect(() => {
-    Promise.all([
-      api<User[]>("/users"),
-      api<Institution[]>("/institutions"),
-    ])
+    Promise.all([api<User[]>("/users"), api<Institution[]>("/institutions")])
       .then(([u, i]) => {
         setUsers(u);
         setInstitutions(i);
@@ -77,7 +87,7 @@ export function UsersAdmin() {
   return (
     <>
       <PageBar context={<AdminTabs />}>
-        <button
+        <Button
           type="button"
           className="button"
           onClick={() => {
@@ -88,7 +98,7 @@ export function UsersAdmin() {
         >
           <Plus size={17} />
           Novo usuário
-        </button>
+        </Button>
       </PageBar>
       {draft && (
         <UserForm
@@ -122,27 +132,30 @@ export function UsersAdmin() {
           <Loading />
         ) : (
           <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Nome / e-mail</th>
-                  <th>Perfil</th>
-                  <th>Instituições</th>
-                  <th>Situação</th>
-                  <th>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nome / e-mail</TableHead>
+                  <TableHead>Perfil</TableHead>
+                  <TableHead>Instituições</TableHead>
+                  <TableHead>Situação</TableHead>
+                  <TableHead>
                     <span className="sr-only">Ações</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {users.map((user) => (
-                  <tr key={user.id} className={user.active ? "" : "inactive"}>
-                    <td>
+                  <TableRow
+                    key={user.id}
+                    className={user.active ? "" : "inactive"}
+                  >
+                    <TableCell>
                       <strong>{user.name}</strong>
                       <span className="tiny-label">{user.email}</span>
-                    </td>
-                    <td>{user.roleLabel}</td>
-                    <td className="institution-cell">
+                    </TableCell>
+                    <TableCell>{user.roleLabel}</TableCell>
+                    <TableCell className="institution-cell">
                       {user.role === "GESTOR_GERAL"
                         ? "Todas"
                         : user.institutions.map((i) => (
@@ -150,24 +163,24 @@ export function UsersAdmin() {
                               {i.name} <small>UASG {i.uasg}</small>
                             </span>
                           ))}
-                    </td>
-                    <td>
+                    </TableCell>
+                    <TableCell>
                       <span
                         className={`status ${user.active ? "active" : "expired"}`}
                       >
                         <i />
                         {user.active ? "Ativo" : "Desativado"}
                       </span>
-                    </td>
-                    <td className="row-actions">
-                      <button
+                    </TableCell>
+                    <TableCell className="row-actions">
+                      <Button
                         type="button"
                         className="button secondary"
                         aria-label={`Editar ${user.name}`}
                         onClick={() => {
                           setMessage("");
                           setFormKey((n) => n + 1);
-            setDraft({
+                          setDraft({
                             id: user.id,
                             name: user.name,
                             email: user.email,
@@ -180,9 +193,9 @@ export function UsersAdmin() {
                       >
                         <Pencil size={14} />
                         Editar
-                      </button>
+                      </Button>
                       {user.id !== viewer.id && user.active && (
-                        <button
+                        <Button
                           type="button"
                           className="button secondary"
                           aria-label={`Entrar como ${user.name}`}
@@ -190,13 +203,13 @@ export function UsersAdmin() {
                         >
                           <LogIn size={14} />
                           Entrar como
-                        </button>
+                        </Button>
                       )}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </section>
@@ -302,7 +315,7 @@ function UserForm({
               required
             />
             <div className="field">
-              <label htmlFor="role">Perfil</label>
+              <Label htmlFor="role">Perfil</Label>
               <select
                 id="role"
                 name="role"
@@ -336,7 +349,7 @@ function UserForm({
               }
             />
             {values.id && (
-              <label className="checkbox wide">
+              <Label className="checkbox wide">
                 <input
                   type="checkbox"
                   checked={values.active}
@@ -346,23 +359,26 @@ function UserForm({
                   }
                 />
                 Conta ativa
-                {self && <small className="muted"> (não é possível desativar a própria conta)</small>}
-              </label>
+                {self && (
+                  <small className="muted">
+                    {" "}
+                    (não é possível desativar a própria conta)
+                  </small>
+                )}
+              </Label>
             )}
             <fieldset className="field wide institution-picker">
               <legend>Instituições</legend>
               {
                 <>
-                  <div className="search-field">
-                    <Search size={15} />
-                    <input
-                      type="search"
-                      aria-label="Filtrar instituições"
-                      placeholder="Filtrar por nome ou UASG"
-                      value={filter}
-                      onChange={(e) => setFilter(e.target.value)}
-                    />
-                  </div>
+                  <SearchField
+                    id="user-institutions-search"
+                    type="search"
+                    label="Filtrar instituições"
+                    placeholder="Filtrar por nome ou UASG"
+                    value={filter}
+                    onChange={(e) => setFilter(e.target.value)}
+                  />
                   <small className="field-hint">
                     {values.institutionIds.length} selecionada(s).{" "}
                     {manager
@@ -372,7 +388,7 @@ function UserForm({
                   <ul id="institutionIds" tabIndex={-1}>
                     {visible.map((institution) => (
                       <li key={institution.id}>
-                        <label className="checkbox">
+                        <Label className="checkbox">
                           <input
                             type="checkbox"
                             checked={values.institutionIds.includes(
@@ -384,7 +400,7 @@ function UserForm({
                             {institution.name}
                             <small>UASG {institution.uasg}</small>
                           </span>
-                        </label>
+                        </Label>
                       </li>
                     ))}
                     {!visible.length && (
@@ -401,19 +417,21 @@ function UserForm({
             </fieldset>
           </div>
           <div className="admin-form-actions">
-            <div aria-live="polite">{error && <ErrorState message={error} />}</div>
+            <div aria-live="polite">
+              {error && <ErrorState message={error} />}
+            </div>
             <div>
-              <button
+              <Button
                 type="button"
                 className="button secondary"
                 onClick={onCancel}
               >
                 Cancelar
-              </button>
-              <button type="submit" className="button" disabled={busy}>
+              </Button>
+              <Button type="submit" className="button" disabled={busy}>
                 <Save size={16} />
                 {busy ? "Salvando…" : "Salvar usuário"}
-              </button>
+              </Button>
             </div>
           </div>
         </section>

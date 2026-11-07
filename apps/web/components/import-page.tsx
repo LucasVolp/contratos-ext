@@ -1,4 +1,6 @@
 "use client";
+import { Button } from "@/components/ui/button";
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowDownToLine, ExternalLink } from "lucide-react";
@@ -159,14 +161,14 @@ export function ImportPage({ records = false }: { records?: boolean }) {
                 </div>
               )}
             </div>
-            <button type="submit" disabled={busy} className="button">
+            <Button type="submit" disabled={busy} className="button">
               <ArrowDownToLine size={16} />
               {busy
                 ? "Consultando registros…"
                 : records
                   ? "Importar ata"
                   : "Importar contratos"}
-            </button>
+            </Button>
           </form>
         </FormValidation.Provider>
         <aside className="import-note">

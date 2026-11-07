@@ -15,7 +15,9 @@ Read it before touching UI code. Non-negotiable summary:
   UI is affirmative (states verified facts plainly), consultative (public data
   is consulted with origin and date, never invented) and supports dynamic
   document elaboration (prefill, drafts, live validation, pending items, export).
-- Reuse shared primitives (`components/ui.tsx`) and `@contracts/validation`
+- Use shadcn/ui with Base UI as the shared UI foundation; support light, dark
+  and system appearance. Reuse domain primitives (`components/ui.tsx`), shadcn
+  primitives (`components/ui/`) and `@contracts/validation`
   before creating anything; patterns used by two domains become shared.
 - Semantic classes on `:root` tokens in `app/globals.css`; no hardcoded colors.
 - Fully usable at 360px width, no page-level horizontal scroll, essential

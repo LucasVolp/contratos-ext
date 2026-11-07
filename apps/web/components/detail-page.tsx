@@ -1,4 +1,7 @@
 "use client";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -368,7 +371,7 @@ export function DetailPage({
             <div className="eyebrow">DOCUMENTO FINAL</div>
             <h2>Seu documento, bem preparado.</h2>
             <p>Selecione o conteúdo e baixe no formato que precisa.</p>
-            <label htmlFor="export-scope">Conteúdo do documento</label>
+            <Label htmlFor="export-scope">Conteúdo do documento</Label>
             <select
               id="export-scope"
               value={itemId}
@@ -388,22 +391,24 @@ export function DetailPage({
                   </option>
                 ))}
             </select>
-            <button
+            <Button
+              type="submit"
               className="button"
               onClick={() => download("docx")}
               disabled={!!busy || !readiness?.ready}
             >
               <ArrowDownToLine size={16} />
               {busy === "docx" ? "Preparando…" : "Baixar DOCX"}
-            </button>
-            <button
+            </Button>
+            <Button
+              type="submit"
               className="button secondary"
               onClick={() => download("pdf")}
               disabled={!!busy || !readiness?.ready}
             >
               <ArrowDownToLine size={16} />
               {busy === "pdf" ? "Preparando…" : "Baixar PDF"}
-            </button>
+            </Button>
             <div aria-live="polite">
               {actionError && <ErrorState message={actionError} />}{" "}
               {readinessError && (
