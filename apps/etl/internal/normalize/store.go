@@ -125,9 +125,20 @@ type partState struct {
 	status     string
 }
 
+// listingResources are the resources whose array payloads list contracts.
+var listingResources = pq.Array([]string{"contracts_active_by_unit", "contracts_inactive_by_unit"})
+
 // Contract rebuilds one contract. Mapping problems give Status FAILED and leave
-// earlier rows untouched; only database failures return an error.
+// earlier rows untouched; only database failures return an error. Its listing
+// header is looked up in every unit listing that ever contained the contract.
 func (n *Normalizer) Contract(ctx context.Context, externalID int64) (ContractResult, error) {
+	return n.contract(ctx, externalID, nil)
+}
+
+// contract rebuilds one contract whose listing element is looked up only in the
+// latest captures of listingKeys. With listingKeys nil, the listing request
+// keys with any capture containing the contract are found first.
+func (n *Normalizer) contract(ctx context.Context, externalID int64, listingKeys []string) (ContractResult, error) {
 	result := ContractResult{ExternalID: externalID}
 	tx, err := n.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -138,8 +149,13 @@ func (n *Normalizer) Contract(ctx context.Context, externalID int64) (ContractRe
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext('public_sources.contract:' || $1 || ':' || $2))`, n.Source, id); err != nil {
 		return result, err
 	}
+	if listingKeys == nil {
+		if listingKeys, err = n.listingKeys(ctx, tx, id); err != nil {
+			return result, err
+		}
+	}
 	var m Mapped
-	header, headerResource, headerKey, headerSeen, err := n.header(ctx, tx, id, &m)
+	header, headerResource, headerKey, headerSeen, err := n.header(ctx, tx, id, listingKeys, &m)
 	if errors.Is(err, sql.ErrNoRows) {
 		result.Status = "SKIPPED_NO_HEADER"
 		return result, nil
@@ -200,9 +216,23 @@ func failed(result ContractResult, err error) ContractResult {
 	return result
 }
 
+// listingKeys returns the listing request keys with any capture, current or
+// older, containing the contract. It scans the listing captures once, which is
+// fine for normalizing one contract but not for every contract of a unit.
+func (n *Normalizer) listingKeys(ctx context.Context, tx *sql.Tx, id string) ([]string, error) {
+	var keys []string
+	err := tx.QueryRowContext(ctx, `SELECT coalesce(array_agg(DISTINCT request_key), '{}') FROM public_sources.captures
+		WHERE source = $1 AND resource = ANY($3::text[]) AND jsonb_typeof(payload) = 'array'
+		AND (payload @> jsonb_build_array(jsonb_build_object('id', $2::bigint))
+			OR payload @> jsonb_build_array(jsonb_build_object('id', $2::text)))`,
+		n.Source, id, listingResources).Scan(pq.Array(&keys))
+	return keys, err
+}
+
 // header maps the freshest capture of the contract: its /id response or its
-// element in the newest listing. It also returns the request key it came from.
-func (n *Normalizer) header(ctx context.Context, tx *sql.Tx, id string, m *Mapped) (Contract, string, string, time.Time, error) {
+// element in the newest of the latest captures of listingKeys. It also returns
+// the request key it came from.
+func (n *Normalizer) header(ctx context.Context, tx *sql.Tx, id string, listingKeys []string, m *Mapped) (Contract, string, string, time.Time, error) {
 	var idPayload, listed []byte
 	var idSeen, listedSeen time.Time
 	err := tx.QueryRowContext(ctx, `SELECT payload, last_seen_at FROM public_sources.latest_captures
@@ -212,11 +242,18 @@ func (n *Normalizer) header(ctx context.Context, tx *sql.Tx, id string, m *Mappe
 	}
 	hasID := err == nil
 	var listedResource, listedKey string
+	// The latest capture per given key comes straight from captures_latest_idx,
+	// instead of the latest_captures view over every request key.
 	err = tx.QueryRowContext(ctx, `SELECT element, c.resource, c.request_key, c.last_seen_at
-		FROM public_sources.latest_captures c
+		FROM (
+			SELECT DISTINCT ON (request_key) id, resource, request_key, payload, last_seen_at
+			FROM public_sources.captures
+			WHERE source = $1 AND request_key = ANY($3::text[])
+			ORDER BY request_key, last_seen_at DESC, id DESC
+		) c
 		CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(c.payload) = 'array' THEN c.payload ELSE '[]'::jsonb END) element
-		WHERE c.source = $1 AND c.resource IN ('contracts_active_by_unit', 'contracts_inactive_by_unit') AND element->>'id' = $2
-		ORDER BY c.last_seen_at DESC, c.id DESC LIMIT 1`, n.Source, id).Scan(&listed, &listedResource, &listedKey, &listedSeen)
+		WHERE c.resource = ANY($4::text[]) AND element->>'id' = $2
+		ORDER BY c.last_seen_at DESC, c.id DESC LIMIT 1`, n.Source, id, pq.Array(listingKeys), listingResources).Scan(&listed, &listedResource, &listedKey, &listedSeen)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return Contract{}, "", "", time.Time{}, err
 	}
@@ -326,43 +363,58 @@ func placeholders(first, count int) string {
 	return strings.Join(marks, ", ")
 }
 
-// Unit normalizes every contract listed for a UG in its latest listings.
+// Unit normalizes every contract listed for a UG in its latest listings,
+// taking listing headers from those two listings only.
 func (n *Normalizer) Unit(ctx context.Context, unit string) (Summary, error) {
-	return n.many(ctx, `SELECT DISTINCT (element->>'id')::bigint FROM public_sources.latest_captures c
+	return n.many(ctx, `SELECT DISTINCT (element->>'id')::bigint,
+		ARRAY['/api/contrato/ug/' || $2, '/api/contrato/inativo/ug/' || $2] FROM public_sources.latest_captures c
 		CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(c.payload) = 'array' THEN c.payload ELSE '[]'::jsonb END) element
 		WHERE c.source = $1 AND c.request_key IN ('/api/contrato/ug/' || $2, '/api/contrato/inativo/ug/' || $2)
 		AND element->>'id' ~ '^[1-9][0-9]*$' ORDER BY 1`, n.Source, unit)
 }
 
-// All normalizes every contract known from any listing or contract capture.
+// All normalizes every contract known from any listing or contract capture,
+// taking each listing header from the latest listings that contain it.
 func (n *Normalizer) All(ctx context.Context) (Summary, error) {
-	return n.many(ctx, `SELECT DISTINCT (element->>'id')::bigint FROM public_sources.latest_captures c
+	return n.many(ctx, `SELECT (element->>'id')::bigint,
+		coalesce(array_agg(DISTINCT c.request_key) FILTER (WHERE c.resource <> 'contract'), '{}')
+		FROM public_sources.latest_captures c
 		CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(c.payload) = 'array' THEN c.payload ELSE '[]'::jsonb END) element
 		WHERE c.source = $1 AND c.resource IN ('contract', 'contracts_active_by_unit', 'contracts_inactive_by_unit')
-		AND element->>'id' ~ '^[1-9][0-9]*$' ORDER BY 1`, n.Source)
+		AND element->>'id' ~ '^[1-9][0-9]*$' GROUP BY 1 ORDER BY 1`, n.Source)
 }
 
+// many normalizes the contracts a query returns as (external id, listing
+// request keys to take the header from) rows.
 func (n *Normalizer) many(ctx context.Context, query string, args ...any) (Summary, error) {
 	var summary Summary
 	rows, err := n.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return summary, err
 	}
-	var ids []int64
+	type target struct {
+		id   int64
+		keys []string
+	}
+	var targets []target
 	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
+		t := target{keys: []string{}}
+		if err := rows.Scan(&t.id, pq.Array(&t.keys)); err != nil {
 			rows.Close()
 			return summary, err
 		}
-		ids = append(ids, id)
+		if t.keys == nil {
+			t.keys = []string{}
+		}
+		targets = append(targets, t)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return summary, err
 	}
-	for _, id := range ids {
-		result, err := n.Contract(ctx, id)
+	for _, t := range targets {
+		id := t.id
+		result, err := n.contract(ctx, id, t.keys)
 		if err != nil {
 			if ctx.Err() != nil {
 				return summary, fmt.Errorf("normalize contract %d: %w", id, err)

@@ -327,3 +327,53 @@ func TestNormalizeHeaderPartReflectsListingAttempt(t *testing.T) {
 		t.Fatalf("header part = %s, want FAILED|%s", got, seen)
 	}
 }
+
+// The header of a contract listed by two units comes from the freshest latest
+// listing that still contains it, whether normalized alone or by unit.
+func TestNormalizeHeaderAcrossUnitListings(t *testing.T) {
+	s := newSeeder(t)
+	ctx := context.Background()
+	item := func(object string) string {
+		return listingItem(t, map[string]any{"objeto": object})
+	}
+	header := func() string {
+		t.Helper()
+		return s.scalar(`SELECT object || '|' || header_resource FROM public_sources.contracts WHERE external_id = 13847`)
+	}
+	normalizeContract := func() {
+		t.Helper()
+		if result, err := s.normalizer().Contract(ctx, 13847); err != nil || result.Status != "NORMALIZED" {
+			t.Fatalf("result = %+v, err = %v", result, err)
+		}
+	}
+	s.body("contracts_active_by_unit", "/api/contrato/ug/158148", "["+item("OBJETO A1")+"]")
+	s.body("contracts_inactive_by_unit", "/api/contrato/inativo/ug/158454", "["+item("OBJETO B1")+"]")
+	normalizeContract()
+	if got := header(); got != "OBJETO B1|contracts_inactive_by_unit" {
+		t.Fatalf("freshest listing of any unit: header = %s", got)
+	}
+	// Unit 158454 no longer lists the contract: its older capture must not count.
+	s.body("contracts_inactive_by_unit", "/api/contrato/inativo/ug/158454", "["+listingItem(t, map[string]any{"id": 99})+"]")
+	normalizeContract()
+	if got := header(); got != "OBJETO A1|contracts_active_by_unit" {
+		t.Fatalf("after the other unit dropped it: header = %s", got)
+	}
+	// A newer version of the unit's own listing wins over its older version.
+	s.body("contracts_active_by_unit", "/api/contrato/ug/158148", "["+item("OBJETO A2")+"]")
+	summary, err := s.normalizer().Unit(ctx, "158148")
+	if err != nil || summary.Normalized != 1 || summary.Failed != 0 {
+		t.Fatalf("summary = %+v, err = %v", summary, err)
+	}
+	if got := header(); got != "OBJETO A2|contracts_active_by_unit" {
+		t.Fatalf("unit normalization: header = %s", got)
+	}
+	// The older version is still the freshest of its content after a re-capture.
+	s.body("contracts_active_by_unit", "/api/contrato/ug/158148", "["+item("OBJETO A1")+"]")
+	all, err := s.normalizer().All(ctx)
+	if err != nil || all.Failed != 0 {
+		t.Fatalf("all = %+v, err = %v", all, err)
+	}
+	if got := header(); got != "OBJETO A1|contracts_active_by_unit" {
+		t.Fatalf("re-captured older content: header = %s", got)
+	}
+}
