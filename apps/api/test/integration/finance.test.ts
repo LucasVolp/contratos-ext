@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { Database } from "../../src/database";
@@ -55,7 +55,8 @@ test("financial migration upgrades existing contracts and replay preserves finan
   assert.equal((await db.query('SELECT "globalValue" FROM "Contract" WHERE id = $1', [id]))[0].globalValue, "0.2");
   assert.equal((await db.query("SELECT id FROM finance.commitment_references"))[0].id, ref);
   assert.equal((await db.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'finance' AND table_type = 'BASE TABLE'")).length, 15);
-  assert.equal((await db.query('SELECT * FROM "_sql_migrations"')).length, 10);
+  const migrations = (await readdir(resolve(__dirname, "../../migrations"))).filter((name) => name.endsWith(".sql"));
+  assert.equal((await db.query('SELECT * FROM "_sql_migrations"')).length, migrations.length);
 });
 
 test("payments, liquidations and item history can precede a prior-year commitment header", async (t) => {
