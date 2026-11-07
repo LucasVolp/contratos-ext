@@ -13,6 +13,7 @@
     "finance:import": "node scripts/finance-etl.cjs",
     "sources:sync": "node scripts/sources-sync.cjs sync",
     "sources:normalize": "node scripts/sources-sync.cjs normalize",
+    "sources:daily": "node scripts/sources-sync.cjs daily",
     "test:e2e": "playwright test",
     "auth:create-manager": "pnpm --filter @contracts/api auth:create-manager",
     "db:seed-institutions": "pnpm --filter @contracts/api db:seed-institutions"

@@ -17,10 +17,12 @@ import (
 	"strconv"
 	"syscall"
 	"time"
+	_ "time/tzdata"
 
 	_ "github.com/lib/pq"
 
 	"contracts-ext/etl/internal/capture"
+	"contracts-ext/etl/internal/daily"
 	"contracts-ext/etl/internal/normalize"
 	"contracts-ext/etl/internal/pacing"
 	"contracts-ext/etl/internal/sources/contratosgovbr"
@@ -32,7 +34,8 @@ var requiredMigrations = []string{"202611070001_public_sources_foundation", "202
 
 const usage = `usage:
   replicator sync -source CONTRATOS_GOV_BR (-unit <UG> | -contract <id>) [-inactive=true] [-trigger MANUAL|SCHEDULED] [-retries 3] [-interval 1s] [-normalize=true]
-  replicator normalize -source CONTRATOS_GOV_BR (-unit <UG> | -contract <id> | -all)`
+  replicator normalize -source CONTRATOS_GOV_BR (-unit <UG> | -contract <id> | -all)
+  replicator daily -source CONTRATOS_GOV_BR [-at 03:00] [-timezone America/Sao_Paulo] [-once] [-retries 3] [-interval 1s]`
 
 // Test seams; there are no flags for these.
 var sourceBaseURL = contratosgovbr.BaseURL
@@ -51,16 +54,20 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	if len(args) == 0 || (args[0] != "sync" && args[0] != "normalize") {
+	if len(args) == 0 || (args[0] != "sync" && args[0] != "normalize" && args[0] != "daily") {
 		return fail(errors.New(usage))
 	}
 	var syncArgs syncPlan
 	var normalizeArgs normalizePlan
+	var dailyArgs dailyPlan
 	var err error
-	if args[0] == "sync" {
+	switch args[0] {
+	case "sync":
 		syncArgs, err = parseSync(args[1:])
-	} else {
+	case "normalize":
 		normalizeArgs, err = parseNormalize(args[1:])
+	default:
+		dailyArgs, err = parseDaily(args[1:])
 	}
 	if err != nil {
 		return fail(fmt.Errorf("%w\n%s", err, usage))
@@ -72,6 +79,9 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	defer db.Close()
 	logger := slog.New(slog.NewTextHandler(stderr, nil))
 	normalizer := &normalize.Normalizer{DB: db, Source: contratosgovbr.Source}
+	if args[0] == "daily" {
+		return runDaily(ctx, db, normalizer, dailyArgs, stdout, stderr)
+	}
 	if args[0] == "normalize" {
 		summary, err := runNormalize(ctx, normalizer, normalizeArgs.unit, normalizeArgs.contractID, normalizeArgs.all)
 		if err != nil {
@@ -142,21 +152,22 @@ func runNormalize(ctx context.Context, n *normalize.Normalizer, unit string, con
 	return summary, nil
 }
 
-func runSync(ctx context.Context, db *sql.DB, normalizer *normalize.Normalizer, plan syncPlan, logger *slog.Logger, stdout, stderr io.Writer) int {
+// newConnector builds the Contratos.gov.br connector over the shared
+// PostgreSQL pacing gate, so every command paces source requests the same way.
+func newConnector(db *sql.DB, logger *slog.Logger, retries int, interval time.Duration) (*capture.Store, *contratosgovbr.Connector, error) {
 	base, err := url.Parse(sourceBaseURL)
 	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
+		return nil, nil, err
 	}
 	policy := contratosgovbr.DefaultPolicy
-	policy.Minimum = plan.interval
+	policy.Minimum = interval
 	gate := &pacing.PostgresGate{DB: db, Source: contratosgovbr.Source, Policy: policy, Log: logger.Info}
 	store := &capture.Store{DB: db}
-	connector := &contratosgovbr.Connector{
+	return store, &contratosgovbr.Connector{
 		Fetcher: &capture.Fetcher{
 			Client:    capture.NewHTTPClient([]string{base.Host}, gate, 60*time.Second, sourceTransport),
 			Gate:      gate,
-			Retries:   plan.retries,
+			Retries:   retries,
 			MaxBytes:  32 << 20,
 			UserAgent: "Mozilla/5.0 (compatible; contracts-ext-replicator/" + version + ")",
 			Log:       logger.Warn,
@@ -164,6 +175,14 @@ func runSync(ctx context.Context, db *sql.DB, normalizer *normalize.Normalizer, 
 		Store:   store,
 		BaseURL: sourceBaseURL,
 		Log:     logger.Info,
+	}, nil
+}
+
+func runSync(ctx context.Context, db *sql.DB, normalizer *normalize.Normalizer, plan syncPlan, logger *slog.Logger, stdout, stderr io.Writer) int {
+	store, connector, err := newConnector(db, logger, plan.retries, plan.interval)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
 	}
 	start := capture.RunStart{Source: contratosgovbr.Source, Trigger: plan.trigger, TargetType: "MANAGEMENT_UNIT", TargetCode: plan.unit, Version: "replicator/" + version}
 	if plan.contractID != 0 {
@@ -207,6 +226,43 @@ func runSync(ctx context.Context, db *sql.DB, normalizer *normalize.Normalizer, 
 	}
 	_ = json.NewEncoder(stdout).Encode(out)
 	return code
+}
+
+// runDaily runs one locked cycle (-once) or the daily schedule. The schedule
+// ends with exit code 0 on SIGTERM/SIGINT once a running cycle is recorded as
+// CANCELLED; -once exits 1 unless the cycle COMPLETED.
+func runDaily(ctx context.Context, db *sql.DB, normalizer *normalize.Normalizer, plan dailyPlan, stdout, stderr io.Writer) int {
+	// One connection holds the daily lock while the cycle uses others.
+	db.SetMaxOpenConns(4)
+	logger := slog.New(slog.NewJSONHandler(stderr, nil))
+	store, connector, err := newConnector(db, logger, plan.retries, plan.interval)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	cycle := &daily.Cycle{DB: db, Store: store, Connector: connector, Normalizer: normalizer, Version: "replicator/" + version, Log: logger}
+	if !plan.once {
+		if err := cycle.Serve(ctx, plan.at, plan.location); ctx.Err() == nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		return 0
+	}
+	result, ran, err := cycle.RunLocked(ctx)
+	if !ran && err == nil {
+		fmt.Fprintln(stderr, "another daily run is in progress")
+		return 1
+	}
+	if result.DailyRunID != 0 {
+		_ = json.NewEncoder(stdout).Encode(result)
+	}
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+	}
+	if err != nil || result.Status != "COMPLETED" {
+		return 1
+	}
+	return 0
 }
 
 func main() {

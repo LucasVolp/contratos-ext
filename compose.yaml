@@ -51,6 +51,19 @@ services:
       retries: 12
       start_period: 20s
     restart: unless-stopped
+  # Daily Contratos.gov.br sync. Opt-in: `docker compose --profile sync up -d replicator`.
+  replicator:
+    profiles: ["sync"]
+    build:
+      context: apps/etl
+      dockerfile: Dockerfile
+    environment:
+      # lib/pq needs sslmode=disable for the Compose database.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-contracts}:${POSTGRES_PASSWORD:-contracts_local}@db:5432/${POSTGRES_DB:-contracts}?sslmode=disable
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
   web:
     build:
       context: .

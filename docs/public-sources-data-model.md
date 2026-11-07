@@ -48,6 +48,21 @@ responsible's `usuario` is masked as `***.DDD.DDD-**` before storage; the source
 already sends it masked. `contract_commitments.transparency_code` equals
 `finance.commitment_references.document_code` for the same empenho.
 
+## Daily sync
+
+Migration `202611090001_public_sources_contract_sync` keys the contract children
+per contract (their primary keys start with `contract_external_id`, so two
+contracts never overwrite each other's rows) and adds the daily cycle audit.
+
+| Object | Purpose |
+|---|---|
+| `daily_runs` | One row per `replicator daily` cycle over all registered UGs: `source`, `status` (`RUNNING`, `COMPLETED`, `CANCELLED`, `FAILED`), `unit_count`, `failed_unit_count`, `error`, `etl_version`, `started_at`, `finished_at`. `finished_at` is set exactly when the status is not `RUNNING`. `COMPLETED` means every UG was attempted, even if some failed. Written by the replicator only. |
+| `capture_runs.daily_run_id` | The daily cycle that started the run (trigger `SCHEDULED`); `NULL` for manual or requested runs. |
+
+A process starting `replicator daily` runs a cycle only when no `COMPLETED` row
+finished in the last 24 hours. A per-source advisory lock
+(`hashtext('public_sources.daily:' || source)`) prevents overlapping cycles.
+
 ## Outcomes
 
 | Outcome | Meaning | Capture row |

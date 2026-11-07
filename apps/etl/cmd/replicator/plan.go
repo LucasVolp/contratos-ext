@@ -6,6 +6,7 @@ import (
 	"io"
 	"time"
 
+	"contracts-ext/etl/internal/daily"
 	"contracts-ext/etl/internal/sources/contratosgovbr"
 )
 
@@ -18,6 +19,16 @@ type syncPlan struct {
 	retries    int
 	interval   time.Duration
 	normalize  bool
+}
+
+type dailyPlan struct {
+	source   string
+	at       string
+	timezone string
+	location *time.Location
+	once     bool
+	retries  int
+	interval time.Duration
 }
 
 type normalizePlan struct {
@@ -94,6 +105,41 @@ func parseSync(args []string) (syncPlan, error) {
 		return syncPlan{}, fmt.Errorf("-retries must be between 0 and 3")
 	case plan.interval%time.Millisecond != 0 || plan.interval < policy.Minimum || plan.interval > policy.Maximum:
 		return syncPlan{}, fmt.Errorf("-interval must be whole milliseconds between %s and %s", policy.Minimum, policy.Maximum)
+	}
+	return plan, nil
+}
+
+// parseDaily parses the flags of `replicator daily`.
+func parseDaily(args []string) (dailyPlan, error) {
+	flags := flag.NewFlagSet("replicator daily", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	policy := contratosgovbr.DefaultPolicy
+	var plan dailyPlan
+	flags.StringVar(&plan.source, "source", "", "Source to sync: CONTRATOS_GOV_BR")
+	flags.StringVar(&plan.at, "at", "03:00", "Time of day of the daily cycle, HH:MM")
+	flags.StringVar(&plan.timezone, "timezone", "America/Sao_Paulo", "IANA time zone of -at")
+	flags.BoolVar(&plan.once, "once", false, "Run one cycle now and exit instead of scheduling")
+	flags.IntVar(&plan.retries, "retries", 3, "Retries after the first attempt (0 to 3)")
+	flags.DurationVar(&plan.interval, "interval", policy.Minimum, "Minimum request interval (whole milliseconds, 1s to 30s)")
+	if err := flags.Parse(args); err != nil {
+		return dailyPlan{}, err
+	}
+	var err error
+	if plan.location, err = time.LoadLocation(plan.timezone); err != nil {
+		return dailyPlan{}, fmt.Errorf("-timezone must be an IANA time zone: %w", err)
+	}
+	if _, err = daily.NextRun(time.Now(), plan.at, plan.location); err != nil {
+		return dailyPlan{}, fmt.Errorf("-at: %w", err)
+	}
+	switch {
+	case flags.NArg() != 0:
+		return dailyPlan{}, fmt.Errorf("unexpected positional arguments")
+	case plan.source != contratosgovbr.Source:
+		return dailyPlan{}, fmt.Errorf("-source must be %s", contratosgovbr.Source)
+	case plan.retries < 0 || plan.retries > 3:
+		return dailyPlan{}, fmt.Errorf("-retries must be between 0 and 3")
+	case plan.interval%time.Millisecond != 0 || plan.interval < policy.Minimum || plan.interval > policy.Maximum:
+		return dailyPlan{}, fmt.Errorf("-interval must be whole milliseconds between %s and %s", policy.Minimum, policy.Maximum)
 	}
 	return plan, nil
 }

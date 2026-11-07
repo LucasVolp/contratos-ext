@@ -244,7 +244,39 @@ pnpm sources:sync -source CONTRATOS_GOV_BR -contract 13847
   captures without any network request. Exit code is 1 when any contract fails
   to normalize.
 - The wrapper uses `SOURCES_DATABASE_URL`, falling back to `FINANCE_DATABASE_URL`
-  and `DATABASE_URL`. Scheduling is external (cron/compose).
+  and `DATABASE_URL`.
+
+### Daily mode
+
+`replicator daily` refreshes every UG registered in the app (`"Institution".uasg`,
+invalid codes are skipped with a warning) once a day. It is the only scheduled
+mode; `sync` stays manual.
+
+```sh
+pnpm sources:daily -- -source CONTRATOS_GOV_BR -once      # one cycle now, JSON result, exit 1 unless COMPLETED
+pnpm sources:daily -- -source CONTRATOS_GOV_BR            # long-running: schedule
+docker compose --profile sync up -d --build replicator    # same, as a container
+```
+
+- **Schedule:** on start it runs a cycle unless a `COMPLETED` cycle finished in the
+  last 24 hours (cancelled and failed cycles do not count), then runs every day at
+  `-at` (default `03:00`) in `-timezone` (default `America/Sao_Paulo`; tzdata is
+  built in). A cycle that fails is logged and the next one still runs. SIGTERM or
+  SIGINT records a running cycle as `CANCELLED` and exits 0. Each log line is JSON.
+- **Policy per cycle:** for each UG, both listings are captured and normalized.
+  Active contracts get all seven sub-resources every cycle. An inactive contract
+  is refreshed only when it was never normalized, its listing element differs from
+  the stored header, a sub-resource part is `MISSING`, `FAILED` or absent, or the
+  oldest part is older than 30 days. A failed UG does not stop the cycle; the run
+  records `unit_count` and `failed_unit_count`.
+- **One cycle at a time:** a PostgreSQL advisory lock per source
+  (`public_sources.daily:<source>`) keeps two processes from syncing together. With
+  `-once`, a held lock prints `another daily run is in progress` and exits 1.
+- **Pacing:** the same shared gate and limits as `sync` (`-interval`, `-retries`).
+- **Compose:** service `replicator` (image built from `apps/etl/Dockerfile`, non-root,
+  `restart: unless-stopped`) waits for a healthy `api`, which applies the migrations.
+  It is in the `sync` profile, so `docker compose up` and the e2e runs never start it.
+  It connects with `?sslmode=disable` to the Compose database.
 
 ## Tests
 
