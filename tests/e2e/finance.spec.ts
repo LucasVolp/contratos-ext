@@ -37,6 +37,79 @@ const committed = (page: import("@playwright/test").Page) =>
     .first()
     .locator("[data-metric=committedValue] dd");
 
+async function applyScope(page: import("@playwright/test").Page, text: string) {
+  const search = page.getByLabel("Buscar recorte", { exact: true });
+  await search.fill(text);
+  await search.press("Enter");
+}
+
+test("execution uses scope search without redundant scope selectors and restores its visible scope", async ({ page }) => {
+  await page.goto(fixture.baseURL + overview);
+  await expect(committed(page)).toHaveText("R$ 21,00");
+  for (const label of ["Unidade", "Exercício", "Período"]) {
+    await expect(page.getByLabel(label, { exact: true })).toHaveCount(0);
+  }
+  const search = page.getByLabel("Buscar recorte", { exact: true });
+  await search.fill("015814 2026 janeiro");
+  await search.press("Enter");
+  await expect(committed(page)).toHaveText("R$ 10,00");
+  await page.reload();
+  await expect(page.getByLabel("Recorte atual", { exact: true })).toContainText(
+    "Unidade de teste A · Exercício 2026 · Janeiro",
+  );
+  await expect(page.getByRole("button", { name: "Atualizar painel", exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Instituição", exact: true })).toBeVisible();
+  await search.fill("todas as unidades ano inteiro");
+  await search.press("Enter");
+  await expect(committed(page)).toHaveText("R$ 21,00");
+  await expect(page.getByLabel("Recorte atual", { exact: true })).toContainText("Ano inteiro");
+});
+
+test("institution selector stays compact when opened and clears the previous unit on change", async ({ page }) => {
+  await page.route("**/api/finance/units?*", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.data.push({
+      ...body.data[0],
+      code: "999999",
+      managementCode: "99999",
+      managementName: "Instituição de teste com nome extenso para verificar o seletor em telas pequenas",
+    });
+    body.total = body.data.length;
+    await route.fulfill({ response, json: body });
+  });
+  await page.goto(fixture.baseURL + overview + "&managementUnitCode=015814");
+  await expect(committed(page)).toHaveText("R$ 10,00");
+  const selector = page.getByRole("combobox", { name: "Instituição", exact: true });
+  await expect(selector).toHaveValue("26421");
+  await expect(selector.locator("option:checked")).toHaveText("IFRO");
+  await expect(selector).toHaveAttribute("title", "Instituição de teste");
+  await expect(page.getByLabel("Código do órgão", { exact: true })).toHaveCount(0);
+  for (const [width, theme] of [[360, "dark"], [390, "system"], [1440, "light"]] as const) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.getByLabel("Aparência", { exact: true }).selectOption(theme);
+    const before = await page.locator(".finance-toolbar").boundingBox();
+    await selector.click();
+    expect(await page.locator(".finance-toolbar").boundingBox()).toEqual(before);
+    await page.keyboard.press("Escape");
+    const bounds = await selector.boundingBox();
+    const refresh = await page.getByRole("button", { name: "Atualizar painel", exact: true }).boundingBox();
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(refresh!.x);
+    expect(Math.abs(bounds!.y - refresh!.y)).toBeLessThanOrEqual(1);
+    expect(bounds!.height).toBeGreaterThanOrEqual(44);
+    expect(bounds!.width).toBeLessThanOrEqual(220);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: `/tmp/finance-institution-${width}-${theme}.png` });
+  }
+  await selector.selectOption("99999");
+  await expect(page).toHaveURL(/managementCode=99999/);
+  expect(new URL(page.url()).searchParams.has("managementUnitCode")).toBe(false);
+  expect(new URL(page.url()).searchParams.get("fiscalYear")).toBe("2026");
+  await expect(selector).toHaveValue("99999");
+  await page.reload();
+  await expect(selector).toHaveValue("99999");
+});
+
 test("shared money presentation keeps significant decimal places, large aggregates and subcent values", () => {
   expect(formatMoney("6.000000000000")).toBe("R$ 6,00");
   expect(formatMoney("123456789012345678.123456")).toBe(
@@ -134,13 +207,9 @@ test("scope search applies what it understood to the panel filters", async ({
   await expect(page).toHaveURL(/managementUnitCode=158148/);
   await expect(page).toHaveURL(/fiscalYear=2025/);
   await expect(page).toHaveURL(/fromMonth=1&toMonth=6|toMonth=6.*fromMonth=1/);
-  await expect(page.getByLabel("Unidade", { exact: true })).toHaveValue(
-    "158148",
-  );
-  await expect(page.getByLabel("Exercício", { exact: true })).toHaveValue(
-    "2025",
-  );
-  await expect(page.getByLabel("Período", { exact: true })).toHaveValue("1-6");
+  await expect(page.getByLabel("Recorte atual", { exact: true })).toContainText("Unidade de teste B");
+  await expect(page.getByLabel("Recorte atual", { exact: true })).toContainText("Exercício 2025");
+  await expect(page.getByLabel("Recorte atual", { exact: true })).toContainText("1º semestre");
   await expect(page.getByRole("status").filter({ hasText: "Aplicado" })).toContainText(
     "Unidade de teste B",
   );
@@ -150,9 +219,7 @@ test("scope search applies what it understood to the panel filters", async ({
   await page
     .getByRole("button", { name: "Usar Unidade de teste A", exact: true })
     .click();
-  await expect(page.getByLabel("Unidade", { exact: true })).toHaveValue(
-    "015814",
-  );
+  await expect(page.getByLabel("Recorte atual", { exact: true })).toContainText("Unidade de teste A");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(search).toBeVisible();
   expect(
@@ -160,6 +227,49 @@ test("scope search applies what it understood to the panel filters", async ({
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
+});
+
+test("city, year and month search updates the URL and confirms the applied scope visibly", async ({ page }) => {
+  await page.route("**/api/finance/units?*", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    await route.fulfill({
+      response,
+      json: {
+        ...body,
+        data: body.data.map((unit: { code: string; name: string | null }) =>
+          unit.code === "015814" ? { ...unit, name: "Campus Três Lagoas" } : unit,
+        ),
+      },
+    });
+  });
+  await page.goto(fixture.baseURL + overview);
+  await expect(committed(page)).toHaveText("R$ 21,00");
+  const search = page.getByLabel("Buscar recorte", { exact: true });
+  await search.fill("tres lagoas 2024 janeiro");
+  await expect(page.locator(".scope-search-preview")).toContainText(
+    "Campus Três Lagoas · Exercício 2024 · Janeiro",
+  );
+  // Typing previews the interpretation without changing the consulted scope.
+  await expect(page).toHaveURL(/fiscalYear=2026/);
+  await search.press("Enter");
+  await expect(page.getByLabel("Recorte atual", { exact: true })).toHaveText("Campus Três Lagoas · Exercício 2024 · Janeiro");
+  const url = new URL(page.url());
+  expect(url.searchParams.get("managementUnitCode")).toBe("015814");
+  expect(url.searchParams.get("fiscalYear")).toBe("2024");
+  expect(url.searchParams.get("fromMonth")).toBe("1");
+  expect(url.searchParams.get("toMonth")).toBe("1");
+  await expect(page.getByRole("status").getByText(/Aplicado:/)).toBeVisible();
+
+  for (const colorScheme of ["light", "dark", "no-preference"] as const) {
+    await page.emulateMedia({ colorScheme });
+    for (const width of [360, 390, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(search).toBeVisible();
+      await expect(page.getByRole("button", { name: "Aplicar", exact: true })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
+  }
 });
 
 test("approved finance workspace replaces trends and rankings with overview and element exploration", async ({
@@ -191,7 +301,7 @@ test("approved finance workspace replaces trends and rankings with overview and 
   await expect(
     page.getByText("Cobertura diária não informada", { exact: true }),
   ).toBeVisible();
-  await page.getByLabel("Unidade", { exact: true }).selectOption("015814");
+  await applyScope(page, "015814");
   await expect(committed(page)).toHaveText("R$ 10,00");
   await page
     .getByRole("button", { name: "Explorar elemento 3.3.90.01", exact: true })
@@ -232,9 +342,7 @@ test("approved finance workspace replaces trends and rankings with overview and 
     .getByRole("navigation", { name: "Consultas financeiras", exact: true })
     .getByRole("link", { name: "Empenhos", exact: true })
     .click();
-  await expect(page.getByLabel("Unidade", { exact: true })).toHaveValue(
-    "015814",
-  );
+  await expect(page.getByLabel("Recorte atual", { exact: true })).toContainText("Unidade de teste A");
   expect(errors).toEqual([]);
 });
 
@@ -428,7 +536,7 @@ test("expense exploration bounds long classifications and shows source subitems 
   await expect(
     page.getByRole("table", { name: "Subelementos do documento" }),
   ).toHaveCount(0);
-  await page.getByLabel("Unidade", { exact: true }).selectOption("158148");
+  await applyScope(page, "158148");
   await expect(page).not.toHaveURL(/documentPage|document=|sourcePage/);
   await expect(
     page.getByRole("heading", {
@@ -796,7 +904,7 @@ test("failed refresh retains the last consulted data and a different scope never
       .filter({ hasText: "Os dados da última consulta foram preservados." }),
   ).toBeVisible();
   await expect(committed(page)).toHaveText("R$ 21,00");
-  await page.getByLabel("Unidade", { exact: true }).selectOption("158148");
+  await applyScope(page, "158148");
   await expect(
     page
       .getByRole("alert")
@@ -851,9 +959,9 @@ test("a delayed result cannot replace the values of a newer unit selection", asy
     } else await route.continue();
   });
   try {
-    await page.getByLabel("Unidade", { exact: true }).selectOption("015814");
+    await applyScope(page, "015814");
     await waiting;
-    await page.getByLabel("Unidade", { exact: true }).selectOption("158148");
+    await applyScope(page, "158148");
     await expect(committed(page)).toHaveText("R$ 11,00");
     release();
     await done;
@@ -890,11 +998,9 @@ test("a restricted viewer sees only linked units and no institutional LOA entry"
   expect(login.ok()).toBe(true);
   await page.goto(fixture.baseURL + overview);
   await expect(committed(page)).toHaveText("R$ 10,00");
-  await expect(
-    page
-      .getByLabel("Unidade", { exact: true })
-      .getByRole("option", { name: "Unidade de teste B", exact: true }),
-  ).toHaveCount(0);
+  await applyScope(page, "158148");
+  await expect(page.getByText("Não reconheci: 158148.", { exact: true })).toBeVisible();
+  await expect(committed(page)).toHaveText("R$ 10,00");
   await expect(
     page.getByRole("link", { name: "LOA institucional", exact: true }),
   ).toHaveCount(0);
@@ -1041,7 +1147,7 @@ test("fiscal year selection persists across reload without reusing another year'
 }) => {
   await page.goto(fixture.baseURL + overview);
   await expect(committed(page)).toHaveText("R$ 21,00");
-  await page.getByLabel("Exercício", { exact: true }).selectOption("2025");
+  await applyScope(page, "2025");
   await expect(page).toHaveURL(/fiscalYear=2025/);
   await expect(
     page.getByRole("heading", {
@@ -1051,11 +1157,9 @@ test("fiscal year selection persists across reload without reusing another year'
   ).toBeVisible();
   await expect(committed(page)).toHaveText("Não informado");
   await page.reload();
-  await expect(page.getByLabel("Exercício", { exact: true })).toHaveValue(
-    "2025",
-  );
+  await expect(page.getByLabel("Recorte atual", { exact: true })).toContainText("Exercício 2025");
   await expect(committed(page)).toHaveText("Não informado");
-  await page.getByLabel("Exercício", { exact: true }).selectOption("2026");
+  await applyScope(page, "2026");
   await expect(committed(page)).toHaveText("R$ 21,00");
 });
 

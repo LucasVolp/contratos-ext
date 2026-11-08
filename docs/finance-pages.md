@@ -6,10 +6,13 @@ All changes in this delivery are frontend code, frontend tests and this guide.
 
 ## Overview
 
-The primary controls select a management unit by name, fiscal year and period.
+The scope search selects a management unit by name or code, fiscal year and period.
+The execution overview has no separate selectors for those same scope fields;
+a persistent summary describes the current URL scope after reload.
 All units are selected initially. The first available management agency is resolved
 from the authenticated financial unit directory; no institution code is hardcoded.
-The institution selector and manual code entry remain under an expandable control.
+The institution selector is compact and precedes the refresh button without
+expanding the toolbar. The default institution still comes from the directory.
 
 The overview presents committed, liquidated and paid amounts, monthly evolution,
 unit comparisons and expense-nature comparisons. Selecting a comparison updates
@@ -75,3 +78,16 @@ The existing source data in the local main services was also checked in the
 browser, including unit selection, institutional budget and commitment details.
 The new chart palette has contrast ratios of 5.38:1, 4.59:1 and 5.51:1 against the
 paper token. Series use labels and distinct stroke patterns as well as color.
+
+## Institution selector labels
+
+The compact institution selector precedes the refresh action. It uses verified
+acronyms for financial management codes 26350 (UFGD), 26415 (IFMS) and 26421 (IFRO).
+The imported full name remains available in the control's title. Unknown codes
+retain the imported name, or the code when the name is missing; no acronym is
+generated from initials and no financial unit is assumed to match a catalog UASG.
+
+Sources checked on 2026-11-08:
+
+- [MEC 2022 parliamentary amendments guide, institute directory](https://www.gov.br/mec/pt-br/media/publicacoes/EmendasParlamentaresMEC2022).
+- [MEC decentralized execution agreement 5433, UFGD identification](https://simec.mec.gov.br/ted/termo-de-execucao-descentralizada.php?download=true&ted=5433).

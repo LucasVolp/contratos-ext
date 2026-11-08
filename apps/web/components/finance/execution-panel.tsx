@@ -15,6 +15,7 @@ import { useFinanceQuery } from "./use-finance-query";
 import { usePanelScope } from "./use-panel-scope";
 import { PanelControls } from "./panel-controls";
 import { ScopeSearch } from "./scope-search";
+import { scopeSearchPeriodLabel } from "@/lib/finance-scope-search";
 import { ExecutionNavigator } from "./execution-navigation";
 import { FinanceContent } from "./finance-content";
 import { ExecutionContext } from "./execution-context";
@@ -100,6 +101,7 @@ export function ExecutionPanel() {
           unitKey="managementUnitCode"
           periods
           onApply={change}
+          currentScope={`${scopeLabel} · Exercício ${scope.fiscalYear} · ${scopeSearchPeriodLabel(Number(scope.fromMonth), Number(scope.toMonth))}`}
         />
       </PageHead>
       <div className="finance-toolbar">
@@ -111,6 +113,7 @@ export function ExecutionPanel() {
           busy={result.loading || breakdown.loading}
           onChange={change}
           onRefresh={refresh}
+          showScopeFilters={false}
         />
       </div>
       <div className="execution-modebar">

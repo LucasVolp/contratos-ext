@@ -2843,32 +2843,28 @@ textarea {
   min-height: 44px;
   white-space: nowrap;
 }
-.panel-advanced {
-  margin-top: 12px;
+/* PanelControls: compact institution selection without expanding the toolbar. */
+.panel-institution-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0 0 12px;
+}
+.panel-institution-select label {
+  flex: none;
   font-size: 11px;
   color: var(--muted);
 }
-.panel-advanced summary {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  width: fit-content;
-  min-height: 30px;
-  cursor: pointer;
+.panel-institution-options {
+  width: 96px;
+  min-width: 0;
+  max-width: 100%;
 }
-.panel-institution-form {
-  display: flex;
-  gap: 12px;
-  align-items: end;
-  max-width: 520px;
-  padding: 12px 0;
-}
-.panel-institution-form .field {
-  flex: 1;
-  margin: 0;
-}
-.panel-advanced > .field {
-  margin: 12px 0;
+.panel-institution-options select {
+  min-height: 44px;
+  text-overflow: ellipsis;
+  font-size: 12px;
 }
 /* ScopeSearch: free-text finance scope filter in the page header */
 .finance-workspace .page-head:has(.scope-search) {
@@ -3319,13 +3315,6 @@ textarea {
   .panel-primary-filters .field {
     min-width: 0;
   }
-  .panel-institution-form {
-    display: block;
-  }
-  .panel-institution-form .button {
-    margin-top: 12px;
-  }
-  .panel-advanced summary,
   .panel-text-button,
   .panel-metric-switch button {
     min-height: 44px;
@@ -4721,42 +4710,33 @@ main.session-loading {
 .finance-toolbar {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
+  align-items: center;
   gap: 24px;
   padding-bottom: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   border-bottom: 1px solid var(--line);
 }
 .finance-toolbar .catalog-tabs {
   gap: 20px;
   border: 0;
-  padding-top: 19px;
+  padding-top: 0;
   margin: 0;
 }
 .finance-toolbar .panel-controls {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
+  grid-template-columns: auto auto;
+  justify-content: end;
+  align-items: center;
   gap: 12px;
   min-width: 0;
   border: 0;
   padding: 0;
   margin: 0;
 }
-.finance-toolbar .panel-primary-filters { gap: 10px; }
-.finance-toolbar .panel-primary-filters .field { min-width: 80px; }
-.finance-toolbar .panel-primary-filters .panel-unit-filter { min-width: 0; }
-.finance-toolbar .panel-advanced { margin: 0; }
-.finance-toolbar .panel-advanced > summary { min-height: 44px; }
-.finance-toolbar .panel-advanced[open] { grid-column: 1 / -1; }
+.finance-toolbar .panel-institution-select { margin: 0; }
 @media (max-width: 1200px) {
   .finance-toolbar { grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .finance-toolbar .catalog-tabs { padding-top: 0; }
-}
-@media (max-width: 700px) {
-  .finance-toolbar .panel-controls { grid-template-columns: minmax(0, 1fr); }
-  .finance-toolbar .panel-primary-filters { gap: 15px; }
-  .finance-toolbar .panel-primary-filters .field { min-width: 0; }
 }
 
 /* Contracts that list a finance commitment (commitment detail). */

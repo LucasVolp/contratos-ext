@@ -100,7 +100,15 @@ function monthOf(norm: string) {
   return index < 0 ? null : index + 1;
 }
 
-function periodLabel(from: number, to: number) {
+export function scopeSearchPeriodLabel(from: number, to: number) {
+  if (
+    !Number.isInteger(from) ||
+    !Number.isInteger(to) ||
+    from < 1 ||
+    to > 12 ||
+    from > to
+  )
+    return "Período inválido";
   const known = PERIOD_LABELS[`${from}-${to}`];
   if (known) return known;
   const first = MONTHS[from - 1][0];
@@ -138,16 +146,25 @@ function matchUnit(tokens: Token[], units: ScopeSearchUnit[]) {
     .filter((token) => !known.includes(token))
     .map((t) => t.raw);
   if (known.length === 0) return { unit: null, candidates: [], unmatched };
-  const scored = units.map((unit, index) => {
-    const name = names[index];
+  const scored = units
+    .map((unit, index) => {
+      const name = names[index];
+      return {
+        unit,
+        hard: known.filter((t) => name.some((part) => part.startsWith(t.norm)))
+          .length,
+        soft: tokens.filter((t) => isSoft(t) && name.includes(t.norm)).length,
+        exact: tokens.map((t) => t.norm).join(" ") === name.join(" "),
+      };
+    })
+    .filter((item) => item.hard === known.length);
+  if (scored.length === 0) {
     return {
-      unit,
-      hard: known.filter((t) => name.some((part) => part.startsWith(t.norm)))
-        .length,
-      soft: tokens.filter((t) => isSoft(t) && name.includes(t.norm)).length,
-      exact: tokens.map((t) => t.norm).join(" ") === name.join(" "),
+      unit: null,
+      candidates: [],
+      unmatched: hard.map((token) => token.raw),
     };
-  });
+  }
   const best = (items: typeof scored, key: "hard" | "soft") => {
     const top = Math.max(...items.map((item) => item[key]));
     return items.filter((item) => item[key] === top);
@@ -246,7 +263,7 @@ export function interpretScopeSearch(
   if (chosen) {
     changes.fromMonth = String(chosen[0]);
     changes.toMonth = String(chosen[1]);
-    labels.push(periodLabel(chosen[0], chosen[1]));
+    labels.push(scopeSearchPeriodLabel(chosen[0], chosen[1]));
   }
   return { changes, labels, unmatched, candidates: unitMatch.candidates };
 }

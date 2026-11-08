@@ -4,6 +4,6 @@ import base from "./playwright.config";
 export default defineConfig({
   ...base,
   globalSetup: undefined,
-  testMatch: "finance.spec.ts",
+  testMatch: ["finance.spec.ts", "finance-scope-search.spec.ts"],
   use: { ...base.use, storageState: undefined },
 });

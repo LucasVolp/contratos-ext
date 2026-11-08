@@ -2,10 +2,10 @@
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
-import { RefreshCw, SlidersHorizontal } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import type { FinanceUnit } from "@/lib/finance-types";
-import { Field, focusInvalid } from "@/components/ui";
-import { useState } from "react";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { financeInstitutionLabel } from "@/lib/finance-institution-label";
 export interface ScopeChoice {
   code: string;
   name: string | null;
@@ -26,6 +26,7 @@ export function PanelControls({
   busy,
   budget = false,
   showPeriod = true,
+  showScopeFilters = true,
 }: {
   scope: PanelScope;
   units: ScopeChoice[];
@@ -35,6 +36,7 @@ export function PanelControls({
   busy: boolean;
   budget?: boolean;
   showPeriod?: boolean;
+  showScopeFilters?: boolean;
 }) {
   const currentYear = new Date().getFullYear();
   const years = [
@@ -63,72 +65,106 @@ export function PanelControls({
   ];
   return (
     <section className="panel-controls" aria-label="Filtros do painel">
+      <div className="panel-institution-select">
+        <Label htmlFor="panel-agency">Instituição</Label>
+        <NativeSelect
+          id="panel-agency"
+          className="panel-institution-options"
+          size="sm"
+          value={scope.managementCode}
+          disabled={organizations.length === 0}
+          title={organizations.find((organization) => organization.code === scope.managementCode)?.name || scope.managementCode}
+          onChange={(event) =>
+            onChange({
+              [budget ? "subordinateAgencyCode" : "managementCode"]:
+                event.target.value,
+              managementUnitCode: "",
+              budgetaryUnitCode: "",
+            })
+          }
+        >
+          {!organizations.some((organization) => organization.code === scope.managementCode) ? (
+            <NativeSelectOption value={scope.managementCode}>
+              {scope.managementCode || "Nenhuma instituição disponível"}
+            </NativeSelectOption>
+          ) : null}
+          {organizations.map((organization) => (
+            <NativeSelectOption key={organization.code} value={organization.code}>
+              {financeInstitutionLabel(organization.code, organization.name)}
+            </NativeSelectOption>
+          ))}
+        </NativeSelect>
+      </div>
       <div className="panel-primary-filters">
-        <div className="field panel-unit-filter">
-          <Label htmlFor="panel-unit">
-            {budget ? "Unidade orçamentária" : "Unidade"}
-          </Label>
-          <select
-            id="panel-unit"
-            value={scope.unit}
-            onChange={(e) =>
-              onChange({
-                [budget ? "budgetaryUnitCode" : "managementUnitCode"]:
-                  e.target.value,
-              })
-            }
-          >
-            <option value="">
-              {budget ? "Todas as unidades orçamentárias" : "Todas as unidades"}
-            </option>
-            {scope.unit && !units.some((u) => u.code === scope.unit) && (
-              <option value={scope.unit}>Unidade {scope.unit}</option>
+        {showScopeFilters ? (
+          <>
+            <div className="field panel-unit-filter">
+              <Label htmlFor="panel-unit">
+                {budget ? "Unidade orçamentária" : "Unidade"}
+              </Label>
+              <select
+                id="panel-unit"
+                value={scope.unit}
+                onChange={(e) =>
+                  onChange({
+                    [budget ? "budgetaryUnitCode" : "managementUnitCode"]:
+                      e.target.value,
+                  })
+                }
+              >
+                <option value="">
+                  {budget ? "Todas as unidades orçamentárias" : "Todas as unidades"}
+                </option>
+                {scope.unit && !units.some((u) => u.code === scope.unit) && (
+                  <option value={scope.unit}>Unidade {scope.unit}</option>
+                )}
+                {units.map((u) => (
+                  <option key={u.code} value={u.code}>
+                    {u.name || `Unidade ${u.code}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <Label htmlFor="panel-year">Exercício</Label>
+              <select
+                id="panel-year"
+                value={scope.fiscalYear}
+                onChange={(e) => onChange({ fiscalYear: e.target.value })}
+              >
+                {years.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {!budget && showPeriod && (
+              <div className="field">
+                <Label htmlFor="panel-period">Período</Label>
+                <select
+                  id="panel-period"
+                  value={period}
+                  onChange={(e) => {
+                    const [fromMonth, toMonth] = e.target.value.split("-");
+                    onChange({ fromMonth, toMonth });
+                  }}
+                >
+                  {!periods.some((p) => p.value === period) && (
+                    <option value={period}>
+                      Meses {scope.fromMonth} a {scope.toMonth}
+                    </option>
+                  )}
+                  {periods.map((p) => (
+                    <option key={p.value} value={p.value}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             )}
-            {units.map((u) => (
-              <option key={u.code} value={u.code}>
-                {u.name || `Unidade ${u.code}`}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <Label htmlFor="panel-year">Exercício</Label>
-          <select
-            id="panel-year"
-            value={scope.fiscalYear}
-            onChange={(e) => onChange({ fiscalYear: e.target.value })}
-          >
-            {years.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-        </div>
-        {!budget && showPeriod && (
-          <div className="field">
-            <Label htmlFor="panel-period">Período</Label>
-            <select
-              id="panel-period"
-              value={period}
-              onChange={(e) => {
-                const [fromMonth, toMonth] = e.target.value.split("-");
-                onChange({ fromMonth, toMonth });
-              }}
-            >
-              {!periods.some((p) => p.value === period) && (
-                <option value={period}>
-                  Meses {scope.fromMonth} a {scope.toMonth}
-                </option>
-              )}
-              {periods.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+          </>
+        ) : null}
         <Button
           className="button secondary panel-refresh"
           type="button"
@@ -140,89 +176,6 @@ export function PanelControls({
           <RefreshCw size={15} aria-hidden="true" />
         </Button>
       </div>
-      <details
-        className="panel-advanced"
-        open={!scope.managementCode || undefined}
-      >
-        <summary>
-          <SlidersHorizontal size={14} aria-hidden="true" />
-          Instituição
-        </summary>
-        {organizations.length > 1 && (
-          <div className="field">
-            <Label htmlFor="panel-agency">Órgão</Label>
-            <select
-              id="panel-agency"
-              value={scope.managementCode}
-              onChange={(e) =>
-                onChange({
-                  [budget ? "subordinateAgencyCode" : "managementCode"]:
-                    e.target.value,
-                  managementUnitCode: "",
-                  budgetaryUnitCode: "",
-                })
-              }
-            >
-              {organizations.map((o) => (
-                <option key={o.code} value={o.code}>
-                  {o.name || o.code}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-        <InstitutionCode
-          key={scope.managementCode}
-          value={scope.managementCode}
-          onSubmit={(code) =>
-            onChange({
-              [budget ? "subordinateAgencyCode" : "managementCode"]: code,
-              managementUnitCode: "",
-              budgetaryUnitCode: "",
-            })
-          }
-        />
-      </details>
     </section>
-  );
-}
-function InstitutionCode({
-  value,
-  onSubmit,
-}: {
-  value: string;
-  onSubmit: (value: string) => void;
-}) {
-  const [draft, setDraft] = useState(value);
-  const [error, setError] = useState("");
-  return (
-    <form
-      className="panel-institution-form"
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (!/^[0-9]{5}$/.test(draft)) {
-          setError("Informe o código do órgão com 5 dígitos.");
-          focusInvalid({
-            "panel-management-code": "Informe o código do órgão com 5 dígitos.",
-          });
-          return;
-        }
-        setError("");
-        onSubmit(draft);
-      }}
-    >
-      <Field
-        name="panel-management-code"
-        label="Código do órgão"
-        value={draft}
-        required
-        hint="Código de 5 dígitos no Portal da Transparência."
-        error={error}
-        onChange={(_, value) => setDraft(value)}
-      />
-      <Button className="button secondary" type="submit">
-        Usar órgão
-      </Button>
-    </form>
   );
 }

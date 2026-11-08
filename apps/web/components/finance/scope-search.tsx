@@ -9,7 +9,7 @@ import {
   type ScopeSearchUnit,
 } from "@/lib/finance-scope-search";
 
-const EXAMPLE = "Ex.: reitoria 2025 1º semestre";
+const EXAMPLE = "Ex.: tres lagoas 2024 janeiro";
 
 function describe(result: ScopeSearchResult) {
   return result.labels.join(" · ");
@@ -35,11 +35,13 @@ export function ScopeSearch({
   unitKey,
   periods,
   onApply,
+  currentScope,
 }: {
   units: ScopeSearchUnit[];
   unitKey: string;
   periods: boolean;
   onApply: (changes: Record<string, string>) => void;
+  currentScope?: string;
 }) {
   const [draft, setDraft] = useState("");
   const [outcome, setOutcome] = useState<ScopeSearchResult | null>(null);
@@ -102,6 +104,11 @@ export function ScopeSearch({
           {hint}
         </p>
       </form>
+      {currentScope ? (
+        <p className="muted" aria-label="Recorte atual" aria-live="polite">
+          {currentScope}
+        </p>
+      ) : null}
       <div role="status" className="scope-search-outcome">
         {outcome ? <Outcome result={outcome} onChoose={choose} /> : null}
       </div>
@@ -119,7 +126,7 @@ function Outcome({
   return (
     <>
       {result.labels.length > 0 ? (
-        <p className="sr-only">Aplicado: {describe(result)}.</p>
+        <p>Aplicado: {describe(result)}.</p>
       ) : null}
       {result.unmatched.length > 0 ? (
         <p>Não reconheci: {result.unmatched.join(", ")}.</p>
