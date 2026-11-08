@@ -11,13 +11,11 @@ import {
   detailFilters,
   executionFilters,
   unitFilters,
+  subelementFilters,
 } from "./validation";
 
 export type CommitmentCollection =
-  | "items"
-  | "history"
-  | "liquidations"
-  | "payments";
+  "items" | "history" | "liquidations" | "payments";
 
 export class FinanceService {
   constructor(
@@ -51,6 +49,26 @@ export class FinanceService {
         fiscalYear: filters.fiscalYear,
         fromMonth: filters.fromMonth,
         toMonth: filters.toMonth,
+      },
+    };
+  }
+  async subelements(query: FinanceQuery, scope: Scope = null) {
+    const filters = {
+      ...subelementFilters(query),
+      allowedUnitCodes: scope ?? undefined,
+    };
+    const result = await this.reports.subelements(filters);
+    return {
+      ...result,
+      context: {
+        dataset: "DAILY_SUBELEMENTS",
+        source: "TRANSPARENCY_PORTAL",
+        managementCode: filters.managementCode,
+        expenseNature: filters.expenseNature,
+        fiscalYear: filters.fiscalYear,
+        fromMonth: filters.fromMonth,
+        toMonth: filters.toMonth,
+        metric: filters.metric,
       },
     };
   }

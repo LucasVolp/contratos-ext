@@ -46,10 +46,11 @@ export function chartUnits(value: string | null): bigint | null {
   const [integer, fraction = ""] = (parseDecimal(absolute) ?? absolute).split(
     ".",
   );
-  if (fraction.length > 6) return null;
+  const significant = fraction.replace(/0+$/, "");
+  if (significant.length > 6) return null;
   try {
     return (
-      BigInt(integer + fraction.padEnd(6, "0")) * BigInt(negative ? -1 : 1)
+      BigInt(integer + significant.padEnd(6, "0")) * BigInt(negative ? -1 : 1)
     );
   } catch {
     return null;

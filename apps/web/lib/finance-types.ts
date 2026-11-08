@@ -113,17 +113,48 @@ export interface ChartEntry {
   filterValue?: string;
 }
 export type ExecutionMetric =
-  | "committedValue"
-  | "liquidatedValue"
-  | "paidValue";
-export interface ExecutionBreakdowns {
-  monthly: { month: number; summary: ExecutionSummary }[];
-  units: { code: string; name: string | null; summary: ExecutionSummary }[];
-  natures: { code: string; name: string | null; summary: ExecutionSummary }[];
+  "committedValue" | "liquidatedValue" | "paidValue";
+export interface ExecutionNature {
+  code: string;
+  name: string | null;
+  summary: ExecutionSummary;
+}
+export interface ExecutionNatures {
+  natures: ExecutionNature[];
   unclassifiedCount: number;
   unassignedUnitCount: number;
 }
 export interface BudgetBreakdowns {
   actions: { code: string; name: string | null; summary: BudgetSummary }[];
   groups: { code: string; name: string | null; summary: BudgetSummary }[];
+}
+
+export interface SubelementRow {
+  code: string | null;
+  name: string | null;
+  committedValue: string | null;
+  liquidatedValue: string | null;
+  paidValue: string | null;
+  sourceRowCount: number;
+}
+export interface SubelementReport extends Page<SubelementRow> {
+  chartEligible: boolean;
+  summary: {
+    committedValue: string | null;
+    liquidatedValue: string | null;
+    paidValue: string | null;
+    sourceRowCount: number;
+    documentCount: number;
+    observedDayCount: number;
+    firstDocumentDate: string | null;
+    lastDocumentDate: string | null;
+    lastImportedAt: string | null;
+    coverage: "NOT_VERIFIED";
+  };
+  chart: {
+    code: string | null;
+    name: string | null;
+    value: string | null;
+    other: boolean;
+  }[];
 }

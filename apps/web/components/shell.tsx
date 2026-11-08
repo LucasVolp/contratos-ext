@@ -1,8 +1,16 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, ChevronRight, Landmark } from "lucide-react";
+import {
+  Building2,
+  ChevronRight,
+  Landmark,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from "lucide-react";
 import { SessionProvider, useSession } from "@/lib/session";
+import { Button } from "./ui/button";
+import { useSidebarPreference } from "@/lib/use-sidebar-preference";
 import { Loading } from "./ui";
 import { ThemePicker } from "./theme-picker";
 import { WorkspaceNavigation } from "./workspace-navigation";
@@ -50,6 +58,7 @@ function Workspace({
   children: React.ReactNode;
 }) {
   const { viewer } = useSession();
+  const [collapsed, toggle] = useSidebarPreference("main");
   const section =
     sections.find(([prefix]) => path.startsWith(prefix))?.[1] ||
     "Área de trabalho";
@@ -63,27 +72,54 @@ function Workspace({
       <a className="skip" href="#conteudo">
         Ir para o conteúdo
       </a>
-      <aside className="sidebar">
-        <Link href="/pregoes" className="workspace-brand">
-          <span className="brand-symbol">
-            <Landmark size={21} aria-hidden="true" />
-          </span>
-          <span>
-            contratos<small>EXT</small>
-          </span>
-        </Link>
-        <div className="workspace-institution">
+      <aside
+        className={`sidebar ${collapsed ? "is-collapsed" : ""}`}
+        aria-label="Barra principal"
+      >
+        <div className="workspace-sidebar-header">
+          <Link href="/pregoes" className="workspace-brand">
+            <span className="brand-symbol">
+              <Landmark size={21} aria-hidden="true" />
+            </span>
+            <span>
+              contratos<small>EXT</small>
+            </span>
+          </Link>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={toggle}
+            aria-label={
+              collapsed ? "Expandir menu principal" : "Recolher menu principal"
+            }
+            title={
+              collapsed ? "Expandir menu principal" : "Recolher menu principal"
+            }
+            aria-expanded={!collapsed}
+            aria-controls="workspace-navigation"
+          >
+            {collapsed ? (
+              <PanelLeftOpen size={18} aria-hidden="true" />
+            ) : (
+              <PanelLeftClose size={18} aria-hidden="true" />
+            )}
+          </Button>
+        </div>
+        <div className="workspace-institution" title={institution}>
           <Building2 size={17} aria-hidden="true" />
           <div>
             <strong>{institution}</strong>
             <span>Área de trabalho institucional</span>
           </div>
         </div>
-        <WorkspaceNavigation
-          path={path}
-          manager={viewer.role === "GESTOR_GERAL"}
-        />
-        <WorkspaceAccount />
+        <div id="workspace-navigation" className="workspace-navigation">
+          <WorkspaceNavigation
+            path={path}
+            manager={viewer.role === "GESTOR_GERAL"}
+          />
+          <WorkspaceAccount />
+        </div>
       </aside>
       <div className="workspace-content">
         <header className="workspace-topbar">

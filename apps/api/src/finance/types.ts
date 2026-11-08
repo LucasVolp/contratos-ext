@@ -151,3 +151,41 @@ export interface BudgetRow extends BudgetSummary {
   expenseElementCode: string;
   expenseElementName: string | null;
 }
+
+export type ExpenseMetric = "committedValue" | "liquidatedValue" | "paidValue";
+export interface SubelementFilters extends ExecutionFilters {
+  expenseNature: string;
+  metric: ExpenseMetric;
+}
+export interface SubelementAmounts {
+  committedValue: string | null;
+  liquidatedValue: string | null;
+  paidValue: string | null;
+}
+export interface SubelementRow extends SubelementAmounts {
+  code: string | null;
+  name: string | null;
+  sourceRowCount: number;
+}
+export interface SubelementSummary extends SubelementAmounts {
+  sourceRowCount: number;
+  documentCount: number;
+  observedDayCount: number;
+  firstDocumentDate: string | null;
+  lastDocumentDate: string | null;
+  lastImportedAt: string | null;
+  coverage: "NOT_VERIFIED";
+}
+export interface SubelementSlice {
+  code: string | null;
+  name: string | null;
+  value: string | null;
+  other: boolean;
+}
+export interface SubelementReport extends ReportPage<
+  SubelementRow,
+  SubelementSummary
+> {
+  chart: SubelementSlice[];
+  chartEligible: boolean;
+}

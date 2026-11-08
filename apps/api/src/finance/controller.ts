@@ -21,6 +21,9 @@ export function registerFinanceRoutes(
       routes.get<Query>("/execution", (request) =>
         finance.execution(request.query, request.scope),
       );
+      routes.get<Query>("/subelements", (request) =>
+        finance.subelements(request.query, request.scope),
+      );
       routes.get<Query>("/budgets", (request) => {
         requireManager(request.viewer!);
         return finance.budgets(request.query);

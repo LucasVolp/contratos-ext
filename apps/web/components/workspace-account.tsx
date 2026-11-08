@@ -35,13 +35,13 @@ export function WorkspaceAccount() {
         </span>
       </div>
       <div className="account-actions">
-        <Link href="/conta">
+        <Link href="/conta" title="Minha conta">
           <UserRound size={14} aria-hidden="true" />
-          Minha conta
+          <span>Minha conta</span>
         </Link>
-        <button type="button" onClick={switchUser}>
+        <button type="button" onClick={switchUser} title="Trocar de usuário">
           <LogOut size={14} aria-hidden="true" />
-          Trocar de usuário
+          <span>Trocar de usuário</span>
         </button>
       </div>
     </section>

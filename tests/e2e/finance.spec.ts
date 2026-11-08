@@ -1,6 +1,16 @@
 import { test, expect } from "@playwright/test";
-import { compactMoney, formatMoney } from "../../apps/web/lib/decimal-display";
+import {
+  compactMoney,
+  formatMoney,
+  chartUnits,
+} from "../../apps/web/lib/decimal-display";
 import { financeFixture } from "../helpers/finance";
+import {
+  executionComposition,
+  rankExecutionNatures,
+  expenseBarData,
+} from "../../apps/web/lib/finance-chart";
+import type { ExecutionNature } from "../../apps/web/lib/finance-types";
 let fixture: Awaited<ReturnType<typeof financeFixture>>;
 test.describe.configure({ mode: "serial" });
 test.beforeAll(async () => {
@@ -21,7 +31,10 @@ test.afterAll(async () => {
 });
 const overview = "/financeiro?managementCode=26421&fiscalYear=2026";
 const committed = (page: import("@playwright/test").Page) =>
-  page.locator(".panel-metrics").first().locator(".panel-metric.committed dd");
+  page
+    .locator(".execution-totals")
+    .first()
+    .locator("[data-metric=committedValue] dd");
 
 test("shared money presentation keeps significant decimal places, large aggregates and subcent values", () => {
   expect(formatMoney("6.000000000000")).toBe("R$ 6,00");
@@ -37,79 +50,500 @@ test("shared money presentation keeps significant decimal places, large aggregat
   expect(compactMoney("0.000000000000")).toBe("R$ 0,00");
 });
 
-test("unit filtering updates authoritative figures, comparisons, monthly values and document reach", async ({
+test("approved finance workspace replaces trends and rankings with overview and element exploration", async ({
   page,
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(fixture.baseURL + overview);
   await expect(
-    page.getByRole("heading", { name: "Visão financeira", exact: true }),
+    page.getByRole("heading", { name: "Execução da despesa", exact: true }),
   ).toBeVisible();
   await expect(committed(page)).toHaveText("R$ 21,00");
   await expect(
-    page.getByRole("img", {
-      name: "Evolução mensal dos valores empenhados, liquidados e pagos",
+    page.getByRole("heading", { name: "Evolução mensal", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Execução nas unidades", exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("tab", { name: "Visão geral", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Situação da execução", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".execution-totals [data-metric=paidValue] dd"),
+  ).toHaveText("Não informado");
+  await expect(
+    page.getByText("Cobertura diária não informada", { exact: true }),
+  ).toBeVisible();
+  await page.getByLabel("Unidade", { exact: true }).selectOption("015814");
+  await expect(committed(page)).toHaveText("R$ 10,00");
+  await expect(page).toHaveURL(/view=overview/);
+  await page
+    .getByRole("tab", { name: "Explorar a despesa", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Explorar elemento 3.3.90.01", exact: true })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/element=339001/);
+  await expect(committed(page)).toHaveText("R$ 1,00");
+  await expect(
+    page.getByRole("heading", {
+      name: "Gasto por subelemento",
+      exact: true,
     }),
   ).toBeVisible();
-  await expect(
-    page.getByText("1 de 12 meses com registros", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.locator(".panel-metrics").first().locator(".panel-metric.paid dd"),
-  ).toHaveText("Não informado");
-  await page.getByLabel("Unidade", { exact: true }).selectOption("015814");
-  await expect(page).toHaveURL(/managementUnitCode=015814/);
+  await page.getByRole("tab", { name: "Visão geral", exact: true }).click();
   await expect(committed(page)).toHaveText("R$ 10,00");
-  await expect(
-    page.getByRole("heading", { name: "Unidade de teste A", exact: true }),
-  ).toBeVisible();
-  await page.getByText("Ver valores mensais", { exact: true }).click();
-  const monthly = page.getByRole("region", {
-    name: "Valores mensais",
-    exact: true,
-  });
-  await expect(monthly.getByRole("row", { name: /Jan/ })).toContainText(
-    "R$ 10,00",
-  );
-  await expect(monthly.getByRole("row", { name: /Fev/ })).toContainText(
-    "Sem registros",
-  );
-  const metric = page
-    .getByRole("group", { name: "Valor usado nas comparações" })
-    .getByRole("button", { name: "Pago", exact: true });
-  await metric.focus();
-  await page.keyboard.press("Space");
-  await expect(metric).toHaveAttribute("aria-pressed", "true");
   await page
-    .getByRole("group", { name: "Valor usado nas comparações" })
-    .getByRole("button", { name: "Empenhado", exact: true })
+    .getByRole("tab", { name: "Explorar a despesa", exact: true })
     .click();
-  const nature = page.getByRole("region", {
-    name: "Naturezas de despesa",
-    exact: true,
-  });
-  await nature.getByRole("button", { name: /Natureza 339001:/ }).click();
-  await expect(page).toHaveURL(/expenseNature=339001/);
   await expect(committed(page)).toHaveText("R$ 1,00");
+  await page.reload();
+  await expect(committed(page)).toHaveText("R$ 1,00");
+  await expect(
+    page.getByRole("link", {
+      name: "Consultar empenhos deste elemento",
+      exact: true,
+    }),
+  ).toHaveAttribute("href", /expenseNature=339001/);
   await page
-    .getByRole("button", { name: "Remover filtro de natureza" })
+    .getByRole("button", { name: "Todas as despesas", exact: true })
+    .first()
     .click();
   await expect(committed(page)).toHaveText("R$ 10,00");
-  await page.reload();
-  await expect(page.getByLabel("Unidade", { exact: true })).toHaveValue(
-    "015814",
-  );
   await page
     .getByRole("link", { name: "Consultar empenhos", exact: true })
     .click();
   await expect(page.getByLabel("Unidade", { exact: true })).toHaveValue(
     "015814",
   );
-  await expect(
-    page.getByRole("heading", { name: "21 empenhos", exact: true }),
-  ).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test("execution donut uses disjoint balances and top five defaults to committed with restorable stage selection", async ({
+  page,
+}) => {
+  await page.route("**/api/finance/execution?**", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    const params = new URL(route.request().url()).searchParams;
+    if (params.get("limit") === "1" && !params.has("expenseNature"))
+      body.summary.paidValue = "1.05";
+    await route.fulfill({ response, json: body });
+  });
+  await page.goto(fixture.baseURL + overview);
+  await expect(
+    page.getByRole("img", { name: "Composição da execução do recorte" }),
+  ).toBeVisible();
+  const top = page.getByRole("region", {
+    name: "Top 5 elementos de despesa",
+    exact: true,
+  });
+  await expect(top.locator("ol > li")).toHaveCount(5);
+  await expect(
+    top.getByLabel("Ordenar elementos por", { exact: true }),
+  ).toHaveValue("committedValue");
+  await top
+    .getByLabel("Ordenar elementos por", { exact: true })
+    .selectOption("liquidatedValue");
+  await expect(page).toHaveURL(/rankingMetric=liquidatedValue/);
+  await page.reload();
+  await expect(
+    top.getByLabel("Ordenar elementos por", { exact: true }),
+  ).toHaveValue("liquidatedValue");
+  await top
+    .getByLabel("Ordenar elementos por", { exact: true })
+    .selectOption("paidValue");
+  await expect(
+    top.getByText("Valores não informados para esta etapa.", { exact: true }),
+  ).toBeVisible();
+  await expect(top.locator("ol > li")).toHaveCount(0);
+  await top
+    .getByLabel("Ordenar elementos por", { exact: true })
+    .selectOption("committedValue");
+  await top
+    .getByRole("button", { name: "Explorar elemento 3.3.90.01", exact: true })
+    .click();
+  await expect(page).toHaveURL(/element=339001/);
+});
+
+test("expense exploration bounds long classifications and shows source subitems inside the selected element", async ({
+  page,
+}) => {
+  await page.goto(fixture.baseURL + overview);
+  const ledger = page.locator(".execution-ledger");
+  await expect(ledger.locator("tbody tr")).toHaveCount(6);
+  await ledger
+    .getByRole("button", { name: "Próxima página", exact: true })
+    .click();
+  await expect(page).toHaveURL(/elementPage=2/);
+  await expect(ledger.locator("tbody tr")).toHaveCount(6);
+  await expect(committed(page)).toHaveText("R$ 21,00");
+  await page.reload();
+  await expect(page).toHaveURL(/elementPage=2/);
+  await expect(
+    ledger.getByRole("button", {
+      name: "Explorar elemento 3.3.90.07",
+      exact: true,
+    }),
+  ).toBeVisible();
+  const navigator = page.getByRole("navigation", {
+    name: "Elementos da despesa",
+    exact: true,
+  });
+  expect(
+    await navigator.evaluate(
+      (node) =>
+        node.clientHeight <= 360 && node.scrollHeight > node.clientHeight,
+    ),
+  ).toBe(true);
+  await expect(
+    page.getByText("Role para ver mais", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Ver próximos elementos", exact: true })
+    .click();
+  await expect
+    .poll(() => navigator.evaluate((node) => node.scrollTop))
+    .toBeGreaterThan(0);
+  await expect(
+    page.getByRole("button", { name: "Ver elementos anteriores", exact: true }),
+  ).toBeEnabled();
+  await page.getByLabel("Localizar despesa", { exact: true }).fill("3.3.90.01");
+  await expect(
+    page.getByText("Role para ver mais", { exact: true }),
+  ).toHaveCount(0);
+  await navigator
+    .getByRole("button", { name: "Explorar elemento 3.3.90.01", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Gasto por subelemento",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page
+    .getByText("Consultar documentos de origem", { exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: /Consultar subelementos de 2026NE/ })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("table", { name: "Subelementos do documento" }),
+  ).toContainText("Subelemento de teste");
+  await expect(
+    page.getByRole("table", { name: "Subelementos do documento" }),
+  ).toContainText("3.3.90.01.10");
+  await expect(
+    page.getByRole("table", { name: "Subelementos do documento" }),
+  ).toContainText("123.456.789.012.345.678,123456");
+  await expect(committed(page)).toHaveText("R$ 1,00");
+  await page.reload();
+  await expect(
+    page.getByRole("table", { name: "Subelementos do documento" }),
+  ).toContainText("Subelemento de teste");
+  let sourceRequests = 0;
+  page.on("request", (request) => {
+    if (request.url().includes("/items?")) sourceRequests++;
+  });
+  await page
+    .getByRole("button", { name: "Atualizar painel", exact: true })
+    .click();
+  await expect.poll(() => sourceRequests).toBeGreaterThan(0);
+  for (const width of [360, 390, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (const theme of ["light", "dark"]) {
+      await page.getByLabel("Aparência", { exact: true }).selectOption(theme);
+      await expect(
+        page.getByRole("table", { name: "Subelementos do documento" }),
+      ).toBeVisible();
+      const layout = await page.evaluate(() => ({
+        width: innerWidth,
+        scroll: document.documentElement.scrollWidth,
+        offenders: [...document.querySelectorAll("main *")]
+          .filter(
+            (node) =>
+              node.getBoundingClientRect().right > innerWidth + 1 &&
+              !node.closest(".table-scroll"),
+          )
+          .map((node) => ({
+            tag: node.tagName,
+            className: node.className,
+            right: node.getBoundingClientRect().right,
+            width: node.getBoundingClientRect().width,
+          }))
+          .slice(0, 15),
+      }));
+      expect(layout.scroll, JSON.stringify(layout)).toBeLessThanOrEqual(
+        layout.width,
+      );
+      if (width === 1440) {
+        await page.screenshot({
+          path: `/tmp/contracts-subitems-${theme}.png`,
+          fullPage: true,
+        });
+      }
+    }
+  }
+  await page.getByRole("button", { name: "Pagamentos", exact: true }).click();
+  await expect(
+    page.getByText("Nenhum registro disponível nesta coleção do documento.", {
+      exact: false,
+    }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Itens do empenho", exact: true })
+    .click();
+  await expect(
+    page.getByRole("table", { name: "Subelementos do documento" }),
+  ).toContainText("Subelemento de teste");
+  const documents = page.locator(".execution-subitems");
+  await documents
+    .getByRole("button", { name: "Próxima página", exact: true })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/documentPage=2/);
+  await expect(
+    page.getByRole("table", { name: "Subelementos do documento" }),
+  ).toHaveCount(0);
+  await page.getByLabel("Unidade", { exact: true }).selectOption("158148");
+  await expect(page).not.toHaveURL(/documentPage|document=|sourcePage/);
+  await expect(
+    page.getByRole("heading", {
+      name: "Elemento não encontrado neste recorte.",
+      exact: true,
+    }),
+  ).toBeVisible();
+});
+
+test("subelement overview consolidates all daily items before browsing individual documents", async ({
+  page,
+}) => {
+  await page.goto(fixture.baseURL + overview + "&element=339001");
+  await expect(
+    page.getByRole("heading", { name: "Gasto por subelemento", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("figure", { name: "Distribuição do gasto por subelemento" }),
+  ).toBeVisible();
+  await expect(page.locator(".expense-bar-value").first()).toHaveText(
+    "R$ 2.469.135.780.246.913.562,46912",
+  );
+  await expect(page.locator(".execution-subelement-summary")).toHaveCount(0);
+  expect(
+    await page
+      .getByRole("figure", { name: "Distribuição do gasto por subelemento" })
+      .evaluate((node) => node.getBoundingClientRect().height),
+  ).toBeLessThan(300);
+  await expect(committed(page)).toHaveText("R$ 1,00");
+  await expect(
+    page.getByRole("button", { name: /Consultar subelementos de 2026NE/ }),
+  ).toHaveCount(0);
+  await page
+    .getByLabel("Visualizar gasto por", { exact: true })
+    .selectOption("paidValue");
+  await expect(page).toHaveURL(/subelementMetric=paidValue/);
+  await expect(
+    page.getByRole("figure", { name: "Distribuição do gasto por subelemento" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText(
+      "Não há valores suficientes para compor o gráfico desta etapa.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByLabel("Visualizar gasto por", { exact: true }),
+  ).toHaveValue("paidValue");
+});
+
+test("both sidebars collapse independently, preserve navigation and retain the preference", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(fixture.baseURL + overview);
+  await expect(committed(page)).toHaveText("R$ 21,00");
+  const main = page.getByRole("complementary", {
+    name: "Barra principal",
+    exact: true,
+  });
+  const content = page.locator(".workspace-content");
+  const before = await content.boundingBox();
+  await page
+    .getByRole("button", { name: "Recolher menu principal", exact: true })
+    .click();
+  await expect(main).toHaveClass(/is-collapsed/);
+  expect((await content.boundingBox())!.width).toBeGreaterThan(before!.width);
+  await expect(
+    main.getByRole("link", { name: "Financeiro", exact: true }),
+  ).toBeVisible();
+  await expect(
+    main.getByRole("link", { name: "Documentos para assinatura", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Recolher lista de elementos", exact: true })
+    .click();
+  await expect(page.locator(".execution-workspace")).toHaveClass(
+    /is-navigator-collapsed/,
+  );
+  await expect(
+    page.getByLabel("Localizar despesa", { exact: true }),
+  ).toHaveCount(0);
+  await expect(committed(page)).toHaveText("R$ 21,00");
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Expandir menu principal", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: "Expandir lista de elementos",
+      exact: true,
+    }),
+  ).toBeVisible();
+  for (const width of [360, 390, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page
+      .getByRole("button", { name: "Expandir menu principal", exact: true })
+      .click();
+    await expect(
+      main.getByRole("link", { name: "Financeiro", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Recolher menu principal", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Expandir lista de elementos", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", {
+        name: "Recolher lista de elementos",
+        exact: true,
+      }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page
+      .getByRole("button", { name: "Recolher lista de elementos", exact: true })
+      .click();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+  }
+});
+
+test("purpose scopes never invent a Reitoria or campus attribution", async ({
+  page,
+}) => {
+  await page.goto(fixture.baseURL + overview);
+  await expect(committed(page)).toHaveText("R$ 21,00");
+  for (const label of [
+    "Despesas próprias da Reitoria",
+    "Execução adjunta aos campi",
+  ]) {
+    await page.getByRole("tab", { name: label, exact: true }).click();
+    await expect(
+      page.getByRole("heading", {
+        name: "Finalidade ainda não classificada",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(committed(page)).toHaveCount(0);
+    await expect(page.getByText("R$ 21,00", { exact: true })).toHaveCount(0);
+  }
+  await page
+    .getByRole("tab", { name: "Dados disponíveis", exact: true })
+    .click();
+  await expect(committed(page)).toHaveText("R$ 21,00");
+});
+
+test("chart coordinates accept insignificant decimal padding without losing source precision", () => {
+  expect(chartUnits("0.100000000000")).toBe(100000n);
+  expect(chartUnits("-1.123456000000")).toBe(-1123456n);
+  expect(chartUnits(null)).toBeNull();
+});
+
+test("execution chart keeps unknown and negative stages separate from composable balances", () => {
+  const nature: ExecutionNature = {
+    code: "339018",
+    name: null,
+    summary: {
+      committedValue: "100.000000000000",
+      liquidatedValue: "60",
+      paidValue: "40",
+      registeredPayablesValue: null,
+      canceledPayablesValue: null,
+      priorYearPaidValue: null,
+      sourceRowCount: 1,
+      observedMonthCount: 1,
+      firstMonth: null,
+      lastMonth: null,
+      lastImportedAt: null,
+    },
+  };
+  const composed = executionComposition(nature.summary);
+  expect(composed.status).toBe("ready");
+  expect(composed.parts.map((part) => part.value)).toEqual(["40", "20", "40"]);
+  expect(
+    executionComposition({ ...nature.summary, paidValue: null }).status,
+  ).toBe("missing");
+  expect(
+    executionComposition({ ...nature.summary, liquidatedValue: "-10" }).status,
+  ).toBe("inconsistent");
+  expect(
+    executionComposition({
+      ...nature.summary,
+      committedValue: "0",
+      liquidatedValue: "0",
+      paidValue: "0",
+    }).status,
+  ).toBe("zero");
+  const bars = expenseBarData(
+    [
+      { label: "Positive", value: "100" },
+      { label: "Negative", value: "-20" },
+      { label: "Unknown", value: null },
+    ],
+    "80",
+  );
+  expect(bars.signed).toBe(true);
+  expect(bars.rows.map((row) => row.width)).toEqual([100, 20, null]);
+  const ranked = rankExecutionNatures(
+    [
+      {
+        ...nature,
+        code: "339001",
+        summary: {
+          ...nature.summary,
+          committedValue: "9007199254740992.000000000001",
+        },
+      },
+      {
+        ...nature,
+        code: "339002",
+        summary: {
+          ...nature.summary,
+          committedValue: "9007199254740992.000000000002",
+        },
+      },
+      {
+        ...nature,
+        code: "339003",
+        summary: { ...nature.summary, committedValue: null },
+      },
+    ],
+    "committedValue",
+  );
+  expect(ranked.rows.map((row) => row.code)).toEqual(["339002", "339001"]);
+  expect(ranked.missingCount).toBe(1);
 });
 
 test("commitment pagination retains exact identifiers, return scope and separate movement collections", async ({
@@ -227,7 +661,10 @@ test("failed refresh retains the last consulted data and a different scope never
   await page.goto(fixture.baseURL + overview);
   await expect(committed(page)).toHaveText("R$ 21,00");
   await expect(
-    page.getByRole("heading", { name: "Evolução mensal", exact: true }),
+    page.getByRole("heading", {
+      name: "Detalhamento por elemento",
+      exact: true,
+    }),
   ).toBeVisible();
   await page.route("**/api/finance/execution?**", (route) =>
     route.fulfill({
@@ -366,7 +803,10 @@ test("small-screen panels preserve navigation, essential actions, empty, invalid
     await page.goto(fixture.baseURL + overview);
     await expect(committed(page)).toHaveText("R$ 21,00");
     await expect(
-      page.getByRole("heading", { name: "Naturezas de despesa", exact: true }),
+      page.getByRole("heading", {
+        name: "Detalhamento por elemento",
+        exact: true,
+      }),
     ).toBeVisible();
     expect(
       await page.evaluate(
@@ -376,10 +816,66 @@ test("small-screen panels preserve navigation, essential actions, empty, invalid
     await expect(
       page.getByRole("button", { name: "Atualizar painel", exact: true }),
     ).toBeVisible();
-    await page.screenshot({
-      path: `/tmp/contracts-finance-panel-${width}.png`,
-      fullPage: true,
-    });
+    for (const theme of ["light", "dark", "system"]) {
+      await page.getByLabel("Aparência", { exact: true }).selectOption(theme);
+      await page.getByRole("tab", { name: "Visão geral", exact: true }).click();
+      await expect(
+        page.getByRole("heading", {
+          name: "Situação da execução",
+          exact: true,
+        }),
+      ).toBeVisible();
+      await page.locator(".execution-source > summary").click();
+      await expect(
+        page.getByText("Origem e cobertura da consulta", { exact: true }),
+      ).toBeVisible();
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      await page.locator(".execution-source > summary").click();
+      await page.screenshot({
+        path: `/tmp/contracts-finance-overview-${width}-${theme}.png`,
+      });
+      await page
+        .getByRole("tab", { name: "Despesas próprias da Reitoria" })
+        .click();
+      await expect(
+        page.getByRole("heading", {
+          name: "Finalidade ainda não classificada",
+        }),
+      ).toBeVisible();
+      await page.getByRole("tab", { name: "Dados disponíveis" }).click();
+      await page
+        .getByRole("tab", { name: "Restos a pagar", exact: true })
+        .click();
+      await expect(
+        page.getByRole("heading", { name: "Restos a pagar", exact: true }),
+      ).toBeVisible();
+      await page.getByRole("tab", { name: "Explorar a despesa" }).click();
+      await expect(committed(page)).toHaveText("R$ 21,00");
+    }
+    if (width < 700) {
+      await page
+        .getByRole("button", { name: "Escolher despesa", exact: true })
+        .click();
+      await expect(
+        page.getByText("Role para ver mais", { exact: true }),
+      ).toBeVisible();
+      await page
+        .getByRole("button", { name: "Ver próximos elementos", exact: true })
+        .click();
+      await expect(
+        page.getByRole("button", {
+          name: "Ver elementos anteriores",
+          exact: true,
+        }),
+      ).toBeEnabled();
+      await page
+        .getByRole("button", { name: "Escolher despesa", exact: true })
+        .click();
+    }
   }
   await page.goto(
     fixture.baseURL + "/financeiro?managementCode=99999&fiscalYear=2026",

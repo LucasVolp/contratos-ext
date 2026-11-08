@@ -51,22 +51,38 @@ export function usePanelScope(
             "expenseGroupCode",
             "expenseElementCode",
           ]
-        : [
-            "managementUnitCode",
-            "expenseNature",
-            "actionCode",
-            "fromMonth",
-            "toMonth",
-          ];
+        : ["managementUnitCode", "actionCode", "fromMonth", "toMonth"];
   for (const field of fields) {
     const value = params.get(field);
     if (value) query.set(field, value);
   }
   function change(changes: Record<string, string>) {
-    const next = new URLSearchParams(query);
+    const next = new URLSearchParams(params.toString());
+    for (const [key, value] of query) if (!next.has(key)) next.set(key, value);
     for (const [key, value] of Object.entries(changes)) {
       if (value) next.set(key, value);
       else next.delete(key);
+    }
+    if (
+      kind === "execution" &&
+      [
+        codeKey,
+        unitKey,
+        "fiscalYear",
+        "fromMonth",
+        "toMonth",
+        "actionCode",
+      ].some((key) => key in changes)
+    ) {
+      for (const key of [
+        "elementPage",
+        "subelementPage",
+        "documentPage",
+        "document",
+        "sourcePage",
+        "sourceKind",
+      ])
+        next.delete(key);
     }
     next.delete("page");
     router.push(`${pathname}?${next}`, { scroll: false });

@@ -1,47 +1,119 @@
 "use client";
-import { Button } from "@/components/ui/button";
-
 import Link from "next/link";
-import { useState } from "react";
-import { ArrowRight, Table2, X } from "lucide-react";
-import { PageHead, Empty, ErrorState, Loading } from "@/components/ui";
-import { financePath } from "@/lib/finance-api";
+import { useEffect, useRef, useState } from "react";
+import { ArrowRight } from "lucide-react";
+import { Empty, ErrorState, Loading, PageHead } from "@/components/ui";
+import { useSidebarPreference } from "@/lib/use-sidebar-preference";
+import { financePath, loadExecutionNatures } from "@/lib/finance-api";
 import type {
+  ExecutionMetric,
+  ExecutionNatures,
   ExecutionRow,
   ExecutionSummary,
   FinancialReport,
 } from "@/lib/finance-types";
+import {
+  type ExecutionPurpose,
+  type ExecutionView,
+} from "@/lib/finance-presentation";
 import { FinanceTabs } from "./shared";
 import { useFinanceQuery } from "./use-finance-query";
 import { usePanelScope } from "./use-panel-scope";
 import { PanelControls } from "./panel-controls";
-import { PanelMetrics, PanelProvenance } from "./panel-metrics";
-import { PanelDetailTable } from "./panel-detail-table";
-import { ExecutionCharts } from "./execution-charts";
+import {
+  ExecutionPurposeTabs,
+  ExecutionViewTabs,
+  ExecutionNavigator,
+} from "./execution-navigation";
+import { ExecutionPayables } from "./execution-totals";
+import { ExecutionContext } from "./execution-context";
+import { ExecutionSource } from "./execution-source";
+import { ExecutionLedger } from "./execution-ledger";
+import { ExecutionPurposeUnavailable } from "./execution-capabilities";
+import { ExecutionElementDetail } from "./execution-element-detail";
+import { ExecutionTopFive } from "./execution-top-five";
+import { ExecutionComparison } from "./execution-comparison";
+
 export function ExecutionPanel() {
-  const { scope, query, directory, units, change, selectedNature } =
-    usePanelScope();
+  const { scope, query, urlQuery, directory, units, change } = usePanelScope();
+  const params = new URLSearchParams(urlQuery);
+  const metric: ExecutionMetric =
+    params.get("rankingMetric") === "liquidatedValue"
+      ? "liquidatedValue"
+      : params.get("rankingMetric") === "paidValue"
+        ? "paidValue"
+        : "committedValue";
+  const [collapsed, toggleNavigator] = useSidebarPreference("finance");
+  const view: ExecutionView =
+    params.get("view") === "overview"
+      ? "overview"
+      : params.get("view") === "payables"
+        ? "payables"
+        : "explore";
+  const purpose: ExecutionPurpose =
+    params.get("purpose") === "own"
+      ? "own"
+      : params.get("purpose") === "campus"
+        ? "campus"
+        : "all";
+  const element = params.get("element") || params.get("expenseNature");
+  const [revision, setRevision] = useState(0);
+  const key = scope.managementCode && purpose === "all" ? query : null;
   const result = useFinanceQuery<
     FinancialReport<ExecutionRow, ExecutionSummary>
-  >(
-    scope.managementCode
-      ? financePath("execution", query, { limit: "1" })
-      : null,
+  >(key ? financePath("execution", key, { limit: "1" }) : null);
+  const breakdown = useFinanceQuery<ExecutionNatures>(
+    key,
+    loadExecutionNatures,
+    revision,
   );
-  const [details, setDetails] = useState(false);
-  const [chartVersion, setChartVersion] = useState(0);
-  const summary = result.data?.summary;
-  const selectedName = units.find((u) => u.code === scope.unit)?.name;
+  const nodes = breakdown.data?.natures || [];
+  const selected = nodes.find((node) => node.code === element);
+  const selectedCode = view === "explore" ? element : null;
+  const summary = selectedCode ? selected?.summary : result.data?.summary;
+  const scopeLabel = scope.unit
+    ? units.find((unit) => unit.code === scope.unit)?.name ||
+      `Unidade ${scope.unit}`
+    : "Todas as unidades do recorte";
+  const canvas = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (view === "explore" && element) {
+      canvas.current?.focus({ preventScroll: true });
+      if (matchMedia("(max-width: 700px)").matches)
+        canvas.current?.scrollIntoView({ block: "start" });
+    }
+  }, [view, element]);
+  function select(code: string) {
+    change({
+      element: code,
+      expenseNature: "",
+      view: "explore",
+      document: "",
+      documentPage: "",
+      sourcePage: "",
+      sourceKind: "",
+      subelementPage: "",
+    });
+  }
+  function refresh() {
+    result.retry();
+    directory.retry();
+    setRevision((value) => value + 1);
+  }
+  const documents = new URLSearchParams({
+    managementCode: scope.managementCode,
+    fiscalYear: scope.fiscalYear,
+  });
+  if (scope.unit) documents.set("managementUnitCode", scope.unit);
+  const allDocuments = `/financeiro/empenhos?${documents}`;
+  if (selectedCode) documents.set("expenseNature", selectedCode);
   return (
-    <div className="finance-panel">
+    <div className="finance-panel finance-workspace">
       <PageHead
-        title="Visão financeira"
-        description="Empenhos, liquidações e pagamentos no período selecionado."
+        title="Execução da despesa"
+        description="Do panorama do exercício aos elementos e documentos disponíveis."
       >
-        <Link
-          href={`/financeiro/empenhos?${query}`}
-          className="button secondary"
-        >
+        <Link className="button secondary" href={allDocuments}>
           Consultar empenhos
           <ArrowRight size={15} aria-hidden="true" />
         </Link>
@@ -49,199 +121,165 @@ export function ExecutionPanel() {
       <FinanceTabs active="execution" query={query} />
       <PanelControls
         scope={scope}
-        units={units.map((u) => ({ code: u.code, name: u.name }))}
+        units={units.map((unit) => ({ code: unit.code, name: unit.name }))}
         agencies={directory.data || []}
-        busy={result.loading}
+        busy={result.loading || breakdown.loading}
         onChange={change}
-        onRefresh={() => {
-          result.retry();
-          directory.retry();
-          setChartVersion((n) => n + 1);
-        }}
+        onRefresh={refresh}
       />
-      {selectedNature && (
-        <div className="panel-filter-tags">
-          <span>Natureza {selectedNature}</span>
-          <button
-            className="panel-text-button"
-            onClick={() => change({ expenseNature: "" })}
-            type="button"
-          >
-            <X size={14} aria-hidden="true" />
-            Remover filtro de natureza
-          </button>
-        </div>
-      )}
-      {directory.error && (
-        <ErrorState message={directory.error.message} retry={directory.retry} />
-      )}
-      {result.error && (
-        <ErrorState
-          message={
-            result.data
-              ? `${result.error.message} Os dados da última consulta foram preservados.`
-              : result.error.message
-          }
-          retry={result.retry}
+      <ExecutionPurposeTabs
+        purpose={purpose}
+        onChange={(value) => change({ purpose: value })}
+      />
+      <div className="execution-modebar">
+        <ExecutionViewTabs
+          view={view}
+          onChange={(value) => change({ view: value })}
         />
-      )}
-      {!scope.managementCode ? (
-        directory.loading ? (
-          <Loading />
-        ) : (
-          <Empty
-            kind="registro"
-            href="/financeiro"
-            title="Informe a instituição da consulta."
-            description="Use o campo de instituição para escolher o órgão no Portal da Transparência."
-            actionLabel="Revisar filtros"
-          />
-        )
-      ) : !result.data ? (
-        !result.error && (
-          <div className="panel-loading">
-            <Loading />
-          </div>
-        )
+        <ExecutionSource
+          summary={result.data?.summary}
+          consultedAt={result.loadedAt}
+          requestedMonths={Number(scope.toMonth) - Number(scope.fromMonth) + 1}
+        />
+      </div>
+      {directory.error ? (
+        <ErrorState message={directory.error.message} retry={directory.retry} />
+      ) : null}
+      {purpose !== "all" ? (
+        <ExecutionPurposeUnavailable purpose={purpose} />
       ) : (
-        summary && (
-          <div aria-busy={result.loading}>
-            <div className="panel-scope-heading">
-              <div>
-                <span className="eyebrow">
-                  EXECUÇÃO MENSAL · {scope.fiscalYear}
-                </span>
-                <h2>
-                  {scope.unit
-                    ? selectedName || `Unidade ${scope.unit}`
-                    : "Todas as unidades"}
-                </h2>
-              </div>
-              <span className="panel-source">Portal da Transparência</span>
-            </div>
-            <span className="sr-only" role="status">
-              Painel atualizado para{" "}
-              {scope.unit ? selectedName || scope.unit : "todas as unidades"},
-              exercício {scope.fiscalYear}.
-            </span>
-            <PanelMetrics
-              metrics={[
-                {
-                  key: "committedValue",
-                  label: "Empenhado",
-                  value: summary.committedValue,
-                  hint: "Compromissos registrados no período",
-                  tone: "committed",
-                },
-                {
-                  key: "liquidatedValue",
-                  label: "Liquidado",
-                  value: summary.liquidatedValue,
-                  hint: "Despesas reconhecidas no período",
-                  tone: "liquidated",
-                },
-                {
-                  key: "paidValue",
-                  label: "Pago",
-                  value: summary.paidValue,
-                  hint: "Pagamentos registrados no período",
-                  tone: "paid",
-                },
-              ]}
-            />
-            <PanelProvenance
-              importedAt={summary.lastImportedAt}
-              consultedAt={result.loadedAt}
-              months={summary.observedMonthCount}
-              requestedMonths={
-                Number(scope.toMonth) - Number(scope.fromMonth) + 1
+        <>
+          {result.error ? (
+            <ErrorState
+              message={
+                result.error.message +
+                (result.data
+                  ? " Os dados da última consulta foram preservados."
+                  : "")
               }
+              retry={refresh}
             />
-            {summary.observedMonthCount <
-              Number(scope.toMonth) - Number(scope.fromMonth) + 1 && (
-              <p className="panel-coverage-note">
-                Há meses sem registros neste recorte. Os totais refletem os
-                dados disponíveis.
-              </p>
-            )}
-            {summary.sourceRowCount === 0 ? (
+          ) : null}
+          {breakdown.error && !result.error ? (
+            <ErrorState
+              title="Não foi possível atualizar o detalhamento"
+              message={
+                breakdown.error.message +
+                (breakdown.data
+                  ? " Os dados da última consulta foram preservados."
+                  : "")
+              }
+              retry={refresh}
+            />
+          ) : null}
+          {!scope.managementCode ? (
+            directory.loading ? (
+              <Loading />
+            ) : (
               <Empty
                 kind="registro"
                 href="/financeiro"
-                title="Nenhum registro encontrado."
-                description="Não há registros disponíveis para esta unidade e período. Ajuste os filtros para consultar outro recorte."
-                actionLabel="Limpar filtros"
+                title="Informe a instituição da consulta."
+                description="Escolha o órgão nos filtros para consultar a execução."
+                actionLabel="Revisar filtros"
               />
-            ) : (
-              <>
-                <ExecutionCharts
-                  refreshVersion={chartVersion}
-                  query={query}
-                  onChange={change}
-                  selectedNature={selectedNature}
+            )
+          ) : !result.data ? (
+            !result.error ? (
+              <Loading />
+            ) : null
+          ) : view === "payables" ? (
+            <ExecutionPayables summary={result.data.summary} />
+          ) : (
+            <div
+              className={`execution-workspace ${view === "overview" ? "is-overview" : ""} ${collapsed ? "is-navigator-collapsed" : ""}`}
+            >
+              {view === "explore" && nodes.length > 0 ? (
+                <ExecutionNavigator
+                  collapsed={collapsed}
+                  onToggle={toggleNavigator}
+                  natures={nodes}
+                  selected={element}
+                  search={params.get("natureSearch") || ""}
+                  onSearch={(value) => change({ natureSearch: value })}
+                  onSelect={select}
                 />
-                <section
-                  className="panel-prior-year"
-                  aria-labelledby="prior-year-title"
-                >
-                  <div>
-                    <span className="eyebrow">EXERCÍCIOS ANTERIORES</span>
-                    <h2 id="prior-year-title">Restos a pagar</h2>
-                    <p>
-                      Movimentos apresentados separadamente da execução
-                      corrente.
-                    </p>
-                  </div>
-                  <PanelMetrics
-                    metrics={[
-                      {
-                        key: "registeredPayablesValue",
-                        label: "Inscritos",
-                        value: summary.registeredPayablesValue,
-                        hint: "Inscrições registradas",
-                        tone: "budget",
-                      },
-                      {
-                        key: "canceledPayablesValue",
-                        label: "Cancelados",
-                        value: summary.canceledPayablesValue,
-                        hint: "Cancelamentos registrados",
-                        tone: "budget",
-                      },
-                      {
-                        key: "priorYearPaidValue",
-                        label: "Pagos",
-                        value: summary.priorYearPaidValue,
-                        hint: "Pagamentos de exercícios anteriores",
-                        tone: "paid",
-                      },
-                    ]}
+              ) : null}
+              <div
+                className="execution-canvas"
+                ref={canvas}
+                tabIndex={-1}
+                aria-busy={result.loading || breakdown.loading}
+              >
+                <ExecutionContext
+                  scopeLabel={scopeLabel}
+                  fiscalYear={scope.fiscalYear}
+                  selectedCode={selectedCode}
+                  selectedName={selected?.name}
+                  summary={summary}
+                  loading={result.loading}
+                  onReset={() => select("")}
+                />
+                {result.data.summary.sourceRowCount === 0 ? (
+                  <Empty
+                    kind="registro"
+                    href="/financeiro"
+                    title="Nenhum registro encontrado."
+                    description="Não há registros disponíveis para este recorte. Ajuste os filtros para consultar outro período."
+                    actionLabel="Revisar filtros"
                   />
-                </section>
-                <div className="panel-detail-action">
-                  <Button
-                    className="button secondary"
-                    type="button"
-                    aria-expanded={details}
-                    aria-controls="execution-details"
-                    onClick={() => setDetails(!details)}
-                  >
-                    <Table2 size={15} aria-hidden="true" />
-                    {details ? "Ocultar detalhamento" : "Ver detalhamento"}
-                  </Button>
-                  <span>
-                    Totais e gráficos consideram todo o recorte selecionado.
-                  </span>
-                </div>
-                {details && (
-                  <div id="execution-details">
-                    <PanelDetailTable mode="execution" query={query} />
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )
+                ) : selectedCode ? (
+                  breakdown.loading && !breakdown.data ? (
+                    <Loading />
+                  ) : selected ? (
+                    <ExecutionElementDetail
+                      revision={revision}
+                      scopeQuery={query}
+                      documentQuery={documents.toString()}
+                      urlQuery={urlQuery}
+                      onChange={change}
+                      key={documents.toString()}
+                    />
+                  ) : !breakdown.error ? (
+                    <Empty
+                      kind="elemento"
+                      href={`/financeiro?${query}`}
+                      title="Elemento não encontrado neste recorte."
+                      description="Selecione outro elemento ou revise os filtros."
+                      actionLabel="Todas as despesas"
+                    />
+                  ) : null
+                ) : breakdown.loading && !breakdown.data ? (
+                  <Loading />
+                ) : breakdown.data ? (
+                  <>
+                    <div className="execution-insights">
+                      <ExecutionComparison summary={result.data.summary} />
+                      <ExecutionTopFive
+                        natures={nodes}
+                        summary={result.data.summary}
+                        metric={metric}
+                        onMetricChange={(value) =>
+                          change({ rankingMetric: value })
+                        }
+                        onSelect={select}
+                      />
+                    </div>
+                    <ExecutionLedger
+                      natures={nodes}
+                      page={params.get("elementPage")}
+                      onPageChange={(value) =>
+                        change({ elementPage: String(value) })
+                      }
+                      onSelect={select}
+                      unclassifiedCount={breakdown.data.unclassifiedCount}
+                    />
+                  </>
+                ) : null}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -3,7 +3,7 @@ import type {
   BudgetBreakdowns,
   BudgetRow,
   BudgetSummary,
-  ExecutionBreakdowns,
+  ExecutionNatures,
   ExecutionRow,
   ExecutionSummary,
   FinanceUnit,
@@ -108,70 +108,44 @@ export function loadBudgetRows(query: string, signal: AbortSignal) {
   return allRows<BudgetRow>(`budgets?${query}`, signal);
 }
 
-/** Chart values are complete server summaries, never client sums of page rows. */
-export async function loadExecutionBreakdowns(
+/** Each element uses a complete SQL summary; page rows only discover classifications. */
+export async function loadExecutionNatures(
   query: string,
   signal: AbortSignal,
-): Promise<ExecutionBreakdowns> {
-  const params = new URLSearchParams(query);
-  const from = Number(params.get("fromMonth") || 1),
-    to = Number(params.get("toMonth") || 12);
+): Promise<ExecutionNatures> {
   const rows = await allRows<ExecutionRow>(`execution?${query}`, signal);
-  const units = [
-    ...new Map(
-      rows.filter((r) => r.managementUnitCode !== null).map((r) => [
-        r.managementUnitCode!,
-        { code: r.managementUnitCode!, name: r.unitName },
-      ]),
-    ).values(),
-  ];
   const natures = [
     ...new Map(
       rows
-        .filter((r) => r.expenseNature !== null)
-        .map((r) => [
-          r.expenseNature!,
-          { code: r.expenseNature!, name: r.expenseElementName },
+        .filter((row) => row.expenseNature !== null)
+        .map((row) => [
+          row.expenseNature!,
+          { code: row.expenseNature!, name: row.expenseElementName },
         ]),
     ).values(),
   ];
-  const tasks = [
-    ...Array.from({ length: Math.max(0, to - from + 1) }, (_, i) => ({
-      kind: "monthly" as const,
-      month: from + i,
-    })),
-    ...units.map((unit) => ({ kind: "unit" as const, ...unit })),
-    ...natures.map((nature) => ({ kind: "nature" as const, ...nature })),
-  ];
   const results = await mapConcurrent(
-    tasks,
-    async (task) => {
-      const changes: Record<string, string> = { limit: "1" };
-      if (task.kind === "monthly") {
-        changes.fromMonth = String(task.month);
-        changes.toMonth = String(task.month);
-      } else
-        changes[task.kind === "unit" ? "managementUnitCode" : "expenseNature"] =
-          task.code;
+    natures,
+    async (nature) => {
       const report = await financeGet<
         FinancialReport<ExecutionRow, ExecutionSummary>
-      >(financePath("execution", query, changes), signal);
-      return { ...task, summary: report.summary };
+      >(
+        financePath("execution", query, {
+          expenseNature: nature.code,
+          page: "1",
+          limit: "1",
+        }),
+        signal,
+      );
+      return { ...nature, summary: report.summary };
     },
     signal,
   );
   return {
-    monthly: results
-      .filter((r) => r.kind === "monthly")
-      .map((r) => ({ month: r.month, summary: r.summary })),
-    units: results
-      .filter((r) => r.kind === "unit")
-      .map((r) => ({ code: r.code, name: r.name, summary: r.summary })),
-    natures: results
-      .filter((r) => r.kind === "nature")
-      .map((r) => ({ code: r.code, name: r.name, summary: r.summary })),
-    unassignedUnitCount: rows.filter((r) => r.managementUnitCode === null).length,
-    unclassifiedCount: rows.filter((r) => r.expenseNature === null).length,
+    natures: results,
+    unclassifiedCount: rows.filter((row) => row.expenseNature === null).length,
+    unassignedUnitCount: rows.filter((row) => row.managementUnitCode === null)
+      .length,
   };
 }
 export async function loadBudgetBreakdowns(

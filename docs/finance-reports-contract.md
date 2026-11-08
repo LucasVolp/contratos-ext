@@ -16,15 +16,15 @@ An out-of-range page keeps the complete summary and count.
 GET /api/finance/execution?managementCode=26421&fiscalYear=2026&fromMonth=1&toMonth=9
 ```
 
-| Filter | Meaning |
-|---|---|
-| `managementCode` | Required five-digit management code |
-| `fiscalYear` | Required year, 1900–9999 |
-| `managementUnitCode` | Optional six-digit financial management-unit code |
-| `fromMonth`, `toMonth` | Inclusive months 1–12; default 1 and 12; start cannot exceed end |
-| `expenseNature` | Optional exact six-digit classification; monthly source has no subitem |
-| `actionCode` | Optional exact alphanumeric source action code, up to 20 characters |
-| `page`, `limit` | Pagination |
+| Filter                 | Meaning                                                                |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `managementCode`       | Required five-digit management code                                    |
+| `fiscalYear`           | Required year, 1900–9999                                               |
+| `managementUnitCode`   | Optional six-digit financial management-unit code                      |
+| `fromMonth`, `toMonth` | Inclusive months 1–12; default 1 and 12; start cannot exceed end       |
+| `expenseNature`        | Optional exact six-digit classification; monthly source has no subitem |
+| `actionCode`           | Optional exact alphanumeric source action code, up to 20 characters    |
+| `page`, `limit`        | Pagination                                                             |
 
 The source is exclusively `finance.monthly_execution` with
 `source = TRANSPARENCY_PORTAL`. Daily documents, internal planning and other provider
@@ -66,15 +66,15 @@ Ordering is unit, economic category, group, modality (unknown last), and element
 GET /api/finance/budgets?subordinateAgencyCode=26421&fiscalYear=2026
 ```
 
-| Filter | Meaning |
-|---|---|
-| `subordinateAgencyCode` | Required five-digit institutional agency code |
-| `fiscalYear` | Required fiscal year, 1900–9999 |
-| `budgetaryUnitCode` | Optional five-digit budgetary-unit code; not a campus UG |
-| `actionCode` | Optional exact alphanumeric source action code |
-| `economicCategoryCode`, `expenseGroupCode` | Optional exact one-digit source components |
-| `expenseElementCode` | Optional exact two-digit element, preserving codes such as `04` |
-| `page`, `limit` | Pagination |
+| Filter                                     | Meaning                                                         |
+| ------------------------------------------ | --------------------------------------------------------------- |
+| `subordinateAgencyCode`                    | Required five-digit institutional agency code                   |
+| `fiscalYear`                               | Required fiscal year, 1900–9999                                 |
+| `budgetaryUnitCode`                        | Optional five-digit budgetary-unit code; not a campus UG        |
+| `actionCode`                               | Optional exact alphanumeric source action code                  |
+| `economicCategoryCode`, `expenseGroupCode` | Optional exact one-digit source components                      |
+| `expenseElementCode`                       | Optional exact two-digit element, preserving codes such as `04` |
+| `page`, `limit`                            | Pagination                                                      |
 
 The source is exclusively Portal records in `finance.annual_budgets`. Rows are
 grouped by year, superior organ, subordinate agency, budgetary unit, action,
@@ -120,3 +120,55 @@ the compiled Fastify API. Its 404 monthly source rows produced 166 unit/classifi
 groups; the 100 annual source rows produced 100 budget groups. Whole-filter report
 totals matched exact SQL sums of their respective source tables. No Portal downloads
 or writes to the application database were needed for that check.
+
+## Daily spending by subelement
+
+```http
+GET /api/finance/subelements?managementCode=26421&fiscalYear=2026&expenseNature=339018&metric=committedValue
+```
+
+Required filters are management, fiscal year and the exact six-digit parent nature.
+Optional unit/month/page/limit filters follow monthly execution validation. `metric`
+accepts `committedValue` (default), `liquidatedValue` or `paidValue`, controlling
+server ordering and the chart. Daily action filtering is unsupported and rejected.
+The authenticated management-unit scope is applied separately to every source.
+
+Current commitment items are grouped by their commitment's issue date and fiscal
+scope. Each liquidation/payment allocation uses its own document's issue date and
+scope. The three datasets are combined with `UNION ALL`; they are never joined
+against each other. History is not added to current items, repeated source item
+occurrences are preserved, prior-year movement fields are excluded, and explicitly
+extra-budgetary payments are excluded. These are daily-source amounts, not an
+alternate sum of monthly execution, nor a historical as-of item balance.
+
+An eight-digit source nature identifies its subelement. A six-digit source nature
+plus an actual two-digit subitem identifies the same code. Conflicting or missing
+classification produces a null-code group whose amounts remain in daily totals.
+Amounts use exact SQL numeric sums; no records or a missing contributing value
+produces null for that stage. A stage with no contributing records is not zero.
+
+`data` contains paginated subelement code/name, the three monetary amounts and
+source-row count. `summary` spans the full filtered union, including document/day
+counts, first/last document dates and latest fact import. `coverage` is always
+`NOT_VERIFIED`: observing records or a successful import does not establish full
+annual extraction. Context identifies `DAILY_SUBELEMENTS`, source and requested
+scope/period/metric. All amounts and counts share one SQL statement snapshot.
+
+`chart` contains the five largest identified classifications with known amounts,
+plus a server-aggregated remainder (`other: true`) when applicable, including
+unclassified records. It never derives totals from a page. `chartEligible` checks
+all grouped classifications for known, nonnegative amounts in the selected stage;
+a negative or unknown classification outside the top five also disables a donut.
+Signed values and missing amounts remain visible in the detail table.
+
+The UI defaults to aggregated spending. Source commitments/items/movements remain
+available under a secondary evidence disclosure. Monthly and daily totals retain
+separate source labels and are never added together.
+
+The final subelement UI uses compact horizontal bars with signed values and an
+optional full-scope percentage; width is normalized to the largest displayed
+absolute value, not a new financial total. A negative value extends left of zero;
+a missing value has no fabricated bar. `chartEligible` remains metadata for
+consumers that need a nonnegative composition. The daily totals strip is omitted
+to avoid repeating monthly figures; source/method details explain the independent
+daily basis, and the table retains all three stage amounts.

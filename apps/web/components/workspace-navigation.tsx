@@ -2,6 +2,8 @@
 import Link from "next/link";
 import {
   FileText,
+  FileCheck,
+  FilePenLine,
   Gavel,
   Landmark,
   ScrollText,
@@ -77,6 +79,7 @@ export function WorkspaceNavigation({
               <li key={phase.href} className={active ? "active" : ""}>
                 <Link
                   href={phase.href}
+                  title={phase.label}
                   className={`phase ${active ? "active" : ""}`}
                   aria-current={active && !phase.children ? "page" : undefined}
                 >
@@ -93,10 +96,24 @@ export function WorkspaceNavigation({
                       <li key={child.href}>
                         <Link
                           href={child.href}
+                          title={child.label}
                           className={child.match(path) ? "active" : ""}
                           aria-current={child.match(path) ? "page" : undefined}
                         >
-                          {child.label}
+                          {child.href === "/atas" ? (
+                            <FilePenLine
+                              size={17}
+                              aria-hidden="true"
+                              className="workspace-child-icon"
+                            />
+                          ) : (
+                            <FileCheck
+                              size={17}
+                              aria-hidden="true"
+                              className="workspace-child-icon"
+                            />
+                          )}
+                          <span>{child.label}</span>
                         </Link>
                       </li>
                     ))}
@@ -111,11 +128,12 @@ export function WorkspaceNavigation({
       <nav aria-label="Consultas financeiras">
         <Link
           href="/financeiro"
+          title="Financeiro"
           className={path.startsWith("/financeiro") ? "active" : ""}
           aria-current={path.startsWith("/financeiro") ? "page" : undefined}
         >
           <Landmark size={18} aria-hidden="true" />
-          Financeiro
+          <span className="workspace-link-label">Financeiro</span>
         </Link>
       </nav>
       {manager && (
@@ -128,9 +146,10 @@ export function WorkspaceNavigation({
                 path.startsWith("/administracao") ? "page" : undefined
               }
               href="/administracao/usuarios"
+              title="Administração"
             >
               <UsersRound size={18} aria-hidden="true" />
-              Administração
+              <span className="workspace-link-label">Administração</span>
             </Link>
           </nav>
         </>

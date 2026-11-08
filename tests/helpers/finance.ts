@@ -44,7 +44,7 @@ export async function financeFixture() {
     await db.query(`INSERT INTO finance.management_units (management_code,code,name,management_name)
       VALUES ('26421','015814','Unidade de teste A','Instituição de teste'),('26421','158148','Unidade de teste B','Instituição de teste')`);
     await db.query(
-      `INSERT INTO finance.expense_natures (code) VALUES ('339030')`,
+      `INSERT INTO finance.expense_natures (code) VALUES ('339030'), ('339001')`,
     );
     for (let i = 0; i < 21; i++) {
       const id = String(9007199254740993n + BigInt(i));
@@ -61,8 +61,8 @@ export async function financeFixture() {
         );
       if (i < 20)
         await db.query(
-          `INSERT INTO finance.commitment_items (commitment_id,sequential,expense_nature_code,description,current_value,ingestion_run_id)
-        VALUES ($1,1,'339030','Material de teste',123456789012345678.123456,$2)`,
+          `INSERT INTO finance.commitment_items (commitment_id,sequential,expense_nature_code,subitem_code,subitem_description,description,current_value,ingestion_run_id)
+        VALUES ($1,1,'339001','10','Subelemento de teste','Material de teste',123456789012345678.123456,$2)`,
           [id, run],
         );
       await db.query(

@@ -5,12 +5,18 @@ import { createApplication } from "../src/app";
 import { Database } from "../src/database";
 
 test("financial HTTP validation rejects invalid filters and bigint identities before querying", async () => {
-  let queries = 0, closed = 0;
+  let queries = 0,
+    closed = 0;
   const db = {
-    query: async () => { queries++; return []; },
-    close: async () => { closed++; },
+    query: async () => {
+      queries++;
+      return [];
+    },
+    close: async () => {
+      closed++;
+    },
   } as unknown as Database;
-  const app = await createApplication({ db,auth:testAuth });
+  const app = await createApplication({ db, auth: testAuth });
   try {
     for (const url of [
       "/api/finance/commitments",
@@ -41,6 +47,10 @@ test("financial HTTP validation rejects invalid filters and bigint identities be
       "/api/finance/execution?managementCode=26421&fiscalYear=2026&expenseNature=33903001",
       "/api/finance/execution?managementCode=26421&fiscalYear=2026&actionCode=20RL%27",
       "/api/finance/execution?managementCode=26421&fiscalYear=2026&from=2026-01-01",
+      "/api/finance/subelements?managementCode=26421&fiscalYear=2026",
+      "/api/finance/subelements?managementCode=26421&fiscalYear=2026&expenseNature=33900110",
+      "/api/finance/subelements?managementCode=26421&fiscalYear=2026&expenseNature=339001&metric=bad",
+      "/api/finance/subelements?managementCode=26421&fiscalYear=2026&expenseNature=339001&actionCode=20RL",
       "/api/finance/budgets?subordinateAgencyCode=26421",
       "/api/finance/budgets?fiscalYear=2026",
       "/api/finance/budgets?subordinateAgencyCode=26421&fiscalYear=2026&managementUnitCode=015814",
@@ -51,8 +61,19 @@ test("financial HTTP validation rejects invalid filters and bigint identities be
       const response = await app.inject({ method: "GET", url });
       assert.equal(response.statusCode, 400, url);
     }
-    assert.equal((await app.inject({ method: "POST", url: "/api/finance/commitments", payload: {} })).statusCode, 404);
+    assert.equal(
+      (
+        await app.inject({
+          method: "POST",
+          url: "/api/finance/commitments",
+          payload: {},
+        })
+      ).statusCode,
+      404,
+    );
     assert.equal(queries, 0);
-  } finally { await app.close(); }
+  } finally {
+    await app.close();
+  }
   assert.equal(closed, 1);
 });

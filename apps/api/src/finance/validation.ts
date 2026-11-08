@@ -197,3 +197,29 @@ export function budgetFilters(query: FinanceQuery): BudgetFilters {
     expenseElementCode: code(query, "expenseElementCode", /^[0-9]{2}$/),
   };
 }
+
+export function subelementFilters(
+  query: FinanceQuery,
+): import("./types").SubelementFilters {
+  const { metric, ...base } = query;
+  const filters = executionFilters(base);
+  if (!filters.expenseNature)
+    invalid("expenseNature", "Informe o elemento de despesa com seis dígitos.");
+  if (filters.actionCode)
+    invalid(
+      "actionCode",
+      "A consulta diária por ação orçamentária ainda não está disponível.",
+    );
+  if (
+    metric !== undefined &&
+    metric !== "committedValue" &&
+    metric !== "liquidatedValue" &&
+    metric !== "paidValue"
+  )
+    invalid("metric", "Escolha empenhado, liquidado ou pago.");
+  return {
+    ...filters,
+    expenseNature: filters.expenseNature,
+    metric: metric === undefined ? "committedValue" : metric,
+  };
+}

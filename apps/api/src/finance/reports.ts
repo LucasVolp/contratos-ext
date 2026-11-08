@@ -1,3 +1,5 @@
+import { FinanceSubelementsRepository } from "./subelements";
+import type { SubelementFilters } from "./types";
 import { SqlConnection } from "../database";
 import { Conditions } from "../repositories/sql";
 import {
@@ -41,6 +43,10 @@ const executionCoverage = `count(*)::int AS "sourceRowCount", count(DISTINCT ref
 
 export class FinanceReportsRepository {
   constructor(private readonly db: SqlConnection) {}
+
+  subelements(filters: SubelementFilters) {
+    return new FinanceSubelementsRepository(this.db).report(filters);
+  }
 
   private async report<Row, Summary>(
     selection: string,
