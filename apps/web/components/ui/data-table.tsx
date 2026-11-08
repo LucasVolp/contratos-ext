@@ -7,8 +7,8 @@ export type Column = {
   label: string;
   money?: boolean;
   date?: boolean;
-  /** Internal route for the cell value. */
-  link?: (row: DataRow) => string;
+  /** Internal route for the cell value; null renders plain text. */
+  link?: (row: DataRow) => string | null;
   /** External URL opened in a new tab; the cell shows the value or `linkText`. */
   externalLink?: (row: DataRow) => string | null;
   linkText?: string;
@@ -25,9 +25,10 @@ export function display(value: unknown) {
 
 function cell(row: DataRow, column: Column) {
   const value = row[column.key];
-  if (column.link)
+  const href = column.link?.(row);
+  if (href)
     return (
-      <Link className="record-number" href={column.link(row)}>
+      <Link className="record-number" href={href}>
         {display(value)}
       </Link>
     );
