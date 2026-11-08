@@ -5,10 +5,12 @@ export function useFinanceQuery<T>(
   key: string | null,
   load: (key: string, signal: AbortSignal) => Promise<T> = financeGet,
   revision = 0,
+  dataScope: string | null = key,
 ) {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<{
     key: string | null;
+    dataScope?: string | null;
     data?: T;
     error?: Error;
     loadedAt?: string;
@@ -23,6 +25,7 @@ export function useFinanceQuery<T>(
         if (!controller.signal.aborted)
           setState({
             key,
+            dataScope,
             data,
             loadedAt: new Date().toISOString(),
             attempt,
@@ -33,8 +36,10 @@ export function useFinanceQuery<T>(
         if (!controller.signal.aborted) {
           setState((previous) => ({
             key,
-            data: previous.key === key ? previous.data : undefined,
-            loadedAt: previous.key === key ? previous.loadedAt : undefined,
+            dataScope,
+            data: previous.dataScope === dataScope ? previous.data : undefined,
+            loadedAt:
+              previous.dataScope === dataScope ? previous.loadedAt : undefined,
             error,
             attempt,
             revision,
@@ -43,12 +48,13 @@ export function useFinanceQuery<T>(
         }
       });
     return () => controller.abort();
-  }, [key, load, attempt, revision]);
+  }, [key, load, attempt, revision, dataScope]);
   const current = state.key === key;
+  const sameScope = state.dataScope === dataScope;
   return {
-    data: current ? state.data : undefined,
+    data: sameScope ? state.data : undefined,
     error: current ? state.error : undefined,
-    loadedAt: current ? state.loadedAt : undefined,
+    loadedAt: sameScope ? state.loadedAt : undefined,
     loading:
       !!key &&
       (!current || state.attempt !== attempt || state.revision !== revision),

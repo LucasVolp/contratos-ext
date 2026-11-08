@@ -42,13 +42,17 @@ export function PanelDetailTable({
   query: string;
 }) {
   const params = useSearchParams();
-  const { data, error, retry } = useFinanceQuery<Page<FinancialRow>>(
+  const { data, error, retry, loading } = useFinanceQuery<Page<FinancialRow>>(
     financePath(mode, query, { page: params.get("page") || "1", limit: "20" }),
+    undefined,
+    0,
+    financePath(mode, query),
   );
   return (
     <section
       className="registry panel-detail-table"
       aria-label="Detalhamento do painel"
+      aria-busy={loading}
     >
       <div className="registry-top">
         <h2>Detalhamento</h2>
@@ -68,7 +72,12 @@ export function PanelDetailTable({
           ) : (
             <FinanceEmpty />
           )}
-          <FinancePager result={data} query={query} />
+          <FinancePager
+            result={data}
+            query={query}
+            loading={loading}
+            requestedPage={params.get("page") || "1"}
+          />
         </>
       )}
     </section>

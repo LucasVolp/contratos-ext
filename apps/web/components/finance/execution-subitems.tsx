@@ -6,6 +6,7 @@ import { financePath } from "@/lib/finance-api";
 import type { CommitmentSummary, Page } from "@/lib/finance-types";
 import { ExecutionDocumentRows } from "./execution-document-rows";
 import { useFinanceQuery } from "./use-finance-query";
+import { FinanceContent } from "./finance-content";
 
 const pageNumber = (value: string | null) =>
   /^\d{1,6}$/.test(value || "") && Number(value) > 0 ? Number(value) : 1;
@@ -28,6 +29,7 @@ export function ExecutionSubitems({
     financePath("commitments", query, { page: String(page), limit: "5" }),
     undefined,
     revision,
+    financePath("commitments", query),
   );
   const selected = result.data?.data.find(
     (row) => row.id === params.get("document"),
@@ -60,70 +62,79 @@ export function ExecutionSubitems({
       {result.error ? (
         <ErrorState message={result.error.message} retry={result.retry} />
       ) : null}
-      {!result.data ? (
-        !result.error ? (
-          <Loading />
-        ) : null
-      ) : result.data.total === 0 ? (
-        <Empty
-          kind="documento"
-          title="Nenhum empenho disponível para este elemento."
-          description="Os registros mensais não asseguram a disponibilidade dos documentos diários. Os totais do elemento permanecem na consulta acima."
-          href={`/financeiro/empenhos?${query}`}
-          actionLabel="Consultar empenhos"
-        />
-      ) : (
-        <>
-          <div
-            className="execution-documents"
-            role="group"
-            aria-label="Empenhos deste elemento"
-          >
-            {result.data.data.map((row) => (
-              <Button
-                type="button"
-                variant="outline"
-                key={row.id}
-                aria-label={`Consultar subelementos de ${row.resumedCode || row.documentCode}`}
-                aria-pressed={selected?.id === row.id}
-                onClick={() =>
-                  onChange({ document: row.id, sourcePage: "", sourceKind: "" })
-                }
-              >
-                <strong>{row.resumedCode || row.documentCode}</strong>
-                <span>{row.unitName || "Unidade não informada"}</span>
-              </Button>
-            ))}
-          </div>
-          <Pager
-            page={result.data.page}
-            total={result.data.total}
-            limit={result.data.limit}
-            onChange={(value) =>
-              onChange({
-                documentPage: String(value),
-                document: "",
-                sourcePage: "",
-              })
-            }
+      <FinanceContent
+        identity={String(result.data?.page || page)}
+        busy={result.loading}
+      >
+        {!result.data ? (
+          !result.error ? (
+            <Loading />
+          ) : null
+        ) : result.data.total === 0 ? (
+          <Empty
+            kind="documento"
+            title="Nenhum empenho disponível para este elemento."
+            description="Os registros mensais não asseguram a disponibilidade dos documentos diários. Os totais do elemento permanecem na consulta acima."
+            href={`/financeiro/empenhos?${query}`}
+            actionLabel="Consultar empenhos"
           />
-          {selected ? (
-            <ExecutionDocumentRows
-              revision={revision}
-              key={`${query}:${selected.id}`}
-              id={selected.id}
-              label={selected.resumedCode || selected.documentCode}
-              params={params}
-              onChange={onChange}
+        ) : (
+          <>
+            <div
+              className="execution-documents"
+              role="group"
+              aria-label="Empenhos deste elemento"
+            >
+              {result.data.data.map((row) => (
+                <Button
+                  type="button"
+                  variant="outline"
+                  key={row.id}
+                  aria-label={`Consultar subelementos de ${row.resumedCode || row.documentCode}`}
+                  aria-pressed={selected?.id === row.id}
+                  onClick={() =>
+                    onChange({
+                      document: row.id,
+                      sourcePage: "",
+                      sourceKind: "",
+                    })
+                  }
+                >
+                  <strong>{row.resumedCode || row.documentCode}</strong>
+                  <span>{row.unitName || "Unidade não informada"}</span>
+                </Button>
+              ))}
+            </div>
+            <Pager
+              page={result.data.page}
+              total={result.data.total}
+              limit={result.data.limit}
+              onChange={(value) =>
+                onChange({
+                  documentPage: String(value),
+                  document: "",
+                  sourcePage: "",
+                })
+              }
             />
-          ) : (
-            <p className="execution-chart-note" role="status">
-              Selecione um empenho para consultar seus subelementos e valores de
-              origem.
-            </p>
-          )}
-        </>
-      )}
+            {selected ? (
+              <ExecutionDocumentRows
+                revision={revision}
+                key={`${query}:${selected.id}`}
+                id={selected.id}
+                label={selected.resumedCode || selected.documentCode}
+                params={params}
+                onChange={onChange}
+              />
+            ) : (
+              <p className="execution-chart-note" role="status">
+                Selecione um empenho para consultar seus subelementos e valores
+                de origem.
+              </p>
+            )}
+          </>
+        )}
+      </FinanceContent>
     </section>
   );
 }

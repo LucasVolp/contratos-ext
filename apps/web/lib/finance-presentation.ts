@@ -1,4 +1,4 @@
-import type { ExecutionMetric } from "./finance-types";
+import type { ExecutionAmounts, ExecutionMetric } from "./finance-types";
 
 export const executionStages: {
   key: ExecutionMetric;
@@ -16,5 +16,11 @@ export function natureCode(value: string) {
     : value;
 }
 
-export type ExecutionView = "overview" | "explore" | "payables";
-export type ExecutionPurpose = "all" | "own" | "campus";
+export const executionColumns: {
+  key: keyof ExecutionAmounts;
+  label: string;
+  tone: string;
+}[] = [
+  ...executionStages,
+  { key: "priorYearPaidValue", label: "R.P.", tone: "payables" },
+];

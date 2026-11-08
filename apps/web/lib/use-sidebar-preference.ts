@@ -12,21 +12,22 @@ function subscribe(notify: () => void) {
     window.removeEventListener(eventName, notify);
   };
 }
-const serverSnapshot = () => false;
 
 export function useSidebarPreference(name: "main" | "finance") {
   const key = `contracts:sidebar:${name}`;
+  const defaultCollapsed = name === "finance";
   const collapsed = useSyncExternalStore(
     subscribe,
     () => {
-      if (temporary.has(key)) return memory.get(key) || false;
+      if (temporary.has(key)) return memory.get(key) ?? defaultCollapsed;
       try {
-        return localStorage.getItem(key) === "collapsed";
+        const stored = localStorage.getItem(key);
+        return stored ? stored === "collapsed" : defaultCollapsed;
       } catch {
-        return memory.get(key) || false;
+        return memory.get(key) ?? defaultCollapsed;
       }
     },
-    serverSnapshot,
+    () => defaultCollapsed,
   );
   function toggle() {
     memory.set(key, !collapsed);

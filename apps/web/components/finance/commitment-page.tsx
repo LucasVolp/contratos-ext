@@ -7,6 +7,7 @@ import { useSession } from "@/lib/session";
 import type { CommitmentDetail } from "@/lib/finance-types";
 import { currency, date } from "@/lib/api";
 import { FinanceTabs, RequestState, display, useFinance } from "./shared";
+import { FinanceContent } from "./finance-content";
 import { PanelMetrics } from "./panel-metrics";
 import { CommitmentCollection, childSections } from "./commitment-collections";
 import { CommitmentContract } from "../contract-commitments/commitment-contract";
@@ -168,14 +169,16 @@ export function CommitmentPage({ id }: { id: string }) {
               </button>
             ))}
           </div>
-          <div id="commitment-collection">
-            <CommitmentCollection
-              key={active}
-              id={id}
-              section={section}
-              query={query}
-            />
-          </div>
+          <FinanceContent identity={active}>
+            <div id="commitment-collection">
+              <CommitmentCollection
+                key={active}
+                id={id}
+                section={section}
+                query={query}
+              />
+            </div>
+          </FinanceContent>
           <p className="panel-footnote">
             Valores correntes e restos a pagar são apresentados separadamente.
             Cada linha de liquidação ou pagamento representa um vínculo, podendo

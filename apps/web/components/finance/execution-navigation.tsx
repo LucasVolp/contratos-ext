@@ -8,63 +8,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchField } from "@/components/ui/search-field";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  natureCode,
-  type ExecutionPurpose,
-  type ExecutionView,
-} from "@/lib/finance-presentation";
+import { natureCode } from "@/lib/finance-presentation";
 import { ExecutionElementList } from "./execution-element-list";
 import type { ExecutionNature } from "@/lib/finance-types";
-
-export function ExecutionPurposeTabs({
-  purpose,
-  onChange,
-}: {
-  purpose: ExecutionPurpose;
-  onChange: (value: ExecutionPurpose) => void;
-}) {
-  return (
-    <div className="execution-purpose">
-      <Tabs
-        value={purpose}
-        onValueChange={(value) => onChange(value as ExecutionPurpose)}
-      >
-        <TabsList aria-label="Finalidade da execução">
-          <TabsTrigger value="all">Dados disponíveis</TabsTrigger>
-          <TabsTrigger value="own">Despesas próprias da Reitoria</TabsTrigger>
-          <TabsTrigger value="campus">Execução adjunta aos campi</TabsTrigger>
-        </TabsList>
-      </Tabs>
-      <p>
-        A unidade executora não determina a destinação da despesa. A separação
-        por finalidade ainda não está informada na fonte desta consulta.
-      </p>
-    </div>
-  );
-}
-
-export function ExecutionViewTabs({
-  view,
-  onChange,
-}: {
-  view: ExecutionView;
-  onChange: (value: ExecutionView) => void;
-}) {
-  return (
-    <Tabs
-      value={view}
-      onValueChange={(value) => onChange(value as ExecutionView)}
-      className="execution-view-tabs"
-    >
-      <TabsList variant="line" aria-label="Leitura financeira">
-        <TabsTrigger value="overview">Visão geral</TabsTrigger>
-        <TabsTrigger value="explore">Explorar a despesa</TabsTrigger>
-        <TabsTrigger value="payables">Restos a pagar</TabsTrigger>
-      </TabsList>
-    </Tabs>
-  );
-}
 
 export function ExecutionNavigator({
   collapsed,

@@ -66,7 +66,10 @@ test("approved finance workspace replaces trends and rankings with overview and 
   await expect(
     page.getByRole("heading", { name: "Execução nas unidades", exact: true }),
   ).toHaveCount(0);
-  await page.getByRole("tab", { name: "Visão geral", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Todas as despesas", exact: true })
+    .first()
+    .click();
   await expect(
     page.getByRole("heading", { name: "Situação da execução", exact: true }),
   ).toBeVisible();
@@ -78,10 +81,6 @@ test("approved finance workspace replaces trends and rankings with overview and 
   ).toBeVisible();
   await page.getByLabel("Unidade", { exact: true }).selectOption("015814");
   await expect(committed(page)).toHaveText("R$ 10,00");
-  await expect(page).toHaveURL(/view=overview/);
-  await page
-    .getByRole("tab", { name: "Explorar a despesa", exact: true })
-    .click();
   await page
     .getByRole("button", { name: "Explorar elemento 3.3.90.01", exact: true })
     .first()
@@ -94,10 +93,14 @@ test("approved finance workspace replaces trends and rankings with overview and 
       exact: true,
     }),
   ).toBeVisible();
-  await page.getByRole("tab", { name: "Visão geral", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Todas as despesas", exact: true })
+    .first()
+    .click();
   await expect(committed(page)).toHaveText("R$ 10,00");
   await page
-    .getByRole("tab", { name: "Explorar a despesa", exact: true })
+    .getByRole("button", { name: "Explorar elemento 3.3.90.01", exact: true })
+    .first()
     .click();
   await expect(committed(page)).toHaveText("R$ 1,00");
   await page.reload();
@@ -114,7 +117,8 @@ test("approved finance workspace replaces trends and rankings with overview and 
     .click();
   await expect(committed(page)).toHaveText("R$ 10,00");
   await page
-    .getByRole("link", { name: "Consultar empenhos", exact: true })
+    .getByRole("navigation", { name: "Consultas financeiras", exact: true })
+    .getByRole("link", { name: "Empenhos", exact: true })
     .click();
   await expect(page.getByLabel("Unidade", { exact: true })).toHaveValue(
     "015814",
@@ -189,6 +193,9 @@ test("expense exploration bounds long classifications and shows source subitems 
       exact: true,
     }),
   ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Expandir lista de elementos", exact: true })
+    .click();
   const navigator = page.getByRole("navigation", {
     name: "Elementos da despesa",
     exact: true,
@@ -385,6 +392,9 @@ test("both sidebars collapse independently, preserve navigation and retain the p
     main.getByRole("link", { name: "Documentos para assinatura", exact: true }),
   ).toBeVisible();
   await page
+    .getByRole("button", { name: "Expandir lista de elementos", exact: true })
+    .click();
+  await page
     .getByRole("button", { name: "Recolher lista de elementos", exact: true })
     .click();
   await expect(page.locator(".execution-workspace")).toHaveClass(
@@ -440,29 +450,22 @@ test("both sidebars collapse independently, preserve navigation and retain the p
   }
 });
 
-test("purpose scopes never invent a Reitoria or campus attribution", async ({
+test("execution opens directly and legacy purpose links still show available records", async ({
   page,
 }) => {
-  await page.goto(fixture.baseURL + overview);
-  await expect(committed(page)).toHaveText("R$ 21,00");
-  for (const label of [
-    "Despesas próprias da Reitoria",
-    "Execução adjunta aos campi",
-  ]) {
-    await page.getByRole("tab", { name: label, exact: true }).click();
+  for (const purpose of ["all", "own", "campus"]) {
+    await page.goto(fixture.baseURL + overview + `&purpose=${purpose}`);
+    await expect(committed(page)).toHaveText("R$ 21,00");
     await expect(
-      page.getByRole("heading", {
-        name: "Finalidade ainda não classificada",
-        exact: true,
-      }),
+      page.getByRole("tablist", { name: "Finalidade da execução" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("heading", { name: "Finalidade ainda não classificada" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("heading", { name: "Situação da execução", exact: true }),
     ).toBeVisible();
-    await expect(committed(page)).toHaveCount(0);
-    await expect(page.getByText("R$ 21,00", { exact: true })).toHaveCount(0);
   }
-  await page
-    .getByRole("tab", { name: "Dados disponíveis", exact: true })
-    .click();
-  await expect(committed(page)).toHaveText("R$ 21,00");
 });
 
 test("chart coordinates accept insignificant decimal padding without losing source precision", () => {
@@ -795,6 +798,34 @@ test("a restricted viewer sees only linked units and no institutional LOA entry"
   ).toBeVisible();
 });
 
+test("overview keeps filters beside tabs and the chart visible on desktop", async ({ page }) => {
+  await page.route("**/api/finance/execution?**", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    const params = new URL(route.request().url()).searchParams;
+    if (params.get("limit") === "1" && !params.has("expenseNature"))
+      body.summary.paidValue = "1.05";
+    await route.fulfill({ response, json: body });
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(fixture.baseURL + overview);
+  await expect(committed(page)).toHaveText("R$ 21,00");
+  const tabs = await page.getByRole("main")
+    .getByRole("navigation", { name: "Consultas financeiras" })
+    .boundingBox();
+  const filters = await page.getByLabel("Filtros do painel").boundingBox();
+  expect(tabs).not.toBeNull();
+  expect(filters).not.toBeNull();
+  expect(tabs!.x + tabs!.width).toBeLessThanOrEqual(filters!.x);
+  expect(tabs!.y).toBeLessThan(filters!.y + filters!.height);
+  expect(filters!.y).toBeLessThan(tabs!.y + tabs!.height);
+  await expect(page.getByRole("img", { name: "Composição da execução do recorte" })).toBeVisible();
+  const chart = await page.locator(".execution-donut-plot").boundingBox();
+  expect(chart).not.toBeNull();
+  expect(chart!.y + chart!.height).toBeLessThanOrEqual(1000);
+  await page.screenshot({ path: "/tmp/finance-toolbar-desktop.png" });
+});
+
 test("small-screen panels preserve navigation, essential actions, empty, invalid and missing states", async ({
   page,
 }) => {
@@ -818,7 +849,10 @@ test("small-screen panels preserve navigation, essential actions, empty, invalid
     ).toBeVisible();
     for (const theme of ["light", "dark", "system"]) {
       await page.getByLabel("Aparência", { exact: true }).selectOption(theme);
-      await page.getByRole("tab", { name: "Visão geral", exact: true }).click();
+      await page
+        .getByRole("button", { name: "Todas as despesas", exact: true })
+        .first()
+        .click();
       await expect(
         page.getByRole("heading", {
           name: "Situação da execução",
@@ -838,28 +872,20 @@ test("small-screen panels preserve navigation, essential actions, empty, invalid
       await page.screenshot({
         path: `/tmp/contracts-finance-overview-${width}-${theme}.png`,
       });
-      await page
-        .getByRole("tab", { name: "Despesas próprias da Reitoria" })
-        .click();
-      await expect(
-        page.getByRole("heading", {
-          name: "Finalidade ainda não classificada",
-        }),
-      ).toBeVisible();
-      await page.getByRole("tab", { name: "Dados disponíveis" }).click();
-      await page
-        .getByRole("tab", { name: "Restos a pagar", exact: true })
-        .click();
-      await expect(
-        page.getByRole("heading", { name: "Restos a pagar", exact: true }),
-      ).toBeVisible();
-      await page.getByRole("tab", { name: "Explorar a despesa" }).click();
       await expect(committed(page)).toHaveText("R$ 21,00");
     }
     if (width < 700) {
-      await page
-        .getByRole("button", { name: "Escolher despesa", exact: true })
-        .click();
+      const expand = page.getByRole("button", {
+        name: "Expandir lista de elementos",
+        exact: true,
+      });
+      if (await expand.isVisible()) await expand.click();
+      const picker = page.getByRole("button", {
+        name: "Escolher despesa",
+        exact: true,
+      });
+      if ((await picker.getAttribute("aria-expanded")) !== "true")
+        await picker.click();
       await expect(
         page.getByText("Role para ver mais", { exact: true }),
       ).toBeVisible();
@@ -919,4 +945,333 @@ test("fiscal year selection persists across reload without reusing another year'
   await expect(committed(page)).toHaveText("Não informado");
   await page.getByLabel("Exercício", { exact: true }).selectOption("2026");
   await expect(committed(page)).toHaveText("R$ 21,00");
+});
+
+test("subelement pagination preserves content and scroll while loading and on the shorter last page", async ({
+  page,
+}) => {
+  for (const [width, theme] of [
+    [1440, "light"],
+    [390, "dark"],
+    [360, "system"],
+  ] as const) {
+    await page.setViewportSize({ width, height: 800 });
+    let release = () => {};
+    let received = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const waiting = new Promise<void>((resolve) => {
+      received = resolve;
+    });
+    await page.route("**/api/finance/subelements?**", async (route) => {
+      const response = await route.fetch();
+      const report = await response.json();
+      const requested = Number(
+        new URL(route.request().url()).searchParams.get("page"),
+      );
+      const rows = Array.from({ length: 7 }, (_, index) => ({
+        ...report.data[0],
+        code: `339001${String(index + 1).padStart(2, "0")}`,
+        name: `Pagination test subelement ${index + 1}`,
+      }));
+      if (requested === 2) {
+        received();
+        await held;
+      }
+      await route.fulfill({
+        response,
+        json: {
+          ...report,
+          page: requested,
+          total: 7,
+          limit: 6,
+          data: rows.slice((requested - 1) * 6, requested * 6),
+        },
+      });
+    });
+    try {
+      await page.goto(fixture.baseURL + overview + "&element=339001");
+      await page.getByLabel("Aparência", { exact: true }).selectOption(theme);
+      const section = page.getByRole("region", {
+        name: "Gasto por subelemento",
+        exact: true,
+      });
+      const table = section.getByRole("table", {
+        name: "Detalhamento do gasto por subelemento",
+      });
+      await expect(table).toContainText("Pagination test subelement 1");
+      const next = section.getByRole("button", {
+        name: "Próxima página",
+        exact: true,
+      });
+      await next.scrollIntoViewIfNeeded();
+      const before = await page.evaluate(() => window.scrollY);
+      await next.click();
+      await waiting;
+      await expect(table).toBeVisible();
+      await expect(table).toContainText("Pagination test subelement 1");
+      expect(
+        Math.abs((await page.evaluate(() => window.scrollY)) - before),
+      ).toBeLessThan(3);
+      release();
+      await expect(table).toContainText("Pagination test subelement 7");
+      await expect(table).not.toContainText("Pagination test subelement 1");
+      expect(
+        Math.abs((await page.evaluate(() => window.scrollY)) - before),
+      ).toBeLessThan(3);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      await section
+        .getByRole("button", { name: "Página anterior", exact: true })
+        .click();
+      await expect(table).toContainText("Pagination test subelement 1");
+      expect(
+        Math.abs((await page.evaluate(() => window.scrollY)) - before),
+      ).toBeLessThan(3);
+    } finally {
+      release();
+      await page.unrouteAll({ behavior: "wait" });
+    }
+  }
+});
+
+test("failed subelement page retains the consulted page and retry loads the requested page", async ({
+  page,
+}) => {
+  let fail = true;
+  await page.route("**/api/finance/subelements?**", async (route) => {
+    const response = await route.fetch();
+    const report = await response.json();
+    const requested = Number(
+      new URL(route.request().url()).searchParams.get("page"),
+    );
+    if (requested === 2 && fail) {
+      fail = false;
+      await route.fulfill({
+        status: 503,
+        json: { message: "Consulta indisponível para teste" },
+      });
+      return;
+    }
+    await route.fulfill({
+      response,
+      json: {
+        ...report,
+        page: requested,
+        total: 7,
+        limit: 6,
+        data: [
+          {
+            ...report.data[0],
+            name:
+              requested === 1
+                ? "Consulted first page"
+                : "Requested second page",
+          },
+        ],
+      },
+    });
+  });
+  await page.goto(fixture.baseURL + overview + "&element=339001");
+  const section = page.getByRole("region", {
+    name: "Gasto por subelemento",
+    exact: true,
+  });
+  const table = section.getByRole("table", {
+    name: "Detalhamento do gasto por subelemento",
+  });
+  await expect(table).toContainText("Consulted first page");
+  await section
+    .getByRole("button", { name: "Próxima página", exact: true })
+    .click();
+  await expect(section.getByRole("alert")).toContainText(
+    "Consulta indisponível para teste",
+  );
+  await expect(table).toContainText("Consulted first page");
+  await section
+    .getByRole("button", { name: "Tentar novamente", exact: true })
+    .click();
+  await expect(table).toContainText("Requested second page");
+  await expect(section.getByRole("alert")).toHaveCount(0);
+});
+
+test("unified execution starts collapsed and emphasizes paid payables beside current payments", async ({
+  page,
+}) => {
+  await page.route("**/api/finance/execution?**", async (route) => {
+    const response = await route.fetch();
+    const report = await response.json();
+    report.summary.priorYearPaidValue = "7.5";
+    report.data = report.data.map((row: Record<string, unknown>) => ({
+      ...row,
+      priorYearPaidValue: "0.5",
+    }));
+    await route.fulfill({ response, json: report });
+  });
+  await page.goto(fixture.baseURL + overview);
+  await expect(committed(page)).toHaveText("R$ 21,00");
+  await expect(
+    page.getByRole("tablist", { name: "Leitura financeira" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", {
+      name: "Expandir lista de elementos",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator(
+        ".execution-totals [data-metric=priorYearPaidValue] > dd:first-of-type",
+      )
+      .first(),
+  ).toHaveText("R$ 7,50");
+  await expect(page.locator(".execution-ledger thead th")).toHaveText([
+    "Elemento de despesa",
+    "Empenhado",
+    "Liquidado",
+    "Pago",
+    "R.P.",
+  ]);
+  await expect(
+    page.locator(".execution-ledger tbody tr").first().locator("td").last(),
+  ).toContainText("R$ 0,50");
+  await page
+    .getByText("Detalhar restos a pagar", { exact: true })
+    .first()
+    .click();
+  await expect(
+    page.getByText("R.P. cancelados", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("R.P. inscritos", { exact: true })).toBeVisible();
+});
+
+for (const collection of ["commitments", "budgets"] as const) {
+  test(`${collection} pagination preserves the visible page and scroll during a delayed request`, async ({
+    page,
+  }) => {
+    const budget = collection === "budgets";
+    await page.goto(
+      fixture.baseURL +
+        (budget
+          ? "/financeiro/loa?subordinateAgencyCode=26421&fiscalYear=2026"
+          : "/financeiro/empenhos?managementCode=26421&fiscalYear=2026"),
+    );
+    if (budget)
+      await page
+        .getByRole("button", { name: "Ver detalhamento", exact: true })
+        .click();
+    const region = page.getByRole("region", {
+      name: budget ? "Detalhamento do painel" : "Resultados da consulta",
+      exact: true,
+    });
+    const table = region.getByRole("table");
+    await expect(table.locator("tbody tr")).toHaveCount(20);
+    let release = () => {};
+    let received = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const waiting = new Promise<void>((resolve) => {
+      received = resolve;
+    });
+    await page.route(`**/api/finance/${collection}?**`, async (route) => {
+      if (new URL(route.request().url()).searchParams.get("page") !== "2")
+        return route.continue();
+      const response = await route.fetch();
+      received();
+      await held;
+      await route.fulfill({ response });
+    });
+    try {
+      const next = region.getByRole("button", {
+        name: "Próxima página",
+        exact: true,
+      });
+      await next.scrollIntoViewIfNeeded();
+      const before = await page.evaluate(() => scrollY);
+      await next.click();
+      await waiting;
+      await expect(table.locator("tbody tr")).toHaveCount(20);
+      await expect(region.getByRole("status")).toContainText(
+        "Carregando página 2",
+      );
+      expect(
+        Math.abs((await page.evaluate(() => scrollY)) - before),
+      ).toBeLessThan(3);
+      release();
+      await expect(table.locator("tbody tr")).toHaveCount(1);
+      await expect(region.getByRole("status")).toContainText(
+        "Página 2 carregada",
+      );
+      expect(
+        Math.abs((await page.evaluate(() => scrollY)) - before),
+      ).toBeLessThan(3);
+    } finally {
+      release();
+    }
+  });
+}
+
+test("overview and element detail share the same canvas geometry across themes and reduced motion", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  for (const [width, theme] of [
+    [1440, "light"],
+    [390, "dark"],
+    [360, "system"],
+  ] as const) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(fixture.baseURL + overview);
+    await page.getByLabel("Aparência", { exact: true }).selectOption(theme);
+    await expect(committed(page)).toHaveText("R$ 21,00");
+    const canvas = page.locator(".execution-canvas");
+    const origin = await canvas.evaluate((node) => {
+      const rect = node.getBoundingClientRect();
+      return { x: rect.x, y: rect.y + scrollY, width: rect.width };
+    });
+    await page
+      .getByRole("region", { name: "Top 5 elementos de despesa", exact: true })
+      .getByRole("button", { name: "Explorar elemento 3.3.90.01", exact: true })
+      .click();
+    await expect(
+      page.getByRole("table", {
+        name: "Detalhamento do gasto por subelemento",
+        exact: true,
+      }),
+    ).toBeVisible();
+    const detail = await canvas.evaluate((node) => {
+      const rect = node.getBoundingClientRect();
+      return { x: rect.x, y: rect.y + scrollY, width: rect.width };
+    });
+    expect(detail).toEqual(origin);
+    expect(
+      await canvas.evaluate(
+        (node) =>
+          node.contains(document.activeElement) ||
+          node === document.activeElement,
+      ),
+    ).toBe(true);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page
+      .getByRole("button", { name: "Todas as despesas", exact: true })
+      .first()
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Situação da execução", exact: true }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: `/tmp/contracts-unified-finance-${width}-${theme}.png`,
+      fullPage: true,
+    });
+  }
 });

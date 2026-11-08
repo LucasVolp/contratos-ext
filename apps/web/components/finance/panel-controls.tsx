@@ -134,9 +134,10 @@ export function PanelControls({
           type="button"
           onClick={onRefresh}
           disabled={busy || !scope.managementCode}
+          aria-label={busy ? "Consultando painel" : "Atualizar painel"}
+          title={busy ? "Consultando painel" : "Atualizar painel"}
         >
           <RefreshCw size={15} aria-hidden="true" />
-          {busy ? "Consultando…" : "Atualizar painel"}
         </Button>
       </div>
       <details

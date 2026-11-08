@@ -26,6 +26,20 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./apps/api
+        - action: rebuild
+          path: ./packages/validation
+        - action: rebuild
+          path: ./package.json
+        - action: rebuild
+          path: ./pnpm-lock.yaml
+        - action: rebuild
+          path: ./pnpm-workspace.yaml
+        - action: rebuild
+          path: ./.dockerignore
     environment:
       NODE_ENV: production
       PORT: 4100
@@ -57,6 +71,13 @@ services:
     build:
       context: apps/etl
       dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./apps/etl
+          ignore:
+            - bin/
+            - .cache/
     environment:
       # lib/pq needs sslmode=disable for the Compose database.
       DATABASE_URL: postgresql://${POSTGRES_USER:-contracts}:${POSTGRES_PASSWORD:-contracts_local}@db:5432/${POSTGRES_DB:-contracts}?sslmode=disable
@@ -68,6 +89,20 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+    develop:
+      watch:
+        - action: rebuild
+          path: ./apps/web
+        - action: rebuild
+          path: ./packages/validation
+        - action: rebuild
+          path: ./package.json
+        - action: rebuild
+          path: ./pnpm-lock.yaml
+        - action: rebuild
+          path: ./pnpm-workspace.yaml
+        - action: rebuild
+          path: ./.dockerignore
     environment:
       NODE_ENV: production
       API_INTERNAL_URL: http://api:4100

@@ -7,6 +7,7 @@ import type { Page } from "@/lib/finance-types";
 import { natureCode } from "@/lib/finance-presentation";
 import { FinanceTable, type Column, type FinancialRow } from "./shared";
 import { useFinanceQuery } from "./use-finance-query";
+import { FinanceContent } from "./finance-content";
 const pageNumber = (value: string | null) =>
   /^\d{1,6}$/.test(value || "") && Number(value) > 0 ? Number(value) : 1;
 type Change = (values: Record<string, string>) => void;
@@ -55,6 +56,7 @@ export function ExecutionDocumentRows({
     }),
     undefined,
     revision,
+    `commitments/${id}/${section.key}`,
   );
   const columns: Column[] = [
     { key: "subelement", label: "Subelemento" },
@@ -106,45 +108,47 @@ export function ExecutionDocumentRows({
       {result.error ? (
         <ErrorState message={result.error.message} retry={result.retry} />
       ) : null}
-      {!result.data ? (
-        !result.error ? (
-          <Loading />
-        ) : null
-      ) : (
-        <>
-          {rows.length ? (
-            <>
-              <p className="execution-table-hint">
-                <ArrowLeftRight size={14} aria-hidden="true" /> Role a tabela
-                para o lado para ver todas as colunas.
+      <FinanceContent identity={section.key} busy={result.loading}>
+        {!result.data ? (
+          !result.error ? (
+            <Loading />
+          ) : null
+        ) : (
+          <>
+            {rows.length ? (
+              <>
+                <p className="execution-table-hint">
+                  <ArrowLeftRight size={14} aria-hidden="true" /> Role a tabela
+                  para o lado para ver todas as colunas.
+                </p>
+                <FinanceTable
+                  rows={rows}
+                  columns={columns}
+                  caption="Subelementos do documento"
+                />
+              </>
+            ) : (
+              <p className="execution-data-note">
+                Nenhum registro disponível nesta coleção do documento. Isso não
+                confirma a ausência de execução no subelemento.
               </p>
-              <FinanceTable
-                rows={rows}
-                columns={columns}
-                caption="Subelementos do documento"
-              />
-            </>
-          ) : (
-            <p className="execution-data-note">
-              Nenhum registro disponível nesta coleção do documento. Isso não
-              confirma a ausência de execução no subelemento.
+            )}
+            <Pager
+              page={result.data.page}
+              total={result.data.total}
+              limit={result.data.limit}
+              onChange={(value) => onChange({ sourcePage: String(value) })}
+            />
+            <p className="execution-chart-note">
+              Fonte: Portal da Transparência · documentos diários. Consulta:{" "}
+              {result.loadedAt
+                ? new Date(result.loadedAt).toLocaleString("pt-BR")
+                : "Não consultado"}
+              .
             </p>
-          )}
-          <Pager
-            page={result.data.page}
-            total={result.data.total}
-            limit={result.data.limit}
-            onChange={(value) => onChange({ sourcePage: String(value) })}
-          />
-          <p className="execution-chart-note">
-            Fonte: Portal da Transparência · documentos diários. Consulta:{" "}
-            {result.loadedAt
-              ? new Date(result.loadedAt).toLocaleString("pt-BR")
-              : "Não consultado"}
-            .
-          </p>
-        </>
-      )}
+          </>
+        )}
+      </FinanceContent>
     </div>
   );
 }

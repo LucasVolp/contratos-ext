@@ -91,11 +91,18 @@ export function CommitmentCollection({
   const params = new URLSearchParams(query);
   const pageKey = `${section.key}Page`;
   const page = params.get(pageKey) || "1";
-  const { data, error, retry } = useFinance<Page<FinancialRow>>(
+  const { data, error, retry, loading } = useFinance<Page<FinancialRow>>(
     `commitments/${encodeURIComponent(id)}/${section.key}?page=${encodeURIComponent(page)}&limit=20`,
+    undefined,
+    0,
+    `commitments/${id}/${section.key}`,
   );
   return (
-    <section className="registry finance-child" aria-label={section.title}>
+    <section
+      className="registry finance-child"
+      aria-label={section.title}
+      aria-busy={loading}
+    >
       <div className="registry-top">
         <h2>{section.title}</h2>
         {data && <span>{data.total} registros</span>}
@@ -114,7 +121,13 @@ export function CommitmentCollection({
           ) : (
             <FinanceEmpty />
           )}
-          <FinancePager result={data} query={query} pageKey={pageKey} />
+          <FinancePager
+            result={data}
+            query={query}
+            pageKey={pageKey}
+            loading={loading}
+            requestedPage={page}
+          />
         </>
       )}
     </section>

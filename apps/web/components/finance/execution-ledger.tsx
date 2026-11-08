@@ -1,3 +1,4 @@
+import { FinanceContent } from "./finance-content";
 import { Pager } from "@/components/ui";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,7 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table";
-import { executionStages, natureCode } from "@/lib/finance-presentation";
+import { executionColumns, natureCode } from "@/lib/finance-presentation";
 import type { ExecutionNature } from "@/lib/finance-types";
 import { currency } from "@/lib/api";
 
@@ -53,46 +54,50 @@ export function ExecutionLedger({
           do recorte, mas não são atribuídos a um elemento.
         </p>
       ) : null}
-      <div className="table-scroll">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Elemento de despesa</TableHead>
-              {executionStages.map((stage) => (
-                <TableHead key={stage.key}>{stage.label}</TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {visible.map((node) => (
-              <TableRow key={node.code}>
-                <TableCell>
-                  <Button
-                    type="button"
-                    variant="link"
-                    className="execution-ledger-link"
-                    aria-label={`Explorar elemento ${natureCode(node.code)}`}
-                    onClick={() => onSelect(node.code)}
-                  >
-                    <span>{natureCode(node.code)}</span>
-                    <strong>
-                      {node.name || `Elemento ${natureCode(node.code)}`}
-                      <ArrowRight size={14} aria-hidden="true" />
-                    </strong>
-                    <small>Abrir elemento</small>
-                  </Button>
-                </TableCell>
-                {executionStages.map((stage) => (
-                  <TableCell key={stage.key}>
-                    <span className="execution-cell-label">{stage.label}</span>
-                    <span>{currency(node.summary[stage.key])}</span>
-                  </TableCell>
+      <FinanceContent identity={String(currentPage)}>
+        <div className="table-scroll">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Elemento de despesa</TableHead>
+                {executionColumns.map((stage) => (
+                  <TableHead key={stage.key}>{stage.label}</TableHead>
                 ))}
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+            </TableHeader>
+            <TableBody>
+              {visible.map((node) => (
+                <TableRow key={node.code}>
+                  <TableCell>
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="execution-ledger-link"
+                      aria-label={`Explorar elemento ${natureCode(node.code)}`}
+                      onClick={() => onSelect(node.code)}
+                    >
+                      <span>{natureCode(node.code)}</span>
+                      <strong>
+                        {node.name || `Elemento ${natureCode(node.code)}`}
+                        <ArrowRight size={14} aria-hidden="true" />
+                      </strong>
+                      <small>Abrir elemento</small>
+                    </Button>
+                  </TableCell>
+                  {executionColumns.map((stage) => (
+                    <TableCell key={stage.key}>
+                      <span className="execution-cell-label">
+                        {stage.label}
+                      </span>
+                      <span>{currency(node.summary[stage.key])}</span>
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </FinanceContent>
       <Pager
         page={currentPage}
         total={natures.length}

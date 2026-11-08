@@ -15,6 +15,7 @@ import { formatSourceDecimal } from "@/lib/decimal-display";
 import { currency, date } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { useFinanceQuery } from "./use-finance-query";
+import { FinanceContent } from "./finance-content";
 import { ApiError } from "@/lib/api";
 import { ErrorState, Loading, Pager, Empty } from "@/components/ui";
 import type { Page } from "@/lib/finance-types";
@@ -122,76 +123,90 @@ export function FinanceTable({
   caption: string;
 }) {
   return (
-    <div
-      className="table-scroll"
-      role="region"
-      aria-label={caption}
-      tabIndex={0}
-    >
-      <Table className="finance-table">
-        <TableCaption className="sr-only">{caption}</TableCaption>
-        <TableHeader>
-          <TableRow>
-            {columns.map((c) => (
-              <TableHead key={c.key} scope="col">
-                {c.label}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row, i) => (
-            <TableRow key={String(row.allocationId || row.id || i)}>
+    <FinanceContent identity={JSON.stringify(rows)}>
+      <div
+        className="table-scroll"
+        role="region"
+        aria-label={caption}
+        tabIndex={0}
+      >
+        <Table className="finance-table">
+          <TableCaption className="sr-only">{caption}</TableCaption>
+          <TableHeader>
+            <TableRow>
               {columns.map((c) => (
-                <TableCell
-                  key={c.key}
-                  className={c.money ? "finance-money" : undefined}
-                >
-                  {c.link ? (
-                    <Link className="record-number" href={c.link(row)}>
-                      {display(row[c.key])}
-                    </Link>
-                  ) : c.money ? (
-                    money(row[c.key])
-                  ) : c.date ? (
-                    calendar(row[c.key])
-                  ) : c.key === "quantity" ? (
-                    formatSourceDecimal(row[c.key])
-                  ) : c.key === "operationType" ? (
-                    operationLabels[String(row[c.key])] || display(row[c.key])
-                  ) : (
-                    display(row[c.key])
-                  )}
-                </TableCell>
+                <TableHead key={c.key} scope="col">
+                  {c.label}
+                </TableHead>
               ))}
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row, i) => (
+              <TableRow key={String(row.allocationId || row.id || i)}>
+                {columns.map((c) => (
+                  <TableCell
+                    key={c.key}
+                    className={c.money ? "finance-money" : undefined}
+                  >
+                    {c.link ? (
+                      <Link className="record-number" href={c.link(row)}>
+                        {display(row[c.key])}
+                      </Link>
+                    ) : c.money ? (
+                      money(row[c.key])
+                    ) : c.date ? (
+                      calendar(row[c.key])
+                    ) : c.key === "quantity" ? (
+                      formatSourceDecimal(row[c.key])
+                    ) : c.key === "operationType" ? (
+                      operationLabels[String(row[c.key])] || display(row[c.key])
+                    ) : (
+                      display(row[c.key])
+                    )}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </FinanceContent>
   );
 }
 export function FinancePager({
   result,
   query,
   pageKey = "page",
+  loading = false,
+  requestedPage,
 }: {
   result: Page<unknown>;
   query: string;
   pageKey?: string;
+  loading?: boolean;
+  requestedPage?: string;
 }) {
   const router = useRouter();
   return (
-    <Pager
-      page={result.page}
-      total={result.total}
-      limit={result.limit}
-      onChange={(page) => {
-        const q = new URLSearchParams(query);
-        q.set(pageKey, String(page));
-        router.push(`?${q}`, { scroll: false });
-      }}
-    />
+    <>
+      <span className="sr-only" role="status">
+        {loading
+          ? `Carregando página ${requestedPage || result.page}.`
+          : `Página ${result.page} carregada. ${result.total} registros.`}
+      </span>
+      <Pager
+        page={result.page}
+        total={result.total}
+        limit={result.limit}
+        onChange={(page) => {
+          if (loading) return;
+          const q = new URLSearchParams(query);
+          q.set(pageKey, String(page));
+          router.push(`?${q}`, { scroll: false });
+        }}
+      />
+    </>
   );
 }
 export function FinanceEmpty() {

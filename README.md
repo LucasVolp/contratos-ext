@@ -11,6 +11,9 @@ cp .env.example .env
 docker compose up --build -d
 ```
 
+For active development, use [Container development](#container-development) so
+source changes rebuild the running services automatically.
+
 Abra **http://localhost:3100**. A migração do banco roda automaticamente antes de iniciar a API. Não é necessário ter SAGA ou DIRAD instalados.
 
 O banco inicia vazio. Para carregar exemplos identificados como demonstração:
@@ -69,6 +72,33 @@ and pagination. Internal planning and the accounts-payable balance remain pendin
 A organização do backend e a transição das migrações estão descritas em [Backend](docs/backend.md).
 
 O frontend encaminha `/api/*` para o backend na rede interna. A API gera DOCX com docxtemplater/PizZip e envia o Word para o Gotenberg somente quando o formato solicitado é PDF. Falha do conversor não impede DOCX. As portas são publicadas apenas em loopback por padrão.
+
+## Container development
+
+Use Docker Compose 2.22 or later. From the repository root, run:
+
+```sh
+pnpm containers:dev
+# Equivalent: docker compose up --build --watch
+```
+
+Keep this command running while developing. It builds the current checkout on
+startup, then watches API and web source files, templates, shared validation,
+package manifests, the lockfile and workspace configuration. Each change rebuilds
+and replaces the affected service, so the browser serves the compiled local code.
+Generated files and host dependencies are excluded through `.dockerignore`.
+Build errors appear in the terminal and must be resolved before the updated
+version can run. Rebuilds briefly interrupt the affected service.
+
+For the optional replicator, use
+`docker compose --profile sync up --build --watch`; its Go source and module
+changes also trigger a rebuild. The sync profile remains opt-in.
+
+For a one-time update of detached containers, run `pnpm containers:update`.
+`docker compose restart` only restarts the existing image and does not apply
+source changes. Watch mode must remain running for automatic updates; restarting
+Docker alone does not restart the watcher. Neither update command removes the
+`postgres_data` volume or seeds the database.
 
 ## Desenvolvimento local
 

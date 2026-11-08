@@ -47,6 +47,7 @@ export function ExecutionSubelementOverview({
     }),
     undefined,
     revision,
+    financePath("subelements", query, { expenseNature: nature, metric }),
   );
   const report = result.data;
   return (
@@ -134,40 +135,50 @@ export function ExecutionSubelementOverview({
             </p>
           </div>
           <div className="execution-subelement-table">
+            <span className="sr-only" role="status">
+              {result.loading
+                ? `Carregando página ${page}.`
+                : `Página ${report.page} carregada.`}
+            </span>
             <p className="execution-table-hint">
               <ArrowLeftRight size={14} aria-hidden="true" /> Role a tabela para
               o lado para ver todas as colunas.
             </p>
-            {report.data.length ? (
-              <FinanceTable
-                caption="Detalhamento do gasto por subelemento"
-                rows={report.data.map((row) => ({
-                  ...row,
-                  classification: row.code
-                    ? natureCode(row.code)
-                    : "Sem subelemento identificado",
-                }))}
-                columns={[
-                  { key: "classification", label: "Subelemento" },
-                  { key: "name", label: "Descrição" },
-                  ...executionStages.map((stage) => ({
-                    key: stage.key,
-                    label: stage.label,
-                    money: true,
-                  })),
-                ]}
-              />
-            ) : (
-              <p className="execution-data-note">
-                Nenhum registro diário encontrado para este elemento no período
-                selecionado.
-              </p>
-            )}
+            <div aria-busy={result.loading}>
+              {report.data.length ? (
+                <FinanceTable
+                  caption="Detalhamento do gasto por subelemento"
+                  rows={report.data.map((row) => ({
+                    ...row,
+                    classification: row.code
+                      ? natureCode(row.code)
+                      : "Sem subelemento identificado",
+                  }))}
+                  columns={[
+                    { key: "classification", label: "Subelemento" },
+                    { key: "name", label: "Descrição" },
+                    ...executionStages.map((stage) => ({
+                      key: stage.key,
+                      label: stage.label,
+                      money: true,
+                    })),
+                  ]}
+                />
+              ) : (
+                <p className="execution-data-note">
+                  Nenhum registro diário encontrado para este elemento no
+                  período selecionado.
+                </p>
+              )}
+            </div>
             <Pager
               page={report.page}
               total={report.total}
               limit={report.limit}
-              onChange={(value) => onChange({ subelementPage: String(value) })}
+              onChange={(value) => {
+                if (result.loading) return;
+                onChange({ subelementPage: String(value) });
+              }}
             />
           </div>
           <p className="execution-data-note">

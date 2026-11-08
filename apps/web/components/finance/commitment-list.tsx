@@ -19,6 +19,9 @@ export function CommitmentList() {
     scope.managementCode
       ? financePath("commitments", query, { page, limit: "20" })
       : null,
+    undefined,
+    0,
+    scope.managementCode ? financePath("commitments", query) : null,
   );
   const returnTo = `/financeiro/empenhos?${query}&page=${encodeURIComponent(page)}`;
   const columns: Column[] = [
@@ -108,9 +111,6 @@ export function CommitmentList() {
             </h2>
             <span className="panel-source">Documentos financeiros</span>
           </div>
-          <span className="sr-only" role="status">
-            {result.data.total} empenhos encontrados.
-          </span>
           {result.data.data.length ? (
             <FinanceTable
               columns={columns}
@@ -126,7 +126,12 @@ export function CommitmentList() {
               actionLabel="Limpar filtros"
             />
           )}
-          <FinancePager result={result.data} query={query} />
+          <FinancePager
+            result={result.data}
+            query={query}
+            loading={result.loading}
+            requestedPage={page}
+          />
         </section>
       )}
       {result.loadedAt && (
