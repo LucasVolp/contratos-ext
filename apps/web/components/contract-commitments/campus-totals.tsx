@@ -1,4 +1,4 @@
-import { currency } from "@/lib/api";
+import { currency, date } from "@/lib/api";
 import type { ContractCommitments } from "@/lib/contract-commitments-api";
 import { DataTable, type Column, type DataRow } from "@/components/ui/data-table";
 
@@ -15,7 +15,7 @@ const columns: Column[] = [
 ];
 
 /** What the contract provides to each campus (issuing UG), the contract total and its balance. */
-export function CampusTotals({ data }: { data: ContractCommitments }) {
+export function CampusTotals({ data, capturedAt }: { data: ContractCommitments; capturedAt: string }) {
   const rows: DataRow[] = [
     ...data.campuses.map((campus) => ({ ...campus, id: campus.unitCode })),
     { ...data.totals, id: "total", unitName: "Total do contrato" },
@@ -28,7 +28,8 @@ export function CampusTotals({ data }: { data: ContractCommitments }) {
           <span>SALDO DO CONTRATO</span>
           <strong>{currency(data.balance.remaining)}</strong>
           <small className="muted">
-            Valor global informado pelo Contratos.gov.br ({currency(data.balance.globalValue)}) menos o total empenhado.
+            Valor global informado pelo Contratos.gov.br em {date(capturedAt)} ({currency(data.balance.globalValue)}) menos o
+            total empenhado.
           </small>
         </div>
       </section>

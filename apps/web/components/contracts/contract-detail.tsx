@@ -59,6 +59,7 @@ export function ContractDetail({ externalId }: { externalId: string }) {
         <ContractHeader contract={contract} />
         <ContractCommitmentsSection
           externalId={externalId}
+          capturedAt={contract.capturedAt}
           state={data.parts.find((p) => p.part === "commitments")}
         />
         <ContractNotes externalId={externalId} initial={data.notes} />

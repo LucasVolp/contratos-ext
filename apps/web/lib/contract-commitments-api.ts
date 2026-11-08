@@ -19,7 +19,6 @@ export type CommitmentLink = Amounts & {
   unitCode: string;
   unitName: string | null;
   issueDate: string | null;
-  creditor: string | null;
   expenseNature: string | null;
   financeStatus: FinanceStatus;
   financeCommitmentId: string | null;
@@ -61,16 +60,17 @@ export function financeStatusLabel(link: Pick<CommitmentLink, "financeStatus" | 
     case "NOT_FOUND":
       return "Não encontrado nos dados importados";
     case "PENDING":
-      return `Aguardando importação — última importação em ${date(link.lastImportedOn)}`;
+      return link.lastImportedOn
+        ? `Aguardando importação — última importação em ${date(link.lastImportedOn)}`
+        : "Aguardando importação";
     default:
       return "Fora do escopo da importação financeira";
   }
 }
 
-/** Committed amount, with the finance figure beside it when the two sources disagree. */
+/** Committed amount; when the two sources disagree, both are shown with their source. */
 export function committedWithFinance(link: Pick<CommitmentLink, "committed" | "financeCommitted">): string {
-  const reported = currency(link.committed);
   return link.financeCommitted !== null && link.financeCommitted !== link.committed
-    ? `${reported} · Execução financeira: ${currency(link.financeCommitted)}`
-    : reported;
+    ? `Contratos.gov.br: ${currency(link.committed)} · Execução financeira: ${currency(link.financeCommitted)}`
+    : currency(link.committed);
 }

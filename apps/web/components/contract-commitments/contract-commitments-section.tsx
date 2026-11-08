@@ -9,7 +9,16 @@ import { CommitmentLinks } from "./commitment-links";
 const never: SourcePartState = { part: "commitments", status: "MISSING", capturedAt: null, lastAttemptAt: null, rowCount: 0 };
 
 /** Commitments of the contract by issuing campus, as Contratos.gov.br lists them. */
-export function ContractCommitmentsSection({ externalId, state = never }: { externalId: string; state?: SourcePartState }) {
+export function ContractCommitmentsSection({
+  externalId,
+  capturedAt,
+  state = never,
+}: {
+  externalId: string;
+  /** When the contract header (and its global value) was captured. */
+  capturedAt: string;
+  state?: SourcePartState;
+}) {
   const load = hasRows(state);
   const empty = (state.status === "AVAILABLE" && state.rowCount === 0) || state.status === "NOT_FOUND";
   const [data, setData] = useState<ContractCommitments | null>(null);
@@ -54,7 +63,7 @@ export function ContractCommitmentsSection({ externalId, state = never }: { exte
           <p className="muted">
             Empenhos informados pelo Contratos.gov.br. Valores do Contratos.gov.br, incluindo restos a pagar.
           </p>
-          <CampusTotals data={data} />
+          <CampusTotals data={data} capturedAt={capturedAt} />
           <CommitmentLinks data={data} />
         </>
       )}

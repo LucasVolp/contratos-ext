@@ -254,3 +254,28 @@ test("unknown or out-of-scope commitment is 404", async (t) => {
     assert.equal(response.json().message, "Empenho não encontrado.");
   }
 });
+
+const runOn = (db: Database, day: string, status: string) =>
+  db.query(`INSERT INTO finance.ingestion_runs
+    (type, source_file, period_start, period_end, scope_type, scope_codes, trigger_type, status, etl_version, finished_at)
+    VALUES ('DAILY_EXPENSES', $1, $2, $2, 'MANAGEMENT', ARRAY['26421'], 'MANUAL', $3, 'test', now())`, [`${status}-${day}.zip`, day, status]);
+
+test("a day imported with no data counts as imported", async (t) => {
+  const { db, app } = await setup(t);
+  await runOn(db, "2026-11-01", "NO_DATA");
+  const link = byNumber((await commitmentsOf(app)).json().commitments, "2026NE000004");
+  assert.equal(link.financeStatus, "NOT_FOUND");
+});
+
+test("a failed day before the first import is pending, not out of scope", async (t) => {
+  const { db, app } = await setup(t);
+  await runOn(db, "2025-06-01", "FAILURE");
+  const link = byNumber((await commitmentsOf(app)).json().commitments, "2025NE000006");
+  assert.equal(link.financeStatus, "PENDING");
+  assert.equal(link.lastImportedOn, "2026-10-23");
+});
+
+test("creditor is not exposed", async (t) => {
+  const { app } = await setup(t);
+  for (const link of (await commitmentsOf(app)).json().commitments) assert.equal("creditor" in link, false, link.number);
+});

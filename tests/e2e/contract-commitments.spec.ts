@@ -25,7 +25,7 @@ const amounts = (committed: string | null, extra: Record<string, string | null> 
   rpLiquidated: '0.000000', rpPaid: '0.000000', ...extra,
 });
 const link = (number: string, unitCode: string, unitName: string | null, committed: string, extra: Record<string, unknown> = {}) => ({
-  transparencyCode: `${unitCode}26421${number}`, number, unitCode, unitName, issueDate: '2026-03-10', creditor: 'Fornecedor de teste',
+  transparencyCode: `${unitCode}26421${number}`, number, unitCode, unitName, issueDate: '2026-03-10',
   expenseNature: '339039', ...amounts(committed), financeStatus: 'CONFIRMED', financeCommitmentId: null, financeCommitted: null,
   lastImportedOn: null, linkable: false, ...extra,
 });
@@ -72,7 +72,7 @@ test.describe('empenhos do contrato', () => {
     await expect(campuses.getByRole('row', { name: /Total do contrato/ })).toContainText('R$ 490,00');
     await expect(area.getByText('SALDO DO CONTRATO')).toBeVisible();
     await expect(area.getByText('R$ 510,00')).toBeVisible();
-    await expect(area.getByText('Valor global informado pelo Contratos.gov.br (R$ 1.000,00) menos o total empenhado.')).toBeVisible();
+    await expect(area.getByText('Valor global informado pelo Contratos.gov.br em 06/11/2026 (R$ 1.000,00) menos o total empenhado.')).toBeVisible();
   });
 
   test('situação de cada empenho é explícita', async ({ page }) => {
@@ -83,7 +83,16 @@ test.describe('empenhos do contrato', () => {
     await expect(list.getByText('Não encontrado nos dados importados')).toBeVisible();
     await expect(list.getByText('Aguardando importação — última importação em 23/10/2026')).toBeVisible();
     await expect(list.getByText('Fora do escopo da importação financeira')).toHaveCount(2);
-    await expect(list.getByText('Execução financeira: R$ 310,00')).toBeVisible();
+    await expect(list.getByText('Contratos.gov.br: R$ 300,00 · Execução financeira: R$ 310,00')).toBeVisible();
+  });
+
+  test('aguardando importação sem nenhuma importação concluída não inventa data', async ({ page }) => {
+    const pendingNever = { ...commitments, commitments: [link('2026NE000004', '158148', 'REITORIA', '25.000000', { financeStatus: 'PENDING', lastImportedOn: null })] };
+    await mockContract(page, { body: () => [pendingNever, 200] });
+    await page.goto(`/contratos/${externalId}`);
+    const list = section(page).getByRole('region', { name: 'Tabela: empenhos do contrato' });
+    await expect(list.getByText('Aguardando importação', { exact: true })).toBeVisible();
+    await expect(list.getByText(/Não informada/)).toHaveCount(0);
   });
 
   test('empenho fora do escopo do usuário não vira link', async ({ page }) => {

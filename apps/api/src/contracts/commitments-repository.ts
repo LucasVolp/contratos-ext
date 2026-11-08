@@ -20,7 +20,6 @@ export interface CommitmentLinkRow extends Amounts {
   unitCode: string;
   unitName: string | null;
   issueDate: string | null;
-  creditor: string | null;
   expenseNature: string | null;
   financeStatus: FinanceStatus;
   financeCommitmentId: string | null;
@@ -61,20 +60,24 @@ const sums = AMOUNT_COLUMNS.map(
   ([key, column]) => `CASE WHEN count(*) = count(l.${column}) THEN sum(l.${column})::text END AS "${key}"`,
 ).join(", ");
 
-// The successful daily finance imports that cover a commitment's unit, through
+// The finished daily finance imports that cover a commitment's unit, through
 // its management (MANAGEMENT scope) or its unit code (MANAGEMENT_UNIT scope).
-const coverageRuns = `finance.ingestion_runs r ON r.type = 'DAILY_EXPENSES' AND r.status = 'SUCCESS'
+// NO_DATA is a complete archive without matching facts, so it imported its day.
+const imported = `r.status IN ('SUCCESS', 'NO_DATA')`;
+const coverageRuns = `finance.ingestion_runs r ON r.type = 'DAILY_EXPENSES' AND r.status IN ('SUCCESS', 'NO_DATA', 'FAILURE')
   AND ((r.scope_type = 'MANAGEMENT' AND cc.management_code = ANY(r.scope_codes))
     OR (r.scope_type = 'MANAGEMENT_UNIT' AND cc.unit_code = ANY(r.scope_codes)))`;
 
 // Commitments Contratos.gov.br lists for contract $2, each with its finance
 // status: CONFIRMED when the Portal da Transparência reference exists (with or
 // without an imported header); otherwise OUT_OF_SCOPE when no import covers its
-// unit or it predates the first covered day, NOT_FOUND when its issue day was
-// imported (or its date is unknown), else PENDING until the next import.
+// unit or it predates the first attempted day, NOT_FOUND when its issue day was
+// imported (or its date is unknown), else PENDING: its day failed or was never
+// run, or it is newer than the last imported day.
 const linked = `coverage AS (
-    SELECT cc.external_id, min(r.period_start) AS first_day, max(r.period_end) AS last_day,
-      bool_or(cc.issue_date BETWEEN r.period_start AND r.period_end) AS day_imported
+    SELECT cc.external_id, min(r.period_start) AS first_day,
+      max(r.period_end) FILTER (WHERE ${imported}) AS last_day,
+      COALESCE(bool_or(cc.issue_date BETWEEN r.period_start AND r.period_end) FILTER (WHERE ${imported}), false) AS day_imported
     FROM public_sources.contract_commitments cc JOIN ${coverageRuns}
     WHERE cc.source = $1 AND cc.contract_external_id = $2::bigint
     GROUP BY cc.external_id),
@@ -104,7 +107,7 @@ export class ContractCommitmentRepository {
     return this.db.query<CommitmentLinkRow & Record<string, unknown>>(
       `WITH ${linked}
        SELECT l.transparency_code AS "transparencyCode", l.number, l.unit_code AS "unitCode", l.unit_name AS "unitName",
-         l.issue_date::text AS "issueDate", l.creditor, l.expense_nature AS "expenseNature", ${amounts},
+         l.issue_date::text AS "issueDate", l.expense_nature AS "expenseNature", ${amounts},
          l.finance_status AS "financeStatus", l.reference_id::text AS "financeCommitmentId",
          l.finance_committed::text AS "financeCommitted",
          CASE WHEN l.finance_status = 'PENDING' THEN l.last_day::text END AS "lastImportedOn"
