@@ -58,6 +58,15 @@ func (s *RunSummary) Add(outcome Outcome) {
 	}
 }
 
+// Merge adds the counters of other (for example one worker's share of a run).
+func (s *RunSummary) Merge(other RunSummary) {
+	s.Requests += other.Requests
+	s.Captured += other.Captured
+	s.Unchanged += other.Unchanged
+	s.NotFound += other.NotFound
+	s.Failed += other.Failed
+}
+
 // Store writes runs, captures and attempts to the public_sources schema.
 type Store struct {
 	DB *sql.DB

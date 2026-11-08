@@ -33,9 +33,9 @@ const version = "0.3.0"
 var requiredMigrations = []string{"202611070001_public_sources_foundation", "202611080001_public_sources_contracts", "202611090001_public_sources_contract_sync"}
 
 const usage = `usage:
-  replicator sync -source CONTRATOS_GOV_BR (-unit <UG> | -contract <id>) [-inactive=true] [-trigger MANUAL|SCHEDULED] [-retries 3] [-interval 1s] [-normalize=true]
+  replicator sync -source CONTRATOS_GOV_BR (-unit <UG> | -contract <id>) [-inactive=true] [-trigger MANUAL|SCHEDULED] [-retries 3] [-interval 200ms] [-concurrency 5] [-normalize=true]
   replicator normalize -source CONTRATOS_GOV_BR (-unit <UG> | -contract <id> | -all)
-  replicator daily -source CONTRATOS_GOV_BR [-at 03:00] [-timezone America/Sao_Paulo] [-once] [-retries 3] [-interval 1s]`
+  replicator daily -source CONTRATOS_GOV_BR [-at 03:00] [-timezone America/Sao_Paulo] [-once] [-retries 3] [-interval 200ms] [-concurrency 5]`
 
 // Test seams; there are no flags for these.
 var sourceBaseURL = contratosgovbr.BaseURL
@@ -154,7 +154,7 @@ func runNormalize(ctx context.Context, n *normalize.Normalizer, unit string, con
 
 // newConnector builds the Contratos.gov.br connector over the shared
 // PostgreSQL pacing gate, so every command paces source requests the same way.
-func newConnector(db *sql.DB, logger *slog.Logger, retries int, interval time.Duration) (*capture.Store, *contratosgovbr.Connector, error) {
+func newConnector(db *sql.DB, logger *slog.Logger, retries int, interval time.Duration, concurrency int) (*capture.Store, *contratosgovbr.Connector, error) {
 	base, err := url.Parse(sourceBaseURL)
 	if err != nil {
 		return nil, nil, err
@@ -172,14 +172,17 @@ func newConnector(db *sql.DB, logger *slog.Logger, retries int, interval time.Du
 			UserAgent: "Mozilla/5.0 (compatible; contracts-ext-replicator/" + version + ")",
 			Log:       logger.Warn,
 		},
-		Store:   store,
-		BaseURL: sourceBaseURL,
-		Log:     logger.Info,
+		Store:       store,
+		BaseURL:     sourceBaseURL,
+		Log:         logger.Info,
+		Concurrency: concurrency,
 	}, nil
 }
 
 func runSync(ctx context.Context, db *sql.DB, normalizer *normalize.Normalizer, plan syncPlan, logger *slog.Logger, stdout, stderr io.Writer) int {
-	store, connector, err := newConnector(db, logger, plan.retries, plan.interval)
+	// Each worker needs a connection for the pacing gate and the capture store.
+	db.SetMaxOpenConns(plan.concurrency + 1)
+	store, connector, err := newConnector(db, logger, plan.retries, plan.interval, plan.concurrency)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
@@ -232,10 +235,11 @@ func runSync(ctx context.Context, db *sql.DB, normalizer *normalize.Normalizer, 
 // ends with exit code 0 on SIGTERM/SIGINT once a running cycle is recorded as
 // CANCELLED; -once exits 1 unless the cycle COMPLETED.
 func runDaily(ctx context.Context, db *sql.DB, normalizer *normalize.Normalizer, plan dailyPlan, stdout, stderr io.Writer) int {
-	// One connection holds the daily lock while the cycle uses others.
-	db.SetMaxOpenConns(4)
+	// One connection holds the daily lock; each worker needs another for the
+	// pacing gate and the capture store, plus one for the cycle's own queries.
+	db.SetMaxOpenConns(plan.concurrency + 2)
 	logger := slog.New(slog.NewJSONHandler(stderr, nil))
-	store, connector, err := newConnector(db, logger, plan.retries, plan.interval)
+	store, connector, err := newConnector(db, logger, plan.retries, plan.interval, plan.concurrency)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1

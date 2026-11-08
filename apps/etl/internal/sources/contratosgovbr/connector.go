@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"contracts-ext/etl/internal/capture"
@@ -20,8 +21,13 @@ const (
 	Host    = "contratos.comprasnet.gov.br"
 )
 
-// DefaultPolicy paces Contratos.gov.br requests.
-var DefaultPolicy = pacing.Policy{Minimum: time.Second, Maximum: 30 * time.Second, BlockPause: 5*time.Minute + time.Second}
+// DefaultPolicy paces Contratos.gov.br requests: at most five per second
+// across every process sharing the database.
+var DefaultPolicy = pacing.Policy{Minimum: 200 * time.Millisecond, Maximum: 30 * time.Second, BlockPause: 5*time.Minute + time.Second}
+
+// DefaultConcurrency is how many contracts of a UG are fetched at once. It is
+// also the upper bound accepted from the command line.
+const DefaultConcurrency = 5
 
 // SubResource maps a stable resource name to its source path segment.
 type SubResource struct {
@@ -45,6 +51,9 @@ type Connector struct {
 	Store   *capture.Store
 	BaseURL string
 	Log     func(string, ...any)
+	// Concurrency is how many contracts are fetched at once; 0 or 1 fetches
+	// them one by one. Every request still waits on the shared gate.
+	Concurrency int
 }
 
 // ValidUnit reports whether code is a six-digit UG code (leading zeros kept).
@@ -173,15 +182,60 @@ func (c *Connector) syncUnit(ctx context.Context, runID int64, unit string, incl
 	if c.Log != nil && len(ids) < len(contracts) {
 		c.Log("Skipped contracts not due for refresh", "unit", unit, "skipped", len(contracts)-len(ids), "total", len(contracts))
 	}
-	for i, id := range ids {
-		if err := c.syncContractResources(ctx, runID, id, &summary); err != nil {
-			return summary, err
-		}
-		if c.Log != nil {
-			c.Log("Captured contract", "id", id, "position", i+1, "total", len(ids))
+	return summary, c.syncContracts(ctx, runID, ids, &summary)
+}
+
+// syncContracts captures the sub-resources of ids with up to c.Concurrency
+// workers. The first cancellation or store failure stops every worker and is
+// returned; source failures are only counted in summary.
+func (c *Connector) syncContracts(ctx context.Context, runID int64, ids []int64, summary *capture.RunSummary) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var (
+		mu       sync.Mutex
+		firstErr error
+		done     int
+		wg       sync.WaitGroup
+	)
+	next := make(chan int64)
+	for range max(1, min(c.Concurrency, len(ids))) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for id := range next {
+				var local capture.RunSummary
+				err := c.syncContractResources(ctx, runID, id, &local)
+				mu.Lock()
+				summary.Merge(local)
+				if err != nil && firstErr == nil {
+					firstErr = err
+					cancel()
+				}
+				if err == nil {
+					done++
+					if c.Log != nil {
+						c.Log("Captured contract", "id", id, "position", done, "total", len(ids))
+					}
+				}
+				mu.Unlock()
+			}
+		}()
+	}
+feed:
+	for _, id := range ids {
+		select {
+		case next <- id:
+		case <-ctx.Done():
+			break feed
 		}
 	}
-	return summary, nil
+	close(next)
+	wg.Wait()
+	if firstErr == nil {
+		// Cancelled by the caller before any worker noticed.
+		firstErr = ctx.Err()
+	}
+	return firstErr
 }
 
 // SyncContract captures one contract by id and its sub-resources.

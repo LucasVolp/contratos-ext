@@ -220,8 +220,12 @@ pnpm sources:sync -source CONTRATOS_GOV_BR -contract 13847
   for each contract: `historico`, `empenhos`, `garantias`, `responsaveis`,
   `itens`, `faturas` and `arquivos`. A contract sync captures `/api/contrato/id/{id}`
   plus the same sub-resources. Only public `/api/contrato/...` endpoints are used.
-- Requests start at least **1 second** apart (`-interval`, whole milliseconds,
-  1s–30s). HTTP 429 or an `X-Amzn-Waf-Action` header starts a **5m01s** cooldown
+- Requests start at least **200 ms** apart, so at most five per second across
+  every process (`-interval`, whole milliseconds, 200ms–30s). A UG's contracts
+  are fetched by up to **5 workers at once** (`-concurrency`, 1–5); each worker
+  takes one contract and its seven sub-resources in order, and every request
+  still waits on the shared gate. A cancellation or database failure stops all
+  workers. HTTP 429 or an `X-Amzn-Waf-Action` header starts a **5m01s** cooldown
   and doubles a shared penalty interval up to 30s; a longer `Retry-After` is
   honored, capped at 1 hour. The penalty is dropped one hour after the cooldown
   ends without a new block. `-interval` applies to that run only and is never
@@ -283,7 +287,8 @@ docker compose --profile sync up -d --build replicator    # same, as a container
   the shared PostgreSQL pacing gate, and each contract is normalized in its own
   transaction under a per-contract advisory transaction lock, so concurrent
   writers serialize per contract and never leave a half-written snapshot.
-- **Pacing:** the same shared gate and limits as `sync` (`-interval`, `-retries`).
+- **Pacing:** the same shared gate, limits and workers as `sync` (`-interval`,
+  `-concurrency`, `-retries`).
 - **Compose:** service `replicator` (image built from `apps/etl/Dockerfile`, non-root,
   `restart: unless-stopped`) waits for a healthy `api`, which applies the migrations.
   It is in the `sync` profile, so `docker compose up` and the e2e runs never start it.
