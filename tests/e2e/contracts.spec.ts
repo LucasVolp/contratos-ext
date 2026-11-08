@@ -37,9 +37,31 @@ async function mockList(page: Page, body: unknown, seen: URL[] = []) {
   });
 }
 
-async function mockDetail(page: Page, options: { contract?: unknown; parts?: unknown[]; notes?: unknown; rows?: Record<string, unknown[]> } = {}) {
+const termFact = (externalId: string, fields: Record<string, unknown>) => ({
+  externalId, number: null, typeName: 'Termo Aditivo', signatureDate: '2022-01-01', globalValue: null, delta: null,
+  counted: null, reason: null, flags: [], ...fields,
+});
+const facts = {
+  endDate: { value: '2026-12-21', source: 'HEADER', daysLeft: 45, divergence: null },
+  term: { status: 'ESTIMATED', startDate: '2021-12-06', months: 54, capMonths: 120, law: '14133', lawSource: 'LEGAL_BASIS' },
+  amendments: {
+    status: 'ESTIMATED', base: '100000.000000', additions: '22000.00', suppressions: '5000.00', additionsPct: '22.0000',
+    suppressionsPct: '5.0000', limitPct: '25', margin: '3000.00', limitUsedRatio: '0.8800', nearLimit: true,
+    terms: [
+      termFact('1', { number: '00011/2021', typeName: 'Contrato', globalValue: '100000.000000', reason: 'ORIGINAL', signatureDate: '2021-12-06' }),
+      termFact('2', { number: '00001/2022', globalValue: '120000.000000', delta: '20000.00', counted: 'ADDITION' }),
+      termFact('3', { number: '00001/2023', globalValue: '115000.000000', delta: '-5000.00', counted: 'SUPPRESSION', flags: ['MIGRATED_RECORD'], signatureDate: '2023-01-01' }),
+    ],
+  },
+  guarantee: { status: 'COVERS', dueDate: '2027-03-31', daysBeforeEnd: null, count: 1 },
+  remaining: '41250.500000',
+  historyPart: 'AVAILABLE',
+  guaranteesPart: 'AVAILABLE',
+};
+
+async function mockDetail(page: Page, options: { contract?: unknown; parts?: unknown[]; notes?: unknown; rows?: Record<string, unknown[]>; facts?: unknown } = {}) {
   await page.route(`**/api/contracts/${externalId}`, route =>
-    json(route, { contract: options.contract ?? detail, parts: options.parts ?? allParts.map(p => available(p)), notes: options.notes ?? noNotes }));
+    json(route, { contract: options.contract ?? detail, parts: options.parts ?? allParts.map(p => available(p)), notes: options.notes ?? noNotes, facts: options.facts ?? facts }));
   await page.route(`**/api/contracts/${externalId}/source/*`, route => {
     const part = new URL(route.request().url()).pathname.split('/').pop()!;
     return json(route, page1(options.rows?.[part] ?? []));
@@ -214,9 +236,16 @@ test.describe('ficha do contrato', () => {
   });
 
   test('vigência sem datas e contrato ainda sem partes não inventam dados', async ({ page }) => {
-    await mockDetail(page, { contract: { ...detail, startDate: null, endDate: null, status: 'UNKNOWN', processNumber: null }, parts: [] });
+    const unknown = { ...facts, endDate: { value: null, source: null, daysLeft: null, divergence: null },
+      term: { ...facts.term, status: 'NOT_COMPUTABLE', startDate: null, months: null, capMonths: null },
+      amendments: { ...facts.amendments, status: 'NOT_COMPUTABLE', terms: [] },
+      guarantee: { status: 'NOT_CONSULTED', dueDate: null, daysBeforeEnd: null, count: 0 },
+      remaining: null, historyPart: 'MISSING', guaranteesPart: 'MISSING' };
+    await mockDetail(page, { contract: { ...detail, startDate: null, endDate: null, status: 'UNKNOWN', processNumber: null }, parts: [], facts: unknown });
     await page.goto(`/contratos/${externalId}`);
-    await expect(page.getByText('Vigência não informada')).toBeVisible();
+    // Once in the situation summary and once in the contract header.
+    await expect(page.getByText('Vigência não informada')).toHaveCount(2);
+    await expect(page.getByText('Garantias não consultadas no Contratos.gov.br')).toBeVisible();
     await expect(page.getByText('Os registros deste contrato no Contratos.gov.br ainda não estão disponíveis.')).toBeVisible();
     await expect(page.locator('table')).toHaveCount(0);
     await expect(page.getByRole('textbox', { name: 'Observações internas' })).toBeVisible();
@@ -263,7 +292,7 @@ test.describe('ficha do contrato', () => {
     await mockDetail(page);
     await page.route(`**/api/contracts/${externalId}`, route => fail
       ? json(route, { message: 'Contrato temporariamente indisponível no teste' }, 503)
-      : json(route, { contract: detail, parts: [], notes: noNotes }));
+      : json(route, { contract: detail, parts: [], notes: noNotes, facts }));
     await page.goto(`/contratos/${externalId}`);
     await expect(page.getByText('Contrato temporariamente indisponível no teste')).toBeVisible();
     fail = false;
@@ -299,3 +328,74 @@ for (const width of [360, 390, 1440]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   });
 }
+
+test.describe('situação do contrato', () => {
+  const summary = (page: Page) => page.getByRole('region', { name: 'Situação do contrato' });
+
+  test('mostra vigência, estimativas e margem com o método', async ({ page }) => {
+    await mockDetail(page);
+    await page.goto(`/contratos/${externalId}`);
+    const box = summary(page);
+    await expect(box.getByText('Vence em 45 dias')).toBeVisible();
+    await expect(box.getByText('4 anos e 6 meses de 10 anos')).toBeVisible();
+    await expect(box.getByText('Acréscimos: 22% de 25%')).toBeVisible();
+    await expect(box.getByText('Supressões: 5% de 25%')).toBeVisible();
+    await expect(box.getByText('Ainda cabe acrescer R$ 3.000,00')).toBeVisible();
+    await expect(box.getByText('Perto do limite')).toBeVisible();
+    await expect(box.getByText('Estimativa', { exact: true }).first()).toBeVisible();
+    await expect(box.getByText('Garantia válida até 31/03/2027')).toBeVisible();
+    await expect(box.getByText('R$ 41.250,50')).toBeVisible();
+    await expect(box.getByText('Registro migrado de sistema anterior')).toBeHidden();
+    await box.getByText('Como calculamos').click();
+    await expect(box.getByText('Registro migrado de sistema anterior')).toBeVisible();
+    await expect(box.getByText('Contrato original', { exact: true })).toBeVisible();
+  });
+
+  test('mostra a divergência entre o cabeçalho e o último termo', async ({ page }) => {
+    await mockDetail(page, { facts: { ...facts, endDate: { value: '2026-06-06', source: 'HEADER', daysLeft: -3,
+      divergence: { termEndDate: '2026-12-06', termExternalId: '2', termNumber: '00001/2024' } } } });
+    await page.goto(`/contratos/${externalId}`);
+    await expect(summary(page).getByText('Encerrado há 3 dias')).toBeVisible();
+    await expect(summary(page).getByText('Cabeçalho do Contratos.gov.br: 06/06/2026 · termo 00001/2024: 06/12/2026')).toBeVisible();
+  });
+
+  test('diz a ausência na fonte, sem afirmar que não há garantia', async ({ page }) => {
+    await mockDetail(page, { facts: { ...facts, guarantee: { status: 'NONE_INFORMED', dueDate: null, daysBeforeEnd: null, count: 0 } } });
+    await page.goto(`/contratos/${externalId}`);
+    await expect(summary(page).getByText('Nenhuma garantia informada pelo Contratos.gov.br')).toBeVisible();
+    await expect(page.getByText(/Sem garantia/i)).toHaveCount(0);
+  });
+
+  test('avisa garantia que vence antes e acréscimos acima do limite', async ({ page }) => {
+    await mockDetail(page, { facts: { ...facts,
+      guarantee: { status: 'BEFORE_END', dueDate: '2026-11-21', daysBeforeEnd: 30, count: 1 },
+      amendments: { ...facts.amendments, additionsPct: '30.0000', margin: '-5000.00', limitUsedRatio: '1.2000' } } });
+    await page.goto(`/contratos/${externalId}`);
+    await expect(summary(page).getByText('A garantia vence em 21/11/2026, 30 dias antes do contrato')).toBeVisible();
+    await expect(summary(page).getByText('Acréscimos excedem o limite em R$ 5.000,00')).toBeVisible();
+  });
+
+  test('instrumento que não é contrato não recebe estimativas', async ({ page }) => {
+    await mockDetail(page, { facts: { ...facts,
+      term: { ...facts.term, status: 'NOT_APPLICABLE', months: null, capMonths: null },
+      amendments: { ...facts.amendments, status: 'NOT_APPLICABLE', terms: [] } } });
+    await page.goto(`/contratos/${externalId}`);
+    await expect(summary(page).getByText('Não se aplica a este tipo de instrumento')).toHaveCount(2);
+    await expect(summary(page).getByText('Estimativa', { exact: true })).toHaveCount(0);
+  });
+
+  test('histórico com consulta falha avisa que pode estar desatualizado', async ({ page }) => {
+    await mockDetail(page, { facts: { ...facts, historyPart: 'FAILED' } });
+    await page.goto(`/contratos/${externalId}`);
+    await expect(summary(page).getByText('Pode estar desatualizado: a última consulta ao Contratos.gov.br falhou')).toBeVisible();
+  });
+
+  test('cabe em 390px sem rolagem horizontal', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockDetail(page);
+    await page.goto(`/contratos/${externalId}`);
+    await expect(summary(page).getByText('Vence em 45 dias')).toBeVisible();
+    await summary(page).getByText('Como calculamos').click();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  });
+});

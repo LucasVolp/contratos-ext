@@ -894,6 +894,61 @@ td:first-child {
   font-size: 29px;
   font-weight: 400;
 }
+/* Contract facts summary (components/contract-facts) */
+.contract-facts .metadata dd > strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 500;
+}
+.contract-facts .metadata dd p {
+  margin: 0 0 4px;
+}
+.fact-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.fact-warning {
+  border-color: var(--warning-border);
+  background: var(--warning-surface);
+}
+.fact-meter {
+  display: block;
+  height: 6px;
+  max-width: 240px;
+  margin: 2px 0 8px;
+  border: 1px solid var(--boundary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.fact-meter span {
+  display: block;
+  height: 100%;
+  background: var(--green);
+}
+.fact-note {
+  display: block;
+  margin-top: 6px;
+  color: var(--accent);
+}
+.fact-method {
+  margin-top: 24px;
+  font-size: 13px;
+}
+.fact-method summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+.fact-method summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.fact-method p {
+  max-width: 850px;
+  margin: 12px 0;
+  color: var(--muted);
+}
 .value-summary {
   display: flex;
   flex-wrap: wrap;

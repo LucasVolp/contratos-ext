@@ -43,10 +43,63 @@ export type SyncState = {
   staleUnits: StaleUnit[];
 };
 export type ContractPage = PageData<ContractSummary> & { sync: SyncState };
+export type FactStatus = "COMPUTED" | "ESTIMATED" | "NOT_COMPUTABLE" | "NOT_APPLICABLE";
+/** One history term as weighed by the amendment estimate; decimals are text. */
+export type TermFact = {
+  externalId: string;
+  number: string | null;
+  typeName: string | null;
+  signatureDate: string | null;
+  globalValue: string | null;
+  delta: string | null;
+  counted: "ADDITION" | "SUPPRESSION" | null;
+  reason: string | null;
+  flags: string[];
+};
+/** Facts derived by the API from the replica when the contract is read. */
+export type ContractFacts = {
+  endDate: {
+    value: string | null;
+    source: "HEADER" | "TERM" | null;
+    daysLeft: number | null;
+    divergence: { termEndDate: string; termExternalId: string; termNumber: string | null } | null;
+  };
+  term: {
+    status: FactStatus;
+    startDate: string | null;
+    months: number | null;
+    capMonths: number | null;
+    law: "8666" | "14133" | "UNKNOWN";
+    lawSource: "LEGAL_BASIS" | "SIGNATURE_DATE" | "NONE";
+  };
+  amendments: {
+    status: FactStatus;
+    base: string | null;
+    additions: string | null;
+    suppressions: string | null;
+    additionsPct: string | null;
+    suppressionsPct: string | null;
+    limitPct: string;
+    margin: string | null;
+    limitUsedRatio: string | null;
+    nearLimit: boolean;
+    terms: TermFact[];
+  };
+  guarantee: {
+    status: "COVERS" | "BEFORE_END" | "NONE_INFORMED" | "NOT_CONSULTED" | "NOT_COMPARABLE";
+    dueDate: string | null;
+    daysBeforeEnd: number | null;
+    count: number;
+  };
+  remaining: string | null;
+  historyPart: string;
+  guaranteesPart: string;
+};
 export type ContractRecord = {
   contract: ContractDetail;
   parts: SourcePartState[];
   notes: ContractNotes;
+  facts: ContractFacts;
 };
 
 export const NOTES_LIMIT = 10000;

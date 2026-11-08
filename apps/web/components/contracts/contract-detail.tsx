@@ -13,6 +13,7 @@ import { ErrorState, Loading, PageHead, Status } from "../ui";
 import { display } from "../ui/data-table";
 import { ContractSourcePanel } from "../contract-source/contract-source-panel";
 import { ContractCommitmentsSection } from "../contract-commitments/contract-commitments-section";
+import { ContractFactsSummary } from "../contract-facts/contract-facts-summary";
 import { ContractNotes } from "./contract-notes";
 
 /** Read-only record of one replicated contract, its source parts and the team's notes. */
@@ -56,6 +57,7 @@ export function ContractDetail({ externalId }: { externalId: string }) {
         back="/contratos"
       />
       <div className="detail-layout single">
+        <ContractFactsSummary facts={data.facts} />
         <ContractHeader contract={contract} />
         <ContractCommitmentsSection
           externalId={externalId}
