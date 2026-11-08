@@ -4578,3 +4578,16 @@ main.session-loading {
 .execution-source-method[open]>summary svg { transform:rotate(180deg); }
 /* Prevent responsive navigator width transitions from overflowing their controls. */
 .execution-navigator [data-slot=button] { transition-property:color,background-color,border-color,outline-color; }
+
+/* Contracts that list a finance commitment (commitment detail). */
+.contract-links {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.contract-links p {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}

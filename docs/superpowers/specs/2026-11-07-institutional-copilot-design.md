@@ -446,6 +446,14 @@ and Dados Abertos contract import and the `Contract` table were removed, and the
 daily sync runs as a compose service. See
 [`2026-11-07-automatic-contract-sync-design.md`](2026-11-07-automatic-contract-sync-design.md).
 
+**Note (2026-11-07, step 3):** contract ↔ commitment linking is designed in
+[`2026-11-07-contract-commitments-design.md`](2026-11-07-contract-commitments-design.md).
+It only uses the commitments Contratos.gov.br lists per contract, so there are no
+suggested or deduced links (supplier + process matching was dropped: price
+registration processes make it attach commitments to the wrong contract). It
+adds a per-campus breakdown. Scheduling the finance import is a later, separate
+step.
+
 Steps 5 and 6 can run in parallel with 3 and 4. Follow-up after Phase 1:
 move the current purchase/price-record catalog calls behind the replicator.
 

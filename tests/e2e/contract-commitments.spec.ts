@@ -144,3 +144,77 @@ test.describe('empenhos do contrato', () => {
     });
   }
 });
+
+const commitmentId = '501';
+const financeCommitment = {
+  id: commitmentId, source: 'TRANSPARENCY_PORTAL', documentCode: '158345264212026NE000001', resumedCode: '2026NE000001',
+  headerAvailable: true, fiscalYear: 2026, managementCode: '26421', managementUnitCode: '158345', unitName: 'CAMPUS A',
+  emissionDate: '2026-03-10', favoredCode: '08273364000157', favoredName: 'Fornecedor de teste', processNumber: '23243.000390/2017-17',
+  expenseNature: '339039', itemCount: 0, historyCount: 0, liquidationCount: 0, paymentCount: 0, committedValue: '310.000000',
+  liquidatedValue: '0', liquidationPriorYearMovementValue: '0', paidValue: '0', priorYearPaidValue: '0',
+  header: { type: 'Ordinário', documentTypeCode: null, documentType: null, budgetPlanCode: null, budgetPlanName: null, observation: null,
+    originalValue: '310.000000', valueBrl: '310.000000', conversionRate: null, ingestionRunId: '1', updatedAt: '2026-10-23T10:00:00.000Z' },
+};
+const listing = (extra: Record<string, unknown> = {}) => ({
+  externalId, number: '00004/2017', supplierName: 'Fornecedor de teste', supplierDocument: '08273364000157', uasg: '158148',
+  unitName: 'Reitoria', ...extra,
+});
+
+async function mockCommitment(page: Page, contracts: () => [unknown, number]) {
+  await page.route('**/api/finance/**', route => {
+    const path = new URL(route.request().url()).pathname;
+    return json(route, path.endsWith(`/commitments/${commitmentId}`) ? financeCommitment : { data: [], total: 0, page: 1, limit: 20 });
+  });
+  await page.route(`**/api/contracts/by-commitment/${commitmentId}`, route => {
+    const [body, status] = contracts();
+    return json(route, body, status);
+  });
+}
+
+const contractBlock = (page: Page) => page.getByRole('region', { name: 'Contrato', exact: true });
+
+test.describe('contrato do empenho', () => {
+  test('empenho mostra o contrato que o lista', async ({ page }) => {
+    await mockCommitment(page, () => [{ contracts: [listing()] }, 200]);
+    await page.goto(`/financeiro/empenhos/${commitmentId}`);
+    const block = contractBlock(page);
+    await expect(block.getByRole('link', { name: '00004/2017' })).toHaveAttribute('href', `/contratos/${externalId}`);
+    await expect(block.getByText('Fornecedor de teste')).toBeVisible();
+    await expect(block.getByText('08.273.364/0001-57')).toBeVisible();
+    await expect(block.getByText('Informado pelo Contratos.gov.br')).toBeVisible();
+  });
+
+  test('contrato fora do escopo aparece sem link', async ({ page }) => {
+    await mockCommitment(page, () => [{ contracts: [listing({ externalId: null })] }, 200]);
+    await page.goto(`/financeiro/empenhos/${commitmentId}`);
+    const block = contractBlock(page);
+    await expect(block.getByText('00004/2017')).toBeVisible();
+    await expect(block.getByRole('link', { name: '00004/2017' })).toHaveCount(0);
+  });
+
+  test('empenho sem contrato informa que não há contrato identificado', async ({ page }) => {
+    await mockCommitment(page, () => [{ contracts: [] }, 200]);
+    await page.goto(`/financeiro/empenhos/${commitmentId}`);
+    await expect(contractBlock(page).getByText('Sem contrato identificado.')).toBeVisible();
+  });
+
+  test('falha no bloco de contrato não derruba a página do empenho', async ({ page }) => {
+    let fail = true;
+    await mockCommitment(page, () => (fail ? [{ message: 'Contratos indisponíveis no teste' }, 503] : [{ contracts: [listing()] }, 200]));
+    await page.goto(`/financeiro/empenhos/${commitmentId}`);
+    await expect(page.getByRole('heading', { name: '2026NE000001', level: 1 })).toBeVisible();
+    const block = contractBlock(page);
+    await expect(block.getByText('Contratos indisponíveis no teste')).toBeVisible();
+    fail = false;
+    await block.getByRole('button', { name: /Tentar novamente/i }).click();
+    await expect(block.getByRole('link', { name: '00004/2017' })).toBeVisible();
+  });
+});
+
+test('bloco de contrato do empenho cabe em 360px sem rolagem horizontal da página', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 844 });
+  await mockCommitment(page, () => [{ contracts: [listing({ supplierName: 'Fornecedor com razão social bastante longa para quebrar a linha em telas estreitas' })] }, 200]);
+  await page.goto(`/financeiro/empenhos/${commitmentId}`);
+  await expect(contractBlock(page).getByRole('link', { name: '00004/2017' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+});
