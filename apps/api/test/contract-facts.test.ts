@@ -180,3 +180,101 @@ test("guarantee coverage", () => {
   assert.equal(noEnd.guarantee.status, "NOT_COMPARABLE");
   assert.equal(noEnd.guarantee.count, 1);
 });
+
+const AS = "ACRÉSCIMO / SUPRESSÃO";
+const contractWith = (initialValue: string | null, history: FactTerm[]) =>
+  computeFacts(input({ header: { initialValue }, history }), TODAY);
+const outcome = (t: { counted: string | null; reason: string | null; flags: string[] }) => [t.counted ?? t.reason, ...t.flags];
+
+test("amendments: when in doubt, count", () => {
+  const facts = contractWith("100000", [
+    term({ externalId: "1", typeName: "Contrato", signatureDate: "2021-01-01", globalValue: "100000" }),
+    term({ externalId: "2", typeName: "Termo de Apostilamento", signatureDate: "2022-01-01", globalValue: "110000", observation: "ACRÉSCIMO DE R$ 10.000,00" }),
+    term({ externalId: "3", typeName: "Termo Aditivo", signatureDate: "2022-06-01", globalValue: "130000", qualifications: [AS] }),
+    term({ externalId: "4", typeName: "Termo Aditivo", signatureDate: "2023-01-01", globalValue: "125000", qualifications: [AS, "INFORMATIVO", "VIGÊNCIA"] }),
+    term({ externalId: "5", typeName: "Termo Aditivo", signatureDate: "2024-01-01", globalValue: "125000", qualifications: ["VIGÊNCIA"] }),
+    term({ externalId: "6", typeName: "Termo Aditivo", signatureDate: "2025-01-01", globalValue: "131250", qualifications: ["REAJUSTE", "VIGÊNCIA"] }),
+    term({ externalId: "7", typeName: "Termo Aditivo", signatureDate: "2025-06-01", globalValue: "133250", observation: "REPACTUAÇÃO CONFORME CCT" }),
+  ]);
+  const a = facts.amendments;
+  assert.equal(a.status, "ESTIMATED");
+  assert.equal(a.base, "100000");
+  assert.equal(a.additions, "22000.00");
+  assert.equal(a.suppressions, "5000.00");
+  assert.equal(a.additionsPct, "22.0000");
+  assert.equal(a.suppressionsPct, "5.0000");
+  assert.equal(a.margin, "3000.00");
+  assert.equal(a.limitUsedRatio, "0.8800");
+  assert.equal(a.nearLimit, true);
+  assert.deepEqual(a.terms.map(outcome), [
+    ["ORIGINAL"],
+    ["APOSTILLE", "APOSTILLE_TEXT_MENTIONS_ADDITION"],
+    ["ADDITION"],
+    ["SUPPRESSION", "MIGRATED_RECORD"],
+    ["NO_VALUE_CHANGE"],
+    ["PRICE_ADJUSTMENT_ONLY"],
+    ["ADDITION", "NO_QUALIFICATION", "TEXT_MENTIONS_ADJUSTMENT"],
+  ]);
+  assert.deepEqual(a.terms.map((t) => t.delta), [null, null, "20000.00", "-5000.00", "0.00", "6250.00", "2000.00"]);
+});
+
+test("amendments: migrated extensions without value change count nothing", () => {
+  const migrated = [AS, "INFORMATIVO", "VIGÊNCIA"];
+  const facts = contractWith("71352.36", [
+    term({ externalId: "10", typeName: "Contrato", signatureDate: "2015-11-06", globalValue: "71352.36" }),
+    ...[2016, 2017, 2018, 2019].map((year, i) =>
+      term({ externalId: String(11 + i), typeName: "Termo Aditivo", signatureDate: `${year}-10-04`, globalValue: "71352.36", qualifications: migrated }),
+    ),
+  ]);
+  assert.equal(facts.amendments.status, "ESTIMATED");
+  assert.equal(facts.amendments.additionsPct, "0.0000");
+  assert.equal(facts.amendments.nearLimit, false);
+  assert.deepEqual(facts.amendments.terms.slice(1).map((t) => t.reason), Array(4).fill("NO_VALUE_CHANGE"));
+});
+
+test("amendments: over the limit gives a negative margin", () => {
+  const facts = contractWith("100000", [
+    term({ externalId: "1", typeName: "Contrato", signatureDate: "2021-01-01", globalValue: "100000" }),
+    term({ externalId: "2", typeName: "Termo Aditivo", signatureDate: "2022-01-01", globalValue: "130000", qualifications: [AS] }),
+  ]);
+  assert.equal(facts.amendments.margin, "-5000.00");
+  assert.equal(facts.amendments.limitUsedRatio, "1.2000");
+});
+
+test("amendments: a term without value keeps the reference", () => {
+  const facts = contractWith("100000", [
+    term({ externalId: "1", typeName: "Termo Aditivo", signatureDate: "2022-01-01", globalValue: "110000", qualifications: [AS] }),
+    term({ externalId: "2", typeName: "Termo Aditivo", signatureDate: "2023-01-01", globalValue: null, qualifications: [AS] }),
+    term({ externalId: "3", typeName: "Termo Aditivo", signatureDate: "2024-01-01", globalValue: "120000", qualifications: [AS] }),
+  ]);
+  assert.deepEqual(facts.amendments.terms.map(outcome), [["ADDITION"], ["NO_GLOBAL_VALUE"], ["ADDITION"]]);
+  assert.equal(facts.amendments.terms[2].delta, "10000.00");
+  assert.equal(facts.amendments.additions, "20000.00");
+});
+
+test("amendments: not computable without history or base", () => {
+  const history = [term({ externalId: "1", typeName: "Contrato", globalValue: "100" })];
+  assert.equal(contractWith("100", []).amendments.status, "NOT_COMPUTABLE");
+  assert.equal(contractWith("0", history).amendments.status, "NOT_COMPUTABLE");
+  assert.equal(contractWith(null, history).amendments.status, "NOT_COMPUTABLE");
+  assert.equal(contractWith("0", history).amendments.additionsPct, null);
+});
+
+test("amendments: rows without signature date go last", () => {
+  const facts = contractWith("100", [
+    term({ externalId: "9", typeName: "Termo Aditivo", globalValue: "100" }),
+    term({ externalId: "12", typeName: "Termo Aditivo", signatureDate: "2022-01-01", globalValue: "100" }),
+    term({ externalId: "3", typeName: "Termo Aditivo", signatureDate: "2022-01-01", globalValue: "100" }),
+  ]);
+  assert.deepEqual(facts.amendments.terms.map((t) => t.externalId), ["3", "12", "9"]);
+});
+
+test("amendments: other instrument rows only move the reference", () => {
+  const facts = contractWith("100", [
+    term({ externalId: "1", typeName: "Contrato", signatureDate: "2021-01-01", globalValue: "100" }),
+    term({ externalId: "2", typeName: "Outros", signatureDate: "2021-06-01", globalValue: "120" }),
+    term({ externalId: "3", typeName: "Termo de Rescisão", signatureDate: "2022-01-01", globalValue: "120" }),
+  ]);
+  assert.deepEqual(facts.amendments.terms.map(outcome), [["ORIGINAL"], ["OTHER_TYPE"], ["RESCISSION"]]);
+  assert.equal(facts.amendments.additions, "0.00");
+});

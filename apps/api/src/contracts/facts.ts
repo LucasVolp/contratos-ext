@@ -2,6 +2,7 @@
 // replica (header, history terms, guarantees and part statuses). Nothing is
 // stored; each fact carries enough of its inputs for the screen to explain it.
 // Design: docs/superpowers/specs/2026-11-08-contract-derived-facts-design.md §4.
+import Decimal from "decimal.js";
 
 export type FactStatus = "COMPUTED" | "ESTIMATED" | "NOT_COMPUTABLE" | "NOT_APPLICABLE";
 export type GuaranteeStatus = "COVERS" | "BEFORE_END" | "NONE_INFORMED" | "NOT_CONSULTED" | "NOT_COMPARABLE";
@@ -158,6 +159,104 @@ function guarantee(input: FactInput, end: string | null): ContractFacts["guarant
     : { status: "COVERS", dueDate, daysBeforeEnd: null, count };
 }
 
+const LIMIT_PCT = new Decimal(25);
+const NEAR_LIMIT_RATIO = new Decimal("0.8");
+const EXTENSION = "VIGÊNCIA";
+const PRICE_ADJUSTMENT = "REAJUSTE";
+const MIGRATED = ["ACRÉSCIMO / SUPRESSÃO", "INFORMATIVO", EXTENSION];
+const sameSet = (set: Set<string>, values: string[]) => set.size === values.length && values.every((v) => set.has(v));
+
+/** Why a counted term may not be a quantitative change, or why a term was left out. */
+function classify(row: FactTerm, delta: Decimal): Pick<TermFact, "counted" | "reason" | "flags"> {
+  const q = new Set(row.qualifications);
+  if (delta.isZero()) return { counted: null, reason: "NO_VALUE_CHANGE", flags: [] };
+  if (sameSet(q, [EXTENSION])) return { counted: null, reason: "EXTENSION_ONLY", flags: [] };
+  if (sameSet(q, [PRICE_ADJUSTMENT]) || sameSet(q, [PRICE_ADJUSTMENT, EXTENSION]))
+    return { counted: null, reason: "PRICE_ADJUSTMENT_ONLY", flags: [] };
+  const flags: string[] = [];
+  if (!q.size) flags.push("NO_QUALIFICATION");
+  if (q.has(PRICE_ADJUSTMENT)) flags.push("INCLUDES_PRICE_ADJUSTMENT");
+  if (sameSet(q, MIGRATED)) flags.push("MIGRATED_RECORD");
+  if (/reajust|repactua|prorroga|renova/i.test(row.observation ?? "")) flags.push("TEXT_MENTIONS_ADJUSTMENT");
+  return { counted: delta.isPositive() ? "ADDITION" : "SUPPRESSION", reason: null, flags };
+}
+
+/**
+ * Cumulative additions and suppressions over the initial value, kept apart.
+ * The change of each Termo Aditivo is its global value minus the previous
+ * valued row's (apostilles included, so price adjustments move the reference);
+ * qualifications are unreliable, so any change is counted unless the term is a
+ * pure extension or a pure price adjustment ("when in doubt, count").
+ */
+function amendments(
+  sorted: FactTerm[],
+  original: FactTerm | null,
+  header: FactHeader,
+): ContractFacts["amendments"] {
+  const result: ContractFacts["amendments"] = {
+    status: "NOT_COMPUTABLE",
+    base: header.initialValue,
+    additions: null,
+    suppressions: null,
+    additionsPct: null,
+    suppressionsPct: null,
+    limitPct: "25",
+    margin: null,
+    limitUsedRatio: null,
+    nearLimit: false,
+    terms: [],
+  };
+  if (header.typeName !== "Contrato") return { ...result, status: "NOT_APPLICABLE" };
+  const base = header.initialValue === null ? null : new Decimal(header.initialValue);
+  if (!sorted.length || !base || base.isZero()) return result;
+
+  let reference: Decimal | null = null,
+    additions = new Decimal(0),
+    suppressions = new Decimal(0);
+  for (const row of sorted) {
+    const value = row.globalValue === null ? null : new Decimal(row.globalValue);
+    const fact: TermFact = {
+      externalId: row.externalId,
+      number: row.number,
+      typeName: row.typeName,
+      signatureDate: row.signatureDate,
+      globalValue: row.globalValue,
+      delta: null,
+      counted: null,
+      reason: null,
+      flags: [],
+    };
+    if (row === original) fact.reason = "ORIGINAL";
+    else if (row.typeName === APOSTILLE) {
+      fact.reason = "APOSTILLE";
+      if (/acr[eé]scimo/i.test(row.observation ?? "")) fact.flags.push("APOSTILLE_TEXT_MENTIONS_ADDITION");
+    } else if (row.typeName === RESCISSION) fact.reason = "RESCISSION";
+    else if (row.typeName !== ADDITIVE) fact.reason = "OTHER_TYPE";
+    else if (!value) fact.reason = "NO_GLOBAL_VALUE";
+    else {
+      const delta = value.minus(reference ?? base);
+      Object.assign(fact, { delta: delta.toFixed(2) }, classify(row, delta));
+      if (fact.counted === "ADDITION") additions = additions.plus(delta);
+      if (fact.counted === "SUPPRESSION") suppressions = suppressions.plus(delta.abs());
+    }
+    if (value) reference = value;
+    result.terms.push(fact);
+  }
+  const additionsPct = additions.div(base).times(100),
+    ratio = additionsPct.div(LIMIT_PCT);
+  return {
+    ...result,
+    status: "ESTIMATED",
+    additions: additions.toFixed(2),
+    suppressions: suppressions.toFixed(2),
+    additionsPct: additionsPct.toFixed(4),
+    suppressionsPct: suppressions.div(base).times(100).toFixed(4),
+    margin: base.times(LIMIT_PCT).div(100).minus(additions).toFixed(2),
+    limitUsedRatio: ratio.toFixed(4),
+    nearLimit: ratio.gte(NEAR_LIMIT_RATIO),
+  };
+}
+
 export function computeFacts(input: FactInput, today: string): ContractFacts {
   const { header } = input;
   const sorted = sortTerms(input.history);
@@ -182,19 +281,7 @@ export function computeFacts(input: FactInput, today: string): ContractFacts {
       law: contractLaw,
       lawSource,
     },
-    amendments: {
-      status: isContract ? "NOT_COMPUTABLE" : "NOT_APPLICABLE",
-      base: header.initialValue,
-      additions: null,
-      suppressions: null,
-      additionsPct: null,
-      suppressionsPct: null,
-      limitPct: "25",
-      margin: null,
-      limitUsedRatio: null,
-      nearLimit: false,
-      terms: [],
-    },
+    amendments: amendments(sorted, original, header),
     guarantee: guarantee(input, end.value),
     remaining: null,
     historyPart: input.parts.history,
