@@ -253,6 +253,26 @@ test("restricted viewer sees only their UASG", async (t) => {
   assert.equal((await db.query(`SELECT * FROM "ContractNote"`)).length, 0);
 });
 
+test("stale units are scoped to the viewer and the requested UASGs", async (t) => {
+  const completed = `INSERT INTO public_sources.daily_runs (source, status, etl_version, started_at, finished_at)
+    VALUES ('CONTRATOS_GOV_BR', 'COMPLETED', 'test', '2026-11-07T03:00:00Z', '2026-11-07T03:42:00Z')`;
+  const sync = async (app: Awaited<ReturnType<typeof setup>>["app"], query = "") =>
+    (await app.inject({ method: "GET", url: `/api/contracts${query}` })).json().sync;
+  const lastCompletedAt = "2026-11-07T03:42:00.000Z";
+  const reitoria = { uasg: "158148", name: "IFMS Reitoria", lastGoodAt: null };
+  const tresLagoas = { uasg: "158454", name: "IFMS Três Lagoas", lastGoodAt: null };
+
+  const own = await setup(t);
+  await own.db.query(completed);
+  assert.deepEqual(await sync(own.app), { lastCompletedAt, running: false, staleUnits: [reitoria, tresLagoas] });
+  assert.deepEqual(await sync(own.app, "?uasgs=158454"), { lastCompletedAt, running: false, staleUnits: [tresLagoas] });
+
+  const limited = await setup(t, restricted);
+  await limited.db.query(completed);
+  assert.deepEqual(await sync(limited.app), { lastCompletedAt, running: false, staleUnits: [tresLagoas] });
+  assert.deepEqual(await sync(limited.app, "?uasgs=158148"), { lastCompletedAt, running: false, staleUnits: [] });
+});
+
 test("invalid external ids are 404", async (t) => {
   const { app } = await setup(t);
   for (const id of ["abc", "0", "99999999999999999999", "9223372036854775808", "-1", "1.5"]) {

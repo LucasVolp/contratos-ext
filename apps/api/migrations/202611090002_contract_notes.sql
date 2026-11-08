@@ -20,3 +20,4 @@ COMMENT ON COLUMN "ContractNote"."updatedById" IS 'User who last saved the notes
 DROP TABLE "Contract";
 
 COMMENT ON TABLE public_sources.contracts IS 'Latest normalized header of each Contratos.gov.br contract. managing_unit_code matches "Institution".uasg, the scope of every app read. Written by the replicator only.';
+COMMENT ON FUNCTION public_sources.contract_number_key(text) IS 'Comparable contract number: upper case, no whitespace, no leading zeros in the first digit run. Generates public_sources.contracts.number_key, indexed with managing_unit_code (contracts_identity_idx) to find a contract by unit and number.';
