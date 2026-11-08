@@ -86,6 +86,20 @@ test("rescission matching the header is not a divergence", () => {
   assert.equal(facts.endDate.daysLeft, -258);
 });
 
+test("an undated term never overrides dated terms for the end date", () => {
+  const history = [
+    term({ externalId: "1", typeName: "Contrato", endDate: "2022-12-01" }),
+    term({ externalId: "2", typeName: "Termo Aditivo", signatureDate: "2022-05-01", endDate: "2026-12-01" }),
+  ];
+  const withHeader = computeFacts(input({ header: { endDate: "2026-12-01" }, history }), TODAY);
+  assert.equal(withHeader.endDate.divergence, null);
+  const withoutHeader = computeFacts(input({ history }), TODAY);
+  assert.equal(withoutHeader.endDate.value, "2026-12-01");
+  assert.equal(withoutHeader.endDate.source, "TERM");
+  const undatedOnly = computeFacts(input({ history: [history[0]] }), TODAY);
+  assert.equal(undatedOnly.endDate.value, "2022-12-01");
+});
+
 test("apostille end dates are ignored", () => {
   const facts = computeFacts(
     input({
@@ -123,8 +137,13 @@ test("time in force against the legal maximum", () => {
   assert.equal(facts.term.months, 54);
   assert.equal(facts.term.capMonths, 120);
 
+  // The end date is the last day in force: 2021-12-06 to 2026-06-05 is 54 full months.
   facts = computeFacts(input({ header: { ...base, endDate: "2026-06-05" } }), TODAY);
+  assert.equal(facts.term.months, 54);
+  facts = computeFacts(input({ header: { ...base, endDate: "2026-06-04" } }), TODAY);
   assert.equal(facts.term.months, 53);
+  facts = computeFacts(input({ header: { ...base, startDate: "2019-02-01", endDate: "2024-01-31" } }), TODAY);
+  assert.equal(facts.term.months, 60);
 
   facts = computeFacts(input({ header: { ...base, category: "Compras" } }), TODAY);
   assert.equal(facts.term.status, "NOT_APPLICABLE");
@@ -166,7 +185,7 @@ test("guarantee coverage", () => {
     [{ parts: { history: "AVAILABLE", guarantees: "AVAILABLE" } }, "NONE_INFORMED", null, null],
     [{ parts: { history: "AVAILABLE", guarantees: "MISSING" } }, "NOT_CONSULTED", null, null],
     [{ parts: { history: "AVAILABLE", guarantees: "FAILED" } }, "NOT_CONSULTED", null, null],
-    [{ guarantees: [g("1", null)] }, "NONE_INFORMED", null, null],
+    [{ guarantees: [g("1", null)] }, "NO_DUE_DATE", null, null],
   ];
   for (const [overrides, status, dueDate, daysBeforeEnd] of cases) {
     const facts = computeFacts(input({ ...overrides, header: end }), TODAY);

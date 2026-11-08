@@ -369,7 +369,7 @@ test.describe('situação do contrato', () => {
     await expect(box.getByText('Garantia válida até 31/03/2027')).toBeVisible();
     await expect(box.getByText('R$ 41.250,50')).toBeVisible();
     await expect(box.getByText('Registro migrado de sistema anterior')).toBeHidden();
-    await box.getByText('Como calculamos').click();
+    await box.getByText('Como calculamos', { exact: true }).click();
     await expect(box.getByText('Registro migrado de sistema anterior')).toBeVisible();
     await expect(box.getByText('Contrato original', { exact: true })).toBeVisible();
   });
@@ -409,6 +409,38 @@ test.describe('situação do contrato', () => {
     await expect(summary(page).getByText('Estimativa', { exact: true })).toHaveCount(0);
   });
 
+  test('termos contados com aviso aparecem no resumo sem abrir o método', async ({ page }) => {
+    await mockDetail(page);
+    await page.goto(`/contratos/${externalId}`);
+    await expect(summary(page).getByText('1 termo contado tem aviso: pode não ser acréscimo ou supressão quantitativo. Confira em Como calculamos.')).toBeVisible();
+  });
+
+  test('não calculável diz a causa', async ({ page }) => {
+    const notComputable = (base: string | null, historyPart: string) => ({ ...facts, historyPart,
+      amendments: { ...facts.amendments, status: 'NOT_COMPUTABLE', base, additionsPct: null, terms: [] } });
+    await mockDetail(page, { facts: notComputable(null, 'AVAILABLE') });
+    await page.goto(`/contratos/${externalId}`);
+    await expect(summary(page).getByText('Não calculável: valor inicial não informado pelo Contratos.gov.br')).toBeVisible();
+    await page.unrouteAll();
+    await mockDetail(page, { facts: notComputable('1000.000000', 'FAILED') });
+    await page.reload();
+    await expect(summary(page).getByText('Não calculável: a consulta ao histórico do contrato falhou')).toBeVisible();
+    await page.unrouteAll();
+    await mockDetail(page, { facts: notComputable('1000.000000', 'MISSING') });
+    await page.reload();
+    await expect(summary(page).getByText('Não calculável: o histórico do contrato ainda não foi consultado')).toBeVisible();
+    await page.unrouteAll();
+    await mockDetail(page, { facts: notComputable('1000.000000', 'NOT_FOUND') });
+    await page.reload();
+    await expect(summary(page).getByText('Não calculável: o Contratos.gov.br não informa o histórico deste contrato')).toBeVisible();
+  });
+
+  test('garantia sem data de vencimento não vira ausência de garantia', async ({ page }) => {
+    await mockDetail(page, { facts: { ...facts, guarantee: { status: 'NO_DUE_DATE', dueDate: null, daysBeforeEnd: null, count: 2 } } });
+    await page.goto(`/contratos/${externalId}`);
+    await expect(summary(page).getByText('Garantia informada sem data de vencimento')).toBeVisible();
+  });
+
   test('histórico com consulta falha avisa que pode estar desatualizado', async ({ page }) => {
     await mockDetail(page, { facts: { ...facts, historyPart: 'FAILED' } });
     await page.goto(`/contratos/${externalId}`);
@@ -420,7 +452,7 @@ test.describe('situação do contrato', () => {
     await mockDetail(page);
     await page.goto(`/contratos/${externalId}`);
     await expect(summary(page).getByText('Vence em 45 dias')).toBeVisible();
-    await summary(page).getByText('Como calculamos').click();
+    await summary(page).getByText('Como calculamos', { exact: true }).click();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });
 });

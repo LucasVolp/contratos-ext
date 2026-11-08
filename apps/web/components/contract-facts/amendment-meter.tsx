@@ -1,12 +1,19 @@
 import { Badge } from "@/components/ui/badge";
 import type { ContractFacts } from "@/lib/contracts-api";
-import { marginLine, meterWidth, percent } from "@/lib/contract-facts";
+import { flaggedLine, marginLine, meterWidth, notComputableLine, percent } from "@/lib/contract-facts";
 
 /** Cumulative additions and suppressions against the 25% limit, kept apart. */
-export function AmendmentMeter({ amendments }: { amendments: ContractFacts["amendments"] }) {
+export function AmendmentMeter({
+  amendments,
+  historyPart,
+}: {
+  amendments: ContractFacts["amendments"];
+  historyPart: string;
+}) {
   if (amendments.status === "NOT_APPLICABLE") return <p>Não se aplica a este tipo de instrumento</p>;
   if (amendments.status === "NOT_COMPUTABLE" || amendments.additionsPct === null)
-    return <p>Não calculável: o histórico do contrato não foi informado</p>;
+    return <p>{notComputableLine(amendments.base, historyPart)}</p>;
+  const flagged = amendments.terms.filter((term) => term.counted !== null && term.flags.length > 0).length;
   const limit = amendments.limitPct;
   const none = amendments.terms.every((term) => term.counted === null);
   return (
@@ -35,6 +42,7 @@ export function AmendmentMeter({ amendments }: { amendments: ContractFacts["amen
         </>
       )}
       {amendments.margin !== null && <p>{marginLine(amendments.margin)}</p>}
+      {flagged > 0 && <p className="fact-note">{flaggedLine(flagged)}</p>}
     </div>
   );
 }

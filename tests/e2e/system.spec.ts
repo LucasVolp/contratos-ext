@@ -64,10 +64,11 @@ test.describe.serial('Sistema independente', () => {
     await expect(page.getByRole('link', { name: /Fase 3: Contrato/ })).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('heading', { name: 'Contratos', exact: true })).toHaveCount(0);
     await page.getByRole('textbox', { name: 'Buscar contratos' }).fill(contract.number);
-    // The test contract runs from 2026-01-01 to 2026-12-31: in force, outside the 30-day window.
+    // The test contract runs from 2026-01-01 to 2026-12-31: mocked stats count it as in force.
     const summary = page.getByRole('region', { name: 'Resumo dos contratos' });
     await expect(summary).toContainText('1contrato');
-    await expect(summary.getByRole('img')).toHaveAttribute('aria-label', '1 em vigor, 0 vencem em 30 dias, 0 encerrados, 0 a iniciar ou sem data');
+    await expect(summary).toContainText('Vencem em 90 dias');
+    await expect(summary.getByRole('img')).toHaveAttribute('aria-label', '1 em vigor, 0 vencem em 90 dias, 0 encerrados, 0 a iniciar ou sem data');
     await expect(summary.getByRole('link', { name: /Novo ciclo/ })).toHaveAttribute('href', '/pregoes');
     await expect(page.getByText(contract.number, { exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: contract.number, exact: true })).toHaveAttribute('href', `/contratos/${contract.externalId}`);

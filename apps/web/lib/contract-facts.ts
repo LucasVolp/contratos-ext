@@ -18,10 +18,10 @@ export const countedLabels: Record<string, string> = {
 };
 /** Warnings next to counted terms: they may not be quantitative changes. */
 export const flagLabels: Record<string, string> = {
-  NO_QUALIFICATION: "Sem qualificação na fonte",
-  INCLUDES_PRICE_ADJUSTMENT: "Qualificação inclui reajuste",
-  MIGRATED_RECORD: "Registro migrado de sistema anterior",
-  TEXT_MENTIONS_ADJUSTMENT: "Texto menciona reajuste, repactuação ou prorrogação",
+  NO_QUALIFICATION: "Sem qualificação na fonte: pode não ser acréscimo ou supressão quantitativo",
+  INCLUDES_PRICE_ADJUSTMENT: "Qualificação inclui reajuste: pode conter reajuste",
+  MIGRATED_RECORD: "Registro migrado de sistema anterior: pode ser prorrogação ou reajuste",
+  TEXT_MENTIONS_ADJUSTMENT: "Texto menciona reajuste, repactuação ou prorrogação: pode não ser acréscimo quantitativo",
   APOSTILLE_TEXT_MENTIONS_ADDITION: "Texto do apostilamento menciona acréscimo",
 };
 
@@ -71,6 +71,8 @@ export function guaranteeLine(guarantee: ContractFacts["guarantee"]) {
       return `Garantia válida até ${date(guarantee.dueDate)}`;
     case "NONE_INFORMED":
       return "Nenhuma garantia informada pelo Contratos.gov.br";
+    case "NO_DUE_DATE":
+      return "Garantia informada sem data de vencimento";
     case "NOT_CONSULTED":
       return "Garantias não consultadas no Contratos.gov.br";
     default:
@@ -101,6 +103,21 @@ export function marginLine(margin: string) {
   return margin.startsWith("-")
     ? `Acréscimos excedem o limite em ${currency(margin.slice(1))}`
     : `Ainda cabe acrescer ${currency(margin)}`;
+}
+
+/** Why the amendment estimate could not be computed: missing base or history, by part status. */
+export function notComputableLine(base: string | null, historyPart: string) {
+  if (base === null || /^0*(\.0*)?$/.test(base)) return "Não calculável: valor inicial não informado pelo Contratos.gov.br";
+  if (historyPart === "FAILED") return "Não calculável: a consulta ao histórico do contrato falhou";
+  if (historyPart === "MISSING") return "Não calculável: o histórico do contrato ainda não foi consultado";
+  return "Não calculável: o Contratos.gov.br não informa o histórico deste contrato";
+}
+
+/** Counted terms carrying a warning, said on the summary so the estimate is read with its caveat. */
+export function flaggedLine(count: number) {
+  return count === 1
+    ? "1 termo contado tem aviso: pode não ser acréscimo ou supressão quantitativo. Confira em Como calculamos."
+    : `${count} termos contados têm aviso: podem não ser acréscimos ou supressões quantitativos. Confira em Como calculamos.`;
 }
 
 export const STALE_PART = "Pode estar desatualizado: a última consulta ao Contratos.gov.br falhou";

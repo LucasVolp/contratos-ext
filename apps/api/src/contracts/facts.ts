@@ -5,7 +5,13 @@
 import Decimal from "decimal.js";
 
 export type FactStatus = "COMPUTED" | "ESTIMATED" | "NOT_COMPUTABLE" | "NOT_APPLICABLE";
-export type GuaranteeStatus = "COVERS" | "BEFORE_END" | "NONE_INFORMED" | "NOT_CONSULTED" | "NOT_COMPARABLE";
+export type GuaranteeStatus =
+  | "COVERS"
+  | "BEFORE_END"
+  | "NONE_INFORMED"
+  | "NO_DUE_DATE"
+  | "NOT_CONSULTED"
+  | "NOT_COMPARABLE";
 export type Law = "8666" | "14133" | "UNKNOWN";
 export type LawSource = "LEGAL_BASIS" | "SIGNATURE_DATE" | "NONE";
 
@@ -117,10 +123,12 @@ const epochDay = (value: string) => Date.parse(`${value}T00:00:00Z`) / 86_400_00
 /** Calendar days from `from` to `to` (negative when `to` is earlier). */
 export const daysBetween = (from: string, to: string) => Math.round(epochDay(to) - epochDay(from));
 
-/** Whole months from start to end; the last month counts when its day is reached. */
+/** Whole months in force; the end date is the last day in force, so it counts. */
 function wholeMonths(start: string, end: string) {
-  const [sy, sm, sd] = start.split("-").map(Number),
-    [ey, em, ed] = end.split("-").map(Number);
+  const after = new Date(`${end}T00:00:00Z`);
+  after.setUTCDate(after.getUTCDate() + 1);
+  const [sy, sm, sd] = start.split("-").map(Number);
+  const [ey, em, ed] = [after.getUTCFullYear(), after.getUTCMonth() + 1, after.getUTCDate()];
   return (ey - sy) * 12 + (em - sm) - (ed < sd ? 1 : 0);
 }
 
@@ -136,7 +144,9 @@ function law(header: FactHeader): { law: Law; lawSource: LawSource } {
 }
 
 function endDate(header: FactHeader, sorted: FactTerm[], today: string): ContractFacts["endDate"] {
-  const latest = sorted.filter((t) => t.typeName !== APOSTILLE && t.endDate !== null).at(-1) ?? null;
+  // Undated terms sort last but cannot be placed in time: use them only when no dated term has an end date.
+  const withEnd = sorted.filter((t) => t.typeName !== APOSTILLE && t.endDate !== null);
+  const latest = withEnd.filter((t) => t.signatureDate !== null).at(-1) ?? withEnd.at(-1) ?? null;
   const value = header.endDate ?? latest?.endDate ?? null;
   const source = header.endDate ? "HEADER" : latest ? "TERM" : null;
   const divergence =
@@ -151,7 +161,7 @@ function guarantee(input: FactInput, end: string | null): ContractFacts["guarant
   const empty = (status: GuaranteeStatus) => ({ status, dueDate: null, daysBeforeEnd: null, count });
   if (!count) return empty(["MISSING", "FAILED"].includes(input.parts.guarantees) ? "NOT_CONSULTED" : "NONE_INFORMED");
   const dues = input.guarantees.map((g) => g.dueDate).filter((d): d is string => d !== null);
-  if (!dues.length) return empty("NONE_INFORMED");
+  if (!dues.length) return empty("NO_DUE_DATE");
   if (!end) return empty("NOT_COMPARABLE");
   const dueDate = dues.reduce((a, b) => (a > b ? a : b));
   return dueDate < end

@@ -88,7 +88,7 @@ export type ContractFacts = {
     terms: TermFact[];
   };
   guarantee: {
-    status: "COVERS" | "BEFORE_END" | "NONE_INFORMED" | "NOT_CONSULTED" | "NOT_COMPARABLE";
+    status: "COVERS" | "BEFORE_END" | "NONE_INFORMED" | "NO_DUE_DATE" | "NOT_CONSULTED" | "NOT_COMPARABLE";
     dueDate: string | null;
     daysBeforeEnd: number | null;
     count: number;

@@ -47,7 +47,7 @@ export function ContractFactsSummary({ facts }: { facts: ContractFacts }) {
         <div>
           <dt>Aditivos</dt>
           <dd>
-            <AmendmentMeter amendments={facts.amendments} />
+            <AmendmentMeter amendments={facts.amendments} historyPart={facts.historyPart} />
             {stale(facts.historyPart)}
           </dd>
         </div>

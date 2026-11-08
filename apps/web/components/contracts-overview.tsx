@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { EXPIRING_WINDOW_DAYS } from "@contracts/validation";
 import { ArrowRight } from "lucide-react";
 import { compactCurrency, currency, PageData } from "@/lib/api";
 import { SegmentBar } from "./phase-summary";
@@ -22,7 +23,7 @@ export function ContractsOverview({
         <span>{stats?.count === 1 ? "contrato" : "contratos"}</span>
       </div>
       <div className="phase-summary-savings">
-        <span className="phase-summary-label">Vencem em 30 dias</span>
+        <span className="phase-summary-label">Vencem em {EXPIRING_WINDOW_DAYS} dias</span>
         {vigency && stats!.count > 0 ? (
           <>
             <p className="phase-summary-figure">
@@ -35,7 +36,7 @@ export function ContractsOverview({
               </span>
             </p>
             <SegmentBar
-              label={`${vigency.active} em vigor, ${vigency.expiring} vencem em 30 dias, ${vigency.ended} encerrados, ${other} a iniciar ou sem data`}
+              label={`${vigency.active} em vigor, ${vigency.expiring} vencem em ${EXPIRING_WINDOW_DAYS} dias, ${vigency.ended} encerrados, ${other} a iniciar ou sem data`}
               segments={[
                 { value: vigency.active, tone: "done" },
                 { value: vigency.expiring, tone: "warn" },
