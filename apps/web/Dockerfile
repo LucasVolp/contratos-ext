@@ -1,10 +1,21 @@
-FROM node:22-bookworm-slim AS build
+FROM node:22-bookworm-slim AS deps
 RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
 WORKDIR /app
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/web/package.json apps/web/package.json
 COPY packages/validation packages/validation
 RUN pnpm install --frozen-lockfile --filter @contracts/web
+
+# Development: compose.override.yaml mounts the source over this stage.
+FROM deps AS dev
+WORKDIR /app/apps/web
+ENV PORT=3100 HOSTNAME=0.0.0.0
+EXPOSE 3100
+# Sync dependencies with the mounted manifests on every start (fast when unchanged).
+ENV CI=true
+CMD ["sh", "-c", "pnpm install --frozen-lockfile --filter @contracts/web && pnpm dev"]
+
+FROM deps AS build
 COPY apps/web apps/web
 RUN pnpm --filter @contracts/web build
 WORKDIR /app/apps/web

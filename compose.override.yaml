@@ -1,0 +1,36 @@
+# Development defaults, merged automatically by `docker compose up`.
+# API and web run from the mounted source with live reload, so the running
+# containers always serve the current checkout, even after Docker restarts.
+# Production-like images: `docker compose -f compose.yaml up --build -d`.
+services:
+  api:
+    build:
+      target: dev
+    develop: !reset null
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./apps/api:/app/apps/api
+      - ./packages/validation:/app/packages/validation
+      - ./package.json:/app/package.json:ro
+      - ./pnpm-lock.yaml:/app/pnpm-lock.yaml:ro
+      - ./pnpm-workspace.yaml:/app/pnpm-workspace.yaml:ro
+      # Keep the Linux dependencies installed in the container.
+      - /app/apps/api/node_modules
+  web:
+    build:
+      target: dev
+    develop: !reset null
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./apps/web:/app/apps/web
+      - ./packages/validation:/app/packages/validation
+      - ./package.json:/app/package.json:ro
+      - ./pnpm-lock.yaml:/app/pnpm-lock.yaml:ro
+      - ./pnpm-workspace.yaml:/app/pnpm-workspace.yaml:ro
+      # Keep the Linux dependencies and the container's own build cache.
+      - /app/apps/web/node_modules
+      - /app/apps/web/.next
+    healthcheck:
+      start_period: 90s

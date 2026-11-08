@@ -11,8 +11,8 @@ cp .env.example .env
 docker compose up --build -d
 ```
 
-For active development, use [Container development](#container-development) so
-source changes rebuild the running services automatically.
+This starts the development environment: API and web run from the local source
+with live reload. See [Container development](#container-development).
 
 Abra **http://localhost:3100**. A migração do banco roda automaticamente antes de iniciar a API. Não é necessário ter SAGA ou DIRAD instalados.
 
@@ -79,26 +79,31 @@ Use Docker Compose 2.22 or later. From the repository root, run:
 
 ```sh
 pnpm containers:dev
-# Equivalent: docker compose up --build --watch
+# Equivalent: docker compose up --build -d --wait
 ```
 
-Keep this command running while developing. It builds the current checkout on
-startup, then watches API and web source files, templates, shared validation,
-package manifests, the lockfile and workspace configuration. Each change rebuilds
-and replaces the affected service, so the browser serves the compiled local code.
-Generated files and host dependencies are excluded through `.dockerignore`.
-Build errors appear in the terminal and must be resolved before the updated
-version can run. Rebuilds briefly interrupt the affected service.
+`compose.override.yaml` is merged automatically by `docker compose`. It mounts
+`apps/api`, `apps/web`, `packages/validation` and the workspace manifests into
+the containers and runs `tsx watch` (API) and `next dev` (web). Saved changes
+reach the browser in a few seconds, with no rebuild and no terminal left open.
+Because the containers always run the mounted checkout, restarting Docker or
+`docker compose restart` never brings back an outdated version.
+
+Each start syncs dependencies with the mounted `pnpm-lock.yaml`. After changing
+dependencies, run `docker compose restart api web`. After changing a
+`Dockerfile`, run `pnpm containers:update` to rebuild the images. Neither
+command removes the `postgres_data` volume or seeds the database.
+
+To run the production images instead (compiled build, no source mounts):
+
+```sh
+pnpm containers:prod
+# Equivalent: docker compose -f compose.yaml up --build -d --wait
+```
 
 For the optional replicator, use
 `docker compose --profile sync up --build --watch`; its Go source and module
-changes also trigger a rebuild. The sync profile remains opt-in.
-
-For a one-time update of detached containers, run `pnpm containers:update`.
-`docker compose restart` only restarts the existing image and does not apply
-source changes. Watch mode must remain running for automatic updates; restarting
-Docker alone does not restart the watcher. Neither update command removes the
-`postgres_data` volume or seeds the database.
+changes trigger a rebuild. The sync profile remains opt-in.
 
 ## Desenvolvimento local
 
