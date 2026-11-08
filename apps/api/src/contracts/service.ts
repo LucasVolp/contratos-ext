@@ -126,7 +126,7 @@ export class ContractService {
 
   // Unknown, malformed, unregistered and out-of-scope contracts all answer the
   // same 404, so the response never reveals that a contract exists.
-  private async find(externalId: string, scope: Scope) {
+  async find(externalId: string, scope: Scope) {
     if (!validId(externalId)) throw notFound();
     const contract = await this.contracts.get(externalId);
     if (!contract || !inScope(scope, contract.uasg)) throw notFound();
