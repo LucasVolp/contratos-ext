@@ -1,9 +1,9 @@
-import { recordId } from "@/lib/route-params";
-import { DetailPage } from "@/components/detail-page";
+import { contractId } from "@/lib/route-params";
+import { ContractDetail } from "@/components/contracts/contract-detail";
 export default async function Page({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  return <DetailPage id={await recordId(params)} />;
+  return <ContractDetail externalId={await contractId(params)} />;
 }

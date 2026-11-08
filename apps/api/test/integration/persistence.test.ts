@@ -13,15 +13,6 @@ async function isolated(t: TestContext) {
   await migrate(db);
   return { db, repos: new Repositories(db) };
 }
-const contract = {
-  number: "SQL-1",
-  uasg: "999999",
-  object: "Material",
-  supplierName: "Empresa",
-  supplierDocument: "11222333000181",
-  initialValue: "999999999999999999.123456",
-  globalValue: "0.2",
-};
 const fields = {
   number: "ATA-SQL",
   uasg: "999999",
@@ -36,7 +27,6 @@ const item = {
 };
 test("SQL migrations initialize an empty database and recognize an existing installation without replaying DDL", async (t) => {
   const { db, repos } = await isolated(t);
-  const saved = await repos.contracts.create(contract);
   const record = await repos.records.save(null, fields, [item]);
   await repos.exports.create({
     recordId: record.id,
@@ -45,10 +35,6 @@ test("SQL migrations initialize an empty database and recognize an existing inst
     snapshot: { immutable: true },
   });
   await migrate(db);
-  assert.equal(
-    (await repos.contracts.get(saved.id))!.initialValue,
-    contract.initialValue,
-  );
   // Reconstruct deployed ORM history; new SQL-only migrations stay in their own journal.
   await db.query(
     'CREATE TABLE "_prisma_migrations" (migration_name text, checksum text, finished_at timestamptz, rolled_back_at timestamptz)',
@@ -76,7 +62,6 @@ test("SQL migrations initialize an empty database and recognize an existing inst
   const after = (await repos.records.get(record.id))!;
   assert.equal(after.items[0].id, record.items[0].id);
   assert.equal(after.exports!.length, 1);
-  assert.deepEqual(await repos.contracts.get(saved.id), saved);
   assert.equal(
     (await db.query('SELECT * FROM "_sql_migrations"')).length,
     (await readdir(directory)).filter((name) => name.endsWith(".sql")).length,
@@ -125,29 +110,9 @@ test("SQL replacement rolls back parent and items on failure and retains immutab
   await repos.records.remove(saved.id);
   assert.deepEqual(await repos.exports.list(saved.id), []);
 });
-test("SQL filters, pagination, exact decimals, UTC timestamps and independent JSON patches survive the driver change", async (t) => {
+test("SQL timestamps and independent JSON patches survive the driver change", async (t) => {
   const { repos } = await isolated(t);
   const at = new Date("2026-01-02T03:04:05.678Z");
-  const saved = await repos.contracts.create({ ...contract, lastSyncedAt: at });
-  assert.equal(saved.initialValue, contract.initialValue);
-  assert.equal(saved.lastSyncedAt!.toISOString(), at.toISOString());
-  await repos.contracts.create({
-    ...contract,
-    number: "SQL-2",
-    globalValue: "0.1",
-  });
-  const filters = {
-    today: "2026-11-04",
-    boundary: "2026-12-04",
-    search: "SQL-",
-  };
-  assert.equal((await repos.contracts.list(filters, 2, 1)).length, 1);
-  assert.equal((await repos.contracts.stats(filters)).totalValue, "0.3");
-  assert.equal(
-    (await repos.contracts.stats({ ...filters, search: "%' OR TRUE --" }))
-      .count,
-    0,
-  );
   const purchase = await repos.purchases.upsert({
     number: "1",
     externalId: "purchase",

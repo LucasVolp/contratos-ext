@@ -1,6 +1,18 @@
 "use client";
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from "@/components/ui/table";
+
+import { Button } from "@/components/ui/button";
+import { SearchField } from "@/components/ui/search-field";
+
 import { useEffect, useMemo, useState } from "react";
-import { CloudDownload, Pencil, Plus, Save, Search } from "lucide-react";
+import { CloudDownload, Pencil, Plus, Save } from "lucide-react";
 import { api, ApiError, validationSummary } from "@/lib/api";
 import {
   ErrorState,
@@ -19,7 +31,12 @@ type Institution = {
   organization: string;
   usersCount: number;
 };
-type Draft = { id: string | null; name: string; uasg: string; organization: string };
+type Draft = {
+  id: string | null;
+  name: string;
+  uasg: string;
+  organization: string;
+};
 export function InstitutionsAdmin() {
   const [rows, setRows] = useState<Institution[] | null>(null),
     [error, setError] = useState(""),
@@ -53,7 +70,7 @@ export function InstitutionsAdmin() {
   return (
     <>
       <PageBar context={<AdminTabs />}>
-        <button
+        <Button
           type="button"
           className="button secondary"
           aria-expanded={importing}
@@ -64,8 +81,8 @@ export function InstitutionsAdmin() {
         >
           <CloudDownload size={17} />
           Adicionar do Compras.gov
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           className="button"
           onClick={() => {
@@ -76,7 +93,7 @@ export function InstitutionsAdmin() {
         >
           <Plus size={17} />
           Nova instituição
-        </button>
+        </Button>
       </PageBar>
       {importing && (
         <PublicImport
@@ -109,16 +126,14 @@ export function InstitutionsAdmin() {
       </div>
       <section className="registry admin-list">
         <div className="filters">
-          <label className="search-field">
-            <Search size={16} />
-            <span className="sr-only">Filtrar instituições</span>
-            <input
-              type="search"
-              placeholder="Filtrar por nome ou UASG"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-            />
-          </label>
+          <SearchField
+            id="institutions-search"
+            label="Filtrar instituições"
+            type="search"
+            placeholder="Filtrar por nome ou UASG"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          />
         </div>
         {error ? (
           <ErrorState message={error} retry={() => setReload((n) => n + 1)} />
@@ -132,36 +147,36 @@ export function InstitutionsAdmin() {
           </p>
         ) : (
           <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Instituição</th>
-                  <th>Organização</th>
-                  <th>UASG</th>
-                  <th>Usuários vinculados</th>
-                  <th>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Instituição</TableHead>
+                  <TableHead>Organização</TableHead>
+                  <TableHead>UASG</TableHead>
+                  <TableHead>Usuários vinculados</TableHead>
+                  <TableHead>
                     <span className="sr-only">Ações</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {visible.map((row) => (
-                  <tr key={row.id}>
-                    <td>
+                  <TableRow key={row.id}>
+                    <TableCell>
                       <strong>{row.name}</strong>
-                    </td>
-                    <td>{row.organization || "—"}</td>
-                    <td>{row.uasg}</td>
-                    <td>{row.usersCount}</td>
-                    <td className="row-actions">
-                      <button
+                    </TableCell>
+                    <TableCell>{row.organization || "—"}</TableCell>
+                    <TableCell>{row.uasg}</TableCell>
+                    <TableCell>{row.usersCount}</TableCell>
+                    <TableCell className="row-actions">
+                      <Button
                         type="button"
                         className="button secondary"
                         aria-label={`Editar ${row.name}`}
                         onClick={() => {
                           setMessage("");
                           setFormKey((n) => n + 1);
-            setDraft({
+                          setDraft({
                             id: row.id,
                             name: row.name,
                             uasg: row.uasg,
@@ -171,12 +186,12 @@ export function InstitutionsAdmin() {
                       >
                         <Pencil size={14} />
                         Editar
-                      </button>
-                    </td>
-                  </tr>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </section>
@@ -276,19 +291,21 @@ function InstitutionForm({
             />
           </div>
           <div className="admin-form-actions">
-            <div aria-live="polite">{error && <ErrorState message={error} />}</div>
+            <div aria-live="polite">
+              {error && <ErrorState message={error} />}
+            </div>
             <div>
-              <button
+              <Button
                 type="button"
                 className="button secondary"
                 onClick={onCancel}
               >
                 Cancelar
-              </button>
-              <button type="submit" className="button" disabled={busy}>
+              </Button>
+              <Button type="submit" className="button" disabled={busy}>
                 <Save size={16} />
                 {busy ? "Salvando…" : "Salvar instituição"}
-              </button>
+              </Button>
             </div>
           </div>
         </section>

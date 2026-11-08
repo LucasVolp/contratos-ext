@@ -1,0 +1,29 @@
+[
+ {
+  "id": 8514191,
+  "unidade_gestora": "158345",
+  "gestao": "26421",
+  "numero": "2022NE000066",
+  "data_emissao": "2022-04-07",
+  "credor": "08.273.364/0001-57 - TICKET GESTAO EM MANUTENCAO EZC S.A",
+  "fonte_recurso": "1000000000",
+  "programa_trabalho": "171068",
+  "planointerno": "L20RLP01ADN - PROAD-GESTAO ADMINISTRATIVA",
+  "naturezadespesa": "339030 - MATERIAL DE CONSUMO",
+  "empenhado": "54.793,53",
+  "aliquidar": "0,00",
+  "liquidado": "22.762,21",
+  "pago": "31.701,20",
+  "rpinscrito": "660,24",
+  "rpaliquidar": "330,12",
+  "rpliquidado": "330,12",
+  "rppago": "18.374,71",
+  "informacao_complementar": "15814805000042017 - UASG MINUTA: 158148",
+  "sistema_origem": "COMPRASNET CONTRATOS",
+  "credor_obj": {
+   "tipo": "JURIDICA",
+   "cnpj_cpf_idgener": "08.273.364/0001-57",
+   "nome": "TICKET GESTAO EM MANUTENCAO EZC S.A"
+  }
+ }
+]

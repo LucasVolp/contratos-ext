@@ -30,7 +30,7 @@ test("Fastify preserves validation errors, UUID checks, JSON errors, health stat
     offline = false;
     const before = queries;
     for (const url of [
-      "/api/contracts/invalid",
+      "/api/records/invalid",
       "/api/records/invalid/document",
       "/api/purchases/invalid/refresh",
       "/api/public-records/invalid/draft",
@@ -43,13 +43,6 @@ test("Fastify preserves validation errors, UUID checks, JSON errors, health stat
       assert.equal(result.statusCode, 400);
     }
     assert.equal(queries, before);
-    const invalid = await app.inject({
-      method: "POST",
-      url: "/api/contracts",
-      payload: { number: "1" },
-    });
-    assert.equal(invalid.statusCode, 400);
-    assert.ok(invalid.json().fieldErrors.uasg);
     for (const payload of ["{", "[]", "null"]) {
       assert.equal(
         (

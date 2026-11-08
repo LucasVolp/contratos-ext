@@ -53,31 +53,23 @@ test('número de compra já completo não recebe ano duplicado na ficha', async 
   await expect(purchase).toHaveText('90001/2026');
 });
 
-test('contrato importado informa origem e data da última importação', async ({ page }) => {
-  const id = '40000000-0000-4000-8000-000000000001';
-  await page.route(`**/api/contracts/${id}`, route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id, number: 'IMPORT-QA', object: 'Contrato importado para teste visual', supplierName: 'Fornecedor de teste', supplierDocument: '11222333000181', uasg: '999999', unitName: 'Unidade de teste', startDate: '2026-01-01', endDate: '2027-01-01', initialValue: '100', globalValue: '100', status: 'ACTIVE', source: 'COMPRAS_GOV', lastSyncedAt: '2026-10-30T12:30:00.000Z' }) }));
-  await page.goto(`/contratos/${id}`);
-  await expect(page.getByText('Última importação', { exact: true })).toBeVisible();
-  await expect(page.locator('.metadata')).toContainText('30/10/2026');
-});
-
 test('falha ao carregar edição bloqueia formulário até repetir a leitura com sucesso', async ({ page }) => {
   const id = '40000000-0000-4000-8000-000000000002';
   let failLoad = true;
   let writes = 0;
-  await page.route(`**/api/contracts/${id}`, route => {
+  await page.route(`**/api/records/${id}`, route => {
     if (route.request().method() === 'PUT') { writes++; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id }) }); }
-    if (failLoad) return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'Contrato temporariamente indisponível no teste' }) });
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id, number: 'LOAD-QA', object: 'Dados originais preservados', supplierName: 'Fornecedor original', supplierDocument: '11222333000181', uasg: '999999', unitName: 'Unidade de teste', startDate: '2026-01-01', endDate: '2027-01-01', initialValue: '100', globalValue: '100', status: 'ACTIVE', source: 'MANUAL' }) });
+    if (failLoad) return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'Ata temporariamente indisponível no teste' }) });
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id, number: 'LOAD-QA', object: 'Dados originais preservados', uasg: '999999', modality: 'PREGAO', renewable: false, items: [] }) });
   });
-  await page.goto(`/contratos/${id}/editar`);
-  await expect(page.getByText('Contrato temporariamente indisponível no teste', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Salvar contrato', exact: true })).toHaveCount(0);
+  await page.goto(`/atas/${id}/editar`);
+  await expect(page.getByText('Ata temporariamente indisponível no teste', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Salvar ata', exact: true })).toHaveCount(0);
   expect(writes).toBe(0);
   failLoad = false;
   await page.getByRole('button', { name: /Tentar novamente/i }).click();
   await expect(page.locator('[name="number"]')).toHaveValue('LOAD-QA');
   await expect(page.locator('[name="object"]')).toHaveValue('Dados originais preservados');
-  await expect(page.getByRole('button', { name: 'Salvar contrato', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Salvar ata', exact: true })).toBeEnabled();
   expect(writes).toBe(0);
 });

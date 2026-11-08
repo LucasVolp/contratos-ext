@@ -28,6 +28,15 @@ export function formatSourceDecimal(value: unknown) {
     : formatDecimal(raw);
 }
 
+/** Source quantities without the storage padding ("750.625000" → "750,625", "12.000000" → "12"). */
+export function formatSourceQuantity(value: unknown) {
+  const formatted = formatSourceDecimal(value);
+  const comma = formatted.lastIndexOf(",");
+  if (comma < 0 || formatted === "Não informado") return formatted;
+  const fraction = formatted.slice(comma + 1).replace(/0+$/, "");
+  return formatted.slice(0, comma) + (fraction ? "," + fraction : "");
+}
+
 /** Integer millionths are only a chart coordinate representation, never a new financial total. */
 export function chartUnits(value: string | null): bigint | null {
   if (value === null) return null;

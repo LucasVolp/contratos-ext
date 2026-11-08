@@ -251,7 +251,9 @@ test("failed refresh retains the last consulted data and a different scope never
       .filter({ hasText: "Consulta indisponível para teste" })
       .first(),
   ).toBeVisible();
-  await expect(committed(page)).toHaveText("Não informado");
+  // A failed query for a different scope has no metrics to display. The previous
+  // scope's figures must disappear until this scope is successfully consulted.
+  await expect(committed(page)).toHaveCount(0);
   await page.unrouteAll({ behavior: "wait" });
   await page
     .getByRole("button", { name: "Tentar novamente", exact: true })
@@ -400,15 +402,24 @@ test("small-screen panels preserve navigation, essential actions, empty, invalid
   ).toBeVisible();
 });
 
-test("fiscal year selection persists across reload without reusing another year's figures", async ({ page }) => {
+test("fiscal year selection persists across reload without reusing another year's figures", async ({
+  page,
+}) => {
   await page.goto(fixture.baseURL + overview);
   await expect(committed(page)).toHaveText("R$ 21,00");
   await page.getByLabel("Exercício", { exact: true }).selectOption("2025");
   await expect(page).toHaveURL(/fiscalYear=2025/);
-  await expect(page.getByRole("heading", { name: "Nenhum registro encontrado.", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      name: "Nenhum registro encontrado.",
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(committed(page)).toHaveText("Não informado");
   await page.reload();
-  await expect(page.getByLabel("Exercício", { exact: true })).toHaveValue("2025");
+  await expect(page.getByLabel("Exercício", { exact: true })).toHaveValue(
+    "2025",
+  );
   await expect(committed(page)).toHaveText("Não informado");
   await page.getByLabel("Exercício", { exact: true }).selectOption("2026");
   await expect(committed(page)).toHaveText("R$ 21,00");

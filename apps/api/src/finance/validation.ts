@@ -12,7 +12,7 @@ import {
 function invalid(field: string, message: string): never {
   throw new BadRequestException({ message, fieldErrors: { [field]: message } });
 }
-function known(query: FinanceQuery, fields: string[]) {
+export function known(query: FinanceQuery, fields: string[]) {
   for (const key of Object.keys(query)) {
     if (!fields.includes(key))
       invalid(key, `Parâmetro de consulta desconhecido: ${key}.`);
@@ -47,7 +47,7 @@ function positive(
     invalid(name, `Valor fora do limite para ${name}.`);
   return number;
 }
-function pagination(query: FinanceQuery): Pagination {
+export function pagination(query: FinanceQuery): Pagination {
   const page = positive(query, "page", 1);
   const limit = positive(query, "limit", 20, 100);
   const offset = (page - 1) * limit;

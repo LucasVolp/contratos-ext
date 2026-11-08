@@ -60,18 +60,47 @@ func ValidUnit(code string) bool {
 	return true
 }
 
+// Listed is one contract element of a UG listing.
+type Listed struct {
+	ID      int64
+	Active  bool            // listed by the active listing
+	Element json.RawMessage // the raw listing element
+}
+
+// DueFunc reports whether a listed contract's sub-resources should be captured.
+type DueFunc func(ctx context.Context, c Listed) (bool, error)
+
 // ContractIDs returns the positive integer ids of a contract listing, in order.
 func ContractIDs(listing []byte) ([]int64, error) {
-	var rows []struct {
-		ID *json.Number `json:"id"`
+	listed, err := listedContracts(listing, false)
+	if err != nil {
+		return nil, err
 	}
+	ids := make([]int64, len(listed))
+	for i, c := range listed {
+		ids[i] = c.ID
+	}
+	return ids, nil
+}
+
+// listedContracts decodes a contract listing into its elements, in order.
+func listedContracts(listing []byte, active bool) ([]Listed, error) {
+	var elements []json.RawMessage
 	decoder := json.NewDecoder(bytes.NewReader(listing))
 	decoder.UseNumber()
-	if err := decoder.Decode(&rows); err != nil {
+	if err := decoder.Decode(&elements); err != nil {
 		return nil, fmt.Errorf("contract listing is not an array of contracts: %w", err)
 	}
-	ids := make([]int64, 0, len(rows))
-	for i, row := range rows {
+	listed := make([]Listed, 0, len(elements))
+	for i, element := range elements {
+		var row struct {
+			ID *json.Number `json:"id"`
+		}
+		decoder := json.NewDecoder(bytes.NewReader(element))
+		decoder.UseNumber()
+		if err := decoder.Decode(&row); err != nil {
+			return nil, fmt.Errorf("contract listing is not an array of contracts: %w", err)
+		}
 		if row.ID == nil {
 			return nil, fmt.Errorf("contract listing row %d has no id", i)
 		}
@@ -79,15 +108,26 @@ func ContractIDs(listing []byte) ([]int64, error) {
 		if err != nil || id <= 0 {
 			return nil, fmt.Errorf("contract listing row %d has invalid id %q", i, row.ID.String())
 		}
-		ids = append(ids, id)
+		listed = append(listed, Listed{ID: id, Active: active, Element: element})
 	}
-	return ids, nil
+	return listed, nil
 }
 
 // SyncUnit captures the active (and optionally inactive) contract listings of a
 // UG and every listed contract's sub-resources. A failed active listing is fatal;
 // other failures make the run partial.
-func (c *Connector) SyncUnit(ctx context.Context, runID int64, unit string, includeInactive bool) (summary capture.RunSummary, err error) {
+func (c *Connector) SyncUnit(ctx context.Context, runID int64, unit string, includeInactive bool) (capture.RunSummary, error) {
+	return c.syncUnit(ctx, runID, unit, includeInactive, func(context.Context, Listed) (bool, error) { return true, nil })
+}
+
+// SyncUnitWith captures the active and inactive contract listings of a UG and
+// the sub-resources of the listed contracts for which due returns true. A
+// failed active listing is fatal; other source failures make the run partial.
+func (c *Connector) SyncUnitWith(ctx context.Context, runID int64, unit string, due DueFunc) (capture.RunSummary, error) {
+	return c.syncUnit(ctx, runID, unit, true, due)
+}
+
+func (c *Connector) syncUnit(ctx context.Context, runID int64, unit string, includeInactive bool, due DueFunc) (summary capture.RunSummary, err error) {
 	defer func() { finalize(&summary, err) }()
 	if !ValidUnit(unit) {
 		return summary, fmt.Errorf("unit must be a six-digit UG code")
@@ -96,7 +136,7 @@ func (c *Connector) SyncUnit(ctx context.Context, runID int64, unit string, incl
 	if includeInactive {
 		listings = append(listings, capture.Request{Resource: "contracts_inactive_by_unit", Path: "/api/contrato/inativo/ug/" + unit})
 	}
-	var ids []int64
+	var contracts []Listed
 	seen := map[int64]bool{}
 	for i, req := range listings {
 		res, outcome, err := c.capture(ctx, runID, req, &summary)
@@ -109,16 +149,29 @@ func (c *Connector) SyncUnit(ctx context.Context, runID int64, unit string, incl
 			}
 			continue
 		}
-		listed, err := ContractIDs(res.Canonical)
+		listed, err := listedContracts(res.Canonical, i == 0)
 		if err != nil {
 			return summary, err
 		}
-		for _, id := range listed {
-			if !seen[id] {
-				seen[id] = true
-				ids = append(ids, id)
+		for _, contract := range listed {
+			if !seen[contract.ID] {
+				seen[contract.ID] = true
+				contracts = append(contracts, contract)
 			}
 		}
+	}
+	var ids []int64
+	for _, contract := range contracts {
+		ok, err := due(ctx, contract)
+		if err != nil {
+			return summary, fmt.Errorf("decide refresh of contract %d: %w", contract.ID, err)
+		}
+		if ok {
+			ids = append(ids, contract.ID)
+		}
+	}
+	if c.Log != nil && len(ids) < len(contracts) {
+		c.Log("Skipped contracts not due for refresh", "unit", unit, "skipped", len(contracts)-len(ids), "total", len(contracts))
 	}
 	for i, id := range ids {
 		if err := c.syncContractResources(ctx, runID, id, &summary); err != nil {

@@ -1,4 +1,4 @@
-import { ListPage } from "@/components/list-page";
+import { ContractList } from "@/components/contracts/contract-list";
 export default function Page() {
-  return <ListPage />;
+  return <ContractList />;
 }

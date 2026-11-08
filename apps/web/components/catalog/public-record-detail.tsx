@@ -1,4 +1,6 @@
 "use client";
+import { Button } from "@/components/ui/button";
+
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { RefreshCw, FilePenLine } from "lucide-react";
@@ -14,7 +16,8 @@ import {
 import { ErrorState, Loading, PageHead } from "../ui";
 import { CatalogTabs } from "./catalog-tabs";
 import { ItemSupplementPanel } from "./item-supplement";
-const canonicalItemKey = (key: string) => /^\d+$/.test(key) ? key.replace(/^0+(?=\d)/, "") : key;
+const canonicalItemKey = (key: string) =>
+  /^\d+$/.test(key) ? key.replace(/^0+(?=\d)/, "") : key;
 export function PublicRecordDetailPage({ id }: { id: string }) {
   return <PublicRecordDetailPageContent key={id} id={id} />;
 }
@@ -34,7 +37,9 @@ function PublicRecordDetailPageContent({ id }: { id: string }) {
     async function load() {
       let cached = false;
       try {
-        const value = await api<PublicRecordDetail>(`/public-records/${id}`, { signal: c.signal });
+        const value = await api<PublicRecordDetail>(`/public-records/${id}`, {
+          signal: c.signal,
+        });
         if (c.signal.aborted) return;
         cached = true;
         setData(value);
@@ -44,10 +49,14 @@ function PublicRecordDetailPageContent({ id }: { id: string }) {
       }
       if (c.signal.aborted) return;
       try {
-        const result = await api<{ data: PublicRecordDetail; errors: { details?: string; records?: string } }>(
-          `/public-records/${id}/ensure-details`,
-          { method: "POST", body: "{}", signal: c.signal },
-        );
+        const result = await api<{
+          data: PublicRecordDetail;
+          errors: { details?: string; records?: string };
+        }>(`/public-records/${id}/ensure-details`, {
+          method: "POST",
+          body: "{}",
+          signal: c.signal,
+        });
         if (c.signal.aborted) return;
         cached = true;
         setData(result.data);
@@ -68,15 +77,22 @@ function PublicRecordDetailPageContent({ id }: { id: string }) {
     // The keyed page owns one request lifecycle per record and explicit retry.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, reload]);
-  async function loadSupplements(force: boolean, signal = lifecycle.current?.signal) {
+  async function loadSupplements(
+    force: boolean,
+    signal = lifecycle.current?.signal,
+  ) {
     if (!signal || signal.aborted) return;
     setBulkBusy(true);
     setBulkError("");
     try {
-      const result = await api<{ data: PublicRecordDetail; errors: { supplements?: string } }>(
-        `/public-records/${id}/supplements/refresh`,
-        { method: "POST", body: JSON.stringify({ force }), signal },
-      );
+      const result = await api<{
+        data: PublicRecordDetail;
+        errors: { supplements?: string };
+      }>(`/public-records/${id}/supplements/refresh`, {
+        method: "POST",
+        body: JSON.stringify({ force }),
+        signal,
+      });
       if (!signal.aborted) {
         setData(result.data);
         setBulkError(result.errors.supplements || "");
@@ -93,7 +109,10 @@ function PublicRecordDetailPageContent({ id }: { id: string }) {
     setBusy(true);
     setActionError("");
     try {
-      const value = await api<PublicRecordDetail>(`/public-records/${id}/refresh`, { method: "POST", body: "{}", signal });
+      const value = await api<PublicRecordDetail>(
+        `/public-records/${id}/refresh`,
+        { method: "POST", body: "{}", signal },
+      );
       if (!signal.aborted) setData(value);
     } catch (e) {
       if (!signal.aborted) setActionError((e as Error).message);
@@ -111,10 +130,15 @@ function PublicRecordDetailPageContent({ id }: { id: string }) {
         description="Ata publicada · registro oficial salvo no catálogo"
         back="/atas/publicadas"
       >
-        <button className="button secondary" onClick={refresh} disabled={busy || updating || bulkBusy}>
+        <Button
+          type="submit"
+          className="button secondary"
+          onClick={refresh}
+          disabled={busy || updating || bulkBusy}
+        >
           <RefreshCw size={16} />
           {busy ? "Atualizando…" : "Atualizar detalhes"}
-        </button>
+        </Button>
         <Link href={`/atas/publicadas/${id}/preparar`} className="button">
           <FilePenLine size={16} />
           Preparar documento
@@ -122,9 +146,22 @@ function PublicRecordDetailPageContent({ id }: { id: string }) {
       </PageHead>
       <CatalogTabs published />
       <div aria-live="polite">
-        {updating && <p className="catalog-notice" role="status">Atualizando detalhes automaticamente…</p>}
-        {bulkBusy && <p className="catalog-notice" role="status">Atualizando participantes e saldos de todos os itens…</p>}
-        {bulkError && <ErrorState message={bulkError} retry={() => void loadSupplements(true)} />}
+        {updating && (
+          <p className="catalog-notice" role="status">
+            Atualizando detalhes automaticamente…
+          </p>
+        )}
+        {bulkBusy && (
+          <p className="catalog-notice" role="status">
+            Atualizando participantes e saldos de todos os itens…
+          </p>
+        )}
+        {bulkError && (
+          <ErrorState
+            message={bulkError}
+            retry={() => void loadSupplements(true)}
+          />
+        )}
         {actionError && <ErrorState message={actionError} retry={refresh} />}
       </div>
       <div className="catalog-detail">
@@ -216,14 +253,18 @@ function PublicRecordDetailPageContent({ id }: { id: string }) {
           </div>
           {!data.detailsSyncedAt && (
             <p className="catalog-notice">
-              Os fornecedores serão carregados automaticamente. Se a consulta falhar, tente atualizar os detalhes novamente.
+              Os fornecedores serão carregados automaticamente. Se a consulta
+              falhar, tente atualizar os detalhes novamente.
             </p>
           )}
-          {data.detailsSyncedAt && !data.suppliers.length && !updating && !actionError && (
-            <p className="muted">
-              Nenhum fornecedor informado na última consulta salva.
-            </p>
-          )}
+          {data.detailsSyncedAt &&
+            !data.suppliers.length &&
+            !updating &&
+            !actionError && (
+              <p className="muted">
+                Nenhum fornecedor informado na última consulta salva.
+              </p>
+            )}
           <div className="catalog-suppliers">
             {data.suppliers.map((supplier, i) => (
               <div key={`${supplier.document}-${i}`}>
@@ -237,10 +278,15 @@ function PublicRecordDetailPageContent({ id }: { id: string }) {
           <div className="section-heading">
             <div>
               <h2>Itens da ata</h2>
-              <button className="button secondary" onClick={() => void loadSupplements(true)} disabled={busy || updating || bulkBusy}>
+              <Button
+                type="submit"
+                className="button secondary"
+                onClick={() => void loadSupplements(true)}
+                disabled={busy || updating || bulkBusy}
+              >
                 <RefreshCw size={15} />
                 Atualizar participantes e saldos
-              </button>
+              </Button>
             </div>
             <span className="tiny-label">
               {!data.detailsSyncedAt
@@ -252,14 +298,19 @@ function PublicRecordDetailPageContent({ id }: { id: string }) {
           </div>
           {!data.detailsSyncedAt && (
             <p className="catalog-notice">
-              Itens ainda não consultados. A atualização automática consulta a fonte pública; você também pode tentar novamente em “Atualizar detalhes”.
+              Itens ainda não consultados. A atualização automática consulta a
+              fonte pública; você também pode tentar novamente em “Atualizar
+              detalhes”.
             </p>
           )}
-          {data.detailsSyncedAt && !data.items.length && !updating && !actionError && (
-            <p className="muted">
-              Nenhum item informado na última consulta salva.
-            </p>
-          )}
+          {data.detailsSyncedAt &&
+            !data.items.length &&
+            !updating &&
+            !actionError && (
+              <p className="muted">
+                Nenhum item informado na última consulta salva.
+              </p>
+            )}
           {data.items.map((item, index) => (
             <article
               className="catalog-public-item"
@@ -303,10 +354,21 @@ function PublicRecordDetailPageContent({ id }: { id: string }) {
                 itemKey={item.key}
                 data={item.supplement}
                 disabled={busy || updating || bulkBusy}
-                onUpdate={(supplement) => setData((old) => old ? {
-                  ...old,
-                  items: old.items.map((entry) => canonicalItemKey(entry.key) === canonicalItemKey(item.key) ? { ...entry, supplement } : entry),
-                } : old)}
+                onUpdate={(supplement) =>
+                  setData((old) =>
+                    old
+                      ? {
+                          ...old,
+                          items: old.items.map((entry) =>
+                            canonicalItemKey(entry.key) ===
+                            canonicalItemKey(item.key)
+                              ? { ...entry, supplement }
+                              : entry,
+                          ),
+                        }
+                      : old,
+                  )
+                }
               />
             </article>
           ))}

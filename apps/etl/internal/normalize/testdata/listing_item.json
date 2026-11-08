@@ -1,0 +1,64 @@
+{
+ "id": 13847,
+ "receita_despesa": "Despesa",
+ "numero": "00004/2017",
+ "contratante": {
+  "orgao_origem": {
+   "codigo": "26421",
+   "nome": "INST.FED.DE EDUC.,CIENC.E TEC.DE RONDONIA",
+   "unidade_gestora_origem": {
+    "codigo": "158148",
+    "nome_resumido": "IF DE RONDONIA",
+    "nome": "INSTITUTO FEDERAL DE EDUCACAO,CIENCIA E TECNOLOGIA DE RONDONIA",
+    "sisg": "Sim",
+    "utiliza_siafi": "Sim",
+    "utiliza_antecipagov": "Sim"
+   }
+  },
+  "orgao": {
+   "codigo": "26421",
+   "nome": "INST.FED.DE EDUC.,CIENC.E TEC.DE RONDONIA",
+   "unidade_gestora": {
+    "codigo": "158148",
+    "nome_resumido": "IF DE RONDONIA",
+    "nome": "INSTITUTO FEDERAL DE EDUCACAO,CIENCIA E TECNOLOGIA DE RONDONIA",
+    "sisg": "Sim",
+    "utiliza_siafi": "Sim",
+    "utiliza_antecipagov": "Sim"
+   }
+  }
+ },
+ "fornecedor": {
+  "tipo": "JURIDICA",
+  "cnpj_cpf_idgener": "08.273.364/0001-57",
+  "nome": "TICKET GESTAO EM MANUTENCAO EZC S.A"
+ },
+ "codigo_tipo": "50",
+ "tipo": "Contrato",
+ "subtipo": null,
+ "prorrogavel": null,
+ "situacao": "Ativo",
+ "justificativa_inativo": null,
+ "categoria": "Serviços",
+ "subcategoria": null,
+ "unidades_requisitantes": null,
+ "processo": "23243.000390/2017-17",
+ "objeto": "SERVIÇOS DE ADMINISTRAÇÃO E CONTROLE DE FROTA DE VEÍCULOS, GERENCIAMENTO E MANUTENÇÃOPREVENTIVA E CORRETIVA E FORNECIMENTO DE PEÇAS.",
+ "amparo_legal": "",
+ "informacao_complementar": null,
+ "codigo_modalidade": "05",
+ "modalidade": "Pregão",
+ "unidade_compra": "158147",
+ "licitacao_numero": "00019/2016",
+ "sistema_origem_licitacao": null,
+ "data_assinatura": "2017-01-26",
+ "data_publicacao": "2017-02-20",
+ "data_proposta_comercial": null,
+ "vigencia_inicio": "2017-02-01",
+ "vigencia_fim": "2023-01-31",
+ "valor_inicial": "545.854,00",
+ "valor_global": "682.318,13",
+ "num_parcelas": 12,
+ "valor_parcela": "56.859,84",
+ "valor_acumulado": "3.820.981,62"
+}

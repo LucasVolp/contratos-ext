@@ -1,7 +1,7 @@
 import { Database } from "../database";
 import { FinanceRepository } from "../finance/repository";
 import { FinanceReportsRepository } from "../finance/reports";
-import { ContractRepository } from "./contracts";
+import { ContractRepository } from "../contracts/repository";
 import { RecordRepository, ExportRepository } from "./records";
 import {
   PurchaseRepository,

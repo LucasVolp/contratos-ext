@@ -5,5 +5,5 @@ export default async function Page({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  return <Editor id={await recordId(params)} records />;
+  return <Editor id={await recordId(params)} />;
 }

@@ -1,4 +1,6 @@
 "use client";
+import { Button } from "@/components/ui/button";
+
 import { useState } from "react";
 import { RefreshCw } from "lucide-react";
 import {
@@ -149,10 +151,10 @@ export function CatalogRefresh({
             value={values.to}
             onChange={change}
           />
-          <button className="button" type="submit" disabled={busy}>
+          <Button className="button" type="submit" disabled={busy}>
             <RefreshCw size={16} className={busy ? "spin" : ""} />
             {busy ? "Consultando…" : "Atualizar agora"}
-          </button>
+          </Button>
         </div>
         <div aria-live="polite" className="catalog-refresh-result">
           {error && <ErrorState message={error} />}

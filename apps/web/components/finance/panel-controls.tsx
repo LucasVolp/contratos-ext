@@ -1,4 +1,7 @@
 "use client";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+
 import { RefreshCw, SlidersHorizontal } from "lucide-react";
 import type { FinanceUnit } from "@/lib/finance-types";
 import { Field, focusInvalid } from "@/components/ui";
@@ -62,9 +65,9 @@ export function PanelControls({
     <section className="panel-controls" aria-label="Filtros do painel">
       <div className="panel-primary-filters">
         <div className="field panel-unit-filter">
-          <label htmlFor="panel-unit">
+          <Label htmlFor="panel-unit">
             {budget ? "Unidade orçamentária" : "Unidade"}
-          </label>
+          </Label>
           <select
             id="panel-unit"
             value={scope.unit}
@@ -89,7 +92,7 @@ export function PanelControls({
           </select>
         </div>
         <div className="field">
-          <label htmlFor="panel-year">Exercício</label>
+          <Label htmlFor="panel-year">Exercício</Label>
           <select
             id="panel-year"
             value={scope.fiscalYear}
@@ -104,7 +107,7 @@ export function PanelControls({
         </div>
         {!budget && showPeriod && (
           <div className="field">
-            <label htmlFor="panel-period">Período</label>
+            <Label htmlFor="panel-period">Período</Label>
             <select
               id="panel-period"
               value={period}
@@ -126,7 +129,7 @@ export function PanelControls({
             </select>
           </div>
         )}
-        <button
+        <Button
           className="button secondary panel-refresh"
           type="button"
           onClick={onRefresh}
@@ -134,7 +137,7 @@ export function PanelControls({
         >
           <RefreshCw size={15} aria-hidden="true" />
           {busy ? "Consultando…" : "Atualizar painel"}
-        </button>
+        </Button>
       </div>
       <details
         className="panel-advanced"
@@ -146,7 +149,7 @@ export function PanelControls({
         </summary>
         {organizations.length > 1 && (
           <div className="field">
-            <label htmlFor="panel-agency">Órgão</label>
+            <Label htmlFor="panel-agency">Órgão</Label>
             <select
               id="panel-agency"
               value={scope.managementCode}
@@ -216,9 +219,9 @@ function InstitutionCode({
         error={error}
         onChange={(_, value) => setDraft(value)}
       />
-      <button className="button secondary" type="submit">
+      <Button className="button secondary" type="submit">
         Usar órgão
-      </button>
+      </Button>
     </form>
   );
 }

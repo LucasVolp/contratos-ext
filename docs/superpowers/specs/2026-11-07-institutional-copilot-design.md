@@ -146,6 +146,14 @@ in Phase 1 is left to the builder.
 
 ### 4.2 Linking app contracts to Contratos.gov.br
 
+> **Superseded (2026-11-07).** The `Contract` table, manual contract entry and
+> the Compras.gov.br contract import were removed. Contracts now come only from
+> the daily Contratos.gov.br replica of the registered UASGs, so there is no
+> app-contract-to-source linking or per-row import conflict. Identity is the
+> source external id; the only app-owned data is the internal notes. See
+> [the automatic contract sync design](2026-11-07-automatic-contract-sync-design.md).
+> The text below is kept as the original Phase 1 analysis.
+
 Existing `Contract` rows come from manual entry or from the Compras.gov.br
 open-data import (`/modulo-contratos/1_consultarContratos`), keyed by UASG and
 number. Phase 1 resolves each contract to its Contratos.gov.br id:
@@ -171,11 +179,17 @@ connector, is a later decision.
 
 Identity rules (designer's call):
 
-- The Contratos.gov.br contract id is the external key once resolved. Lookup
-  and deduplication use the **origin UG** (`unidade_gestora_origem`) plus
-  contract number, which is what the existing `(number, uasg)` identity
-  corresponds to. `unidade_compra` (the purchasing unit, e.g. 158147 vs. UG
-  158148) is stored but not used for identity.
+- Identity is the **managing UG** (`contratante.orgao.unidade_gestora` in UG
+  listings, `unidade_codigo` in `/api/contrato/id/{id}`) plus the contract
+  number compared through `public_sources.contract_number_key`. The managing UG
+  is what the current Dados Abertos import stores as `Contract.uasg`
+  (`codigoUnidadeGestora`). Evidence: contract 1057026 has managing UG 158148
+  and origin UG 158533 (a campus). An earlier draft said origin UG; that was
+  corrected on 2026-11-08 during step 2 planning.
+- Resolution is computed at read time (step 2b): no Contratos.gov.br id is
+  stored on `Contract`, whose `externalId` already holds the PNCP control
+  number. `unidade_compra` (purchasing unit) and the origin UG are stored in
+  the replica but are not used for identity.
 - A UG-wide import (~200 contracts) **skips and reports conflicting rows
   individually** instead of cancelling the whole batch, as the current
   `importContracts` does for small imports.
@@ -277,8 +291,10 @@ written by the public sources replicator (4.8).
   done / failed and reloads when done.
 - Failures keep the last replica and identify which parts are stale or
   unavailable, as the catalog already does.
-- Routine freshness comes from scheduled syncs (scheduling is external, as in
-  the finance ETL).
+- Routine freshness comes from the daily sync, which runs as the `replicator`
+  compose service (`replicator daily`; see
+  [the automatic contract sync design](2026-11-07-automatic-contract-sync-design.md)).
+  Finance ETL scheduling remains external.
 
 ### 4.6 Screens
 
@@ -395,8 +411,9 @@ Shape (designer's call within the user's decision):
 - **On-demand sync requests:** a request table written by the API (target:
   contract or UG; status; timestamps; error) and consumed by the replicator.
   This implies the replicator gains a long-running worker mode that polls
-  the table, alongside the existing one-shot CLI commands. Scheduled syncs
-  remain external (cron/compose).
+  the table, alongside the existing one-shot CLI commands. The daily contract
+  sync is already a compose service (`replicator daily`), see
+  [the automatic contract sync design](2026-11-07-automatic-contract-sync-design.md).
 - **CLI commands** at least: sync one contract, sync a UG (active and
   inactive contracts), re-normalize from raw, and run the worker.
 - **Observability:** each run recorded (like `finance.ingestion_runs`), with
@@ -422,6 +439,12 @@ plan → implementation; only Phase 1 is designed in detail here.
 | 5 | Document store | PDF capture, hash versioning, volume storage, per-page text extraction, `needs_ocr` marking; Files section on contract. | 2 |
 | 6 | Refresh now | Sync request table, ETL worker mode, screen buttons, scheduling in compose. | 2 |
 | 7 | Complements (optional) | PNCP as second source of terms and files; suggested links for commitments without a contract, with human confirmation. | 3, 5 |
+
+**Note (2026-11-07):** the automatic contract sync supersedes step 2's "UG
+import with per-row conflicts" and step 6's "scheduling in compose". The manual
+and Dados Abertos contract import and the `Contract` table were removed, and the
+daily sync runs as a compose service. See
+[`2026-11-07-automatic-contract-sync-design.md`](2026-11-07-automatic-contract-sync-design.md).
 
 Steps 5 and 6 can run in parallel with 3 and 4. Follow-up after Phase 1:
 move the current purchase/price-record catalog calls behind the replicator.
@@ -459,7 +482,9 @@ Each gets its own design before implementation.
   deployment). Phase 1 is planned on top of the merged result; resolving the
   merge is a prerequisite owned by the user. Rules:
   - new contract endpoints apply the existing UASG scope using the contract's
-    origin UG;
+    managing UG (`managing_unit_code`, what institutions register as their
+    UASG; the origin UG, e.g. a campus, is not used for scoping). See
+    [the automatic contract sync design](2026-11-07-automatic-contract-sync-design.md);
   - whoever can see a contract sees all its commitments, including those
     issued by other UGs (e.g. a campus), because they belong to the contract;
   - UG-wide sync requests are restricted to management roles; single-contract

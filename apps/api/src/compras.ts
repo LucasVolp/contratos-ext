@@ -5,13 +5,7 @@ import {
   ServiceUnavailableException,
   UnprocessableEntityException,
 } from "./errors";
-import {
-  Data,
-  date,
-  decimal,
-  validateRecord,
-  validateContract,
-} from "./domain";
+import { Data, date, decimal, validateRecord } from "./domain";
 const str = (value: unknown) =>
   value === null || value === undefined ? "" : String(value);
 const money = (value: unknown) => decimal(str(value ?? "0"), "valor importado");
@@ -84,27 +78,6 @@ export class ComprasClient {
     } while (page <= totalPages);
     return result;
   }
-  async contracts(uasg: string, from: string, to: string) {
-    const units = await this.pages("/modulo-uasg/1_consultarUasg", {
-      codigoUasg: uasg,
-      statusUasg: true,
-    });
-    const unit = units.find((u) => str(u.codigoUasg) === uasg);
-    if (!unit?.codigoOrgao)
-      throw new NotFoundException(
-        "UASG ativa não localizada no Compras.gov. Confira o código informado.",
-      );
-    return (
-      await this.pages("/modulo-contratos/1_consultarContratos", {
-        codigoOrgao: unit.codigoOrgao,
-        codigoUnidadeGestora: uasg,
-        dataVigenciaInicialMin: from,
-        dataVigenciaInicialMax: to,
-      })
-    )
-      .filter((r) => !r.contratoExcluido)
-      .map((r) => mapImportedContract(r, uasg));
-  }
   async record(uasg: string, number: string, from: string, to: string) {
     const atas = await this.pages("/modulo-arp/1_consultarARP", {
       codigoUnidadeGerenciadora: uasg,
@@ -142,25 +115,6 @@ export class ComprasClient {
     );
     return mapImportedRecord(ata, own, uasg);
   }
-}
-export function mapImportedContract(row: Data, uasg: string): Data {
-  return {
-    ...validateContract({
-      number: str(row.numeroContrato),
-      object: str(row.objeto),
-      supplierName: str(row.nomeRazaoSocialFornecedor),
-      supplierDocument: normalizeDocument(str(row.niFornecedor)),
-      uasg,
-      unitName: str(row.nomeUnidadeGestora),
-      startDate: day(row.dataVigenciaInicial),
-      endDate: day(row.dataVigenciaFinal),
-      initialValue: money(row.valorInicial ?? row.valorGlobal),
-      globalValue: money(row.valorGlobal),
-    }),
-    source: "COMPRAS_GOV",
-    externalId: str(row.numeroControlePncpContrato) || null,
-    lastSyncedAt: new Date(),
-  };
 }
 export function mapImportedRecord(
   ata: Data,

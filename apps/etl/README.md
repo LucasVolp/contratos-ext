@@ -237,8 +237,57 @@ pnpm sources:sync -source CONTRATOS_GOV_BR -contract 13847
 - Output is one JSON line: `runId`, `status`, `requests`, `captured`,
   `unchanged`, `notFound`, `failed`, `error`. Exit code is 1 for configuration
   errors and `FAILED` runs, 0 for `SUCCEEDED` and `PARTIAL`.
+- After a capture that did not fail, `sync` normalizes the synced contracts into
+  typed tables (`-normalize=false` skips it); the JSON line gains a
+  `normalization` object. `pnpm sources:normalize -source CONTRATOS_GOV_BR
+  (-unit <UG> | -contract <id> | -all)` rebuilds typed rows from stored
+  captures without any network request. Exit code is 1 when any contract fails
+  to normalize.
 - The wrapper uses `SOURCES_DATABASE_URL`, falling back to `FINANCE_DATABASE_URL`
-  and `DATABASE_URL`. Scheduling is external (cron/compose).
+  and `DATABASE_URL`.
+
+### Daily mode
+
+`replicator daily` refreshes every UG registered in the app (`"Institution".uasg`,
+invalid codes are skipped with a warning) once a day. It is the only scheduled
+mode; `sync` stays manual.
+
+```sh
+pnpm sources:daily -- -source CONTRATOS_GOV_BR -once      # one cycle now, JSON result, exit 1 unless COMPLETED
+pnpm sources:daily -- -source CONTRATOS_GOV_BR            # long-running: schedule
+docker compose --profile sync up -d --build replicator    # same, as a container
+```
+
+- **Schedule:** on start it runs a cycle unless a `COMPLETED` cycle finished in the
+  last 24 hours (cancelled and failed cycles do not count), then runs every day at
+  `-at` (default `03:00`) in `-timezone` (default `America/Sao_Paulo`; tzdata is
+  built in). A cycle that fails is logged and the next one still runs. SIGTERM or
+  SIGINT records a running cycle as `CANCELLED` and exits 0. Each log line is JSON.
+- **Policy per cycle:** UGs go in order of their last good active listing, the
+  oldest first (never captured before any), then by UASG, so cycles interrupted
+  again and again still reach every UG. For each UG, both listings are captured
+  and normalized; listing headers come from that UG's two latest listings.
+  Active contracts get all seven sub-resources every cycle. An inactive contract
+  is refreshed only when it was never normalized, its listing element differs from
+  the stored header, a sub-resource part is `MISSING`, `FAILED` or absent, or the
+  oldest part is older than 30 days. A failed UG does not stop the cycle; the run
+  records `unit_count` and `failed_unit_count`.
+- **One cycle at a time:** a PostgreSQL advisory lock per source
+  (`public_sources.daily:<source>`) keeps two daily processes from syncing together.
+  With `-once`, a held lock prints `another daily run is in progress` and exits 1.
+  Holding the lock proves no other cycle is alive, so before starting, daily runs
+  left `RUNNING` by a crash (and their `RUNNING` capture runs) are recorded as
+  `FAILED` with error `interrupted`; the API's "running" state stays truthful.
+- **Only `daily` takes the run lock:** a manual `sync` or `normalize` may run while
+  a daily cycle is in progress. That is safe: every source request still waits on
+  the shared PostgreSQL pacing gate, and each contract is normalized in its own
+  transaction under a per-contract advisory transaction lock, so concurrent
+  writers serialize per contract and never leave a half-written snapshot.
+- **Pacing:** the same shared gate and limits as `sync` (`-interval`, `-retries`).
+- **Compose:** service `replicator` (image built from `apps/etl/Dockerfile`, non-root,
+  `restart: unless-stopped`) waits for a healthy `api`, which applies the migrations.
+  It is in the `sync` profile, so `docker compose up` and the e2e runs never start it.
+  It connects with `?sslmode=disable` to the Compose database.
 
 ## Tests
 

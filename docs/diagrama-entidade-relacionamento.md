@@ -16,7 +16,7 @@ API does not expose authentication routes.
 
 | Entidade | Papel na aplicação |
 |---|---|
-| `Contract` | Contrato cadastrado ou importado. |
+| `ContractNote` | Observações internas de um contrato da réplica diária do Contratos.gov.br (`public_sources.contracts`); é o único dado de contrato gravado pela aplicação. |
 | `PublicPurchase` | Pregão/compra pública salvo no catálogo local. |
 | `PublicRecord` | Ata pública salva no catálogo local. |
 | `CatalogSupplement` | Consulta auxiliar de participantes, empenhos/saldos ou adesões. |
@@ -26,7 +26,7 @@ API does not expose authentication routes.
 
 ## DER físico
 
-As ligações abaixo são as três chaves estrangeiras existentes no banco. `PK` indica chave primária, `FK` chave estrangeira e `UK` unicidade individual. As restrições compostas estão na tabela após o diagrama. O comentário `opcional` indica coluna que aceita `NULL`; as demais são obrigatórias. `decimal_24_6` e `decimal_36_12` representam precisão e escala; `timestamp` representa `timestamp(3)`.
+As ligações abaixo são as três chaves estrangeiras existentes entre estas entidades (`ContractNote.updatedById` aponta para `User`, tabela legada fora do diagrama). `PK` indica chave primária, `FK` chave estrangeira e `UK` unicidade individual. As restrições compostas estão na tabela após o diagrama. O comentário `opcional` indica coluna que aceita `NULL`; as demais são obrigatórias. `decimal_24_6` e `decimal_36_12` representam precisão e escala; `timestamp` representa `timestamp(3)`.
 
 ```mermaid
 erDiagram
@@ -36,23 +36,12 @@ erDiagram
     PriceRecord ||--o{ DocumentExport : "registra geracoes"
     PublicRecord ||--o{ CatalogSupplement : "possui consultas auxiliares"
 
-    Contract {
-        uuid id PK
-        text number
-        text object
-        text supplierName
-        text supplierDocument
-        text uasg
-        text unitName
-        text startDate "opcional"
-        text endDate "opcional"
-        decimal_24_6 initialValue
-        decimal_24_6 globalValue
-        text source
-        text externalId "opcional"
-        timestamp lastSyncedAt "opcional"
-        timestamp createdAt
-        timestamp updatedAt
+    ContractNote {
+        text source PK
+        bigint externalId PK
+        text notes
+        uuid updatedById "opcional; FK para User, fora deste diagrama"
+        timestamptz updatedAt
     }
 
     PriceRecord {
@@ -189,7 +178,6 @@ Todas as entidades possuem `id` como chave primária UUID.
 
 | Entidade | Colunas únicas em conjunto |
 |---|---|
-| `Contract` | `(number, uasg)` |
 | `PriceRecord` | `(number, uasg, supplierDocument)` |
 | `PriceRecord` | `(sourcePublicRecordId, sourceSupplierDocument)` |
 | `RecordItem` | `(recordId, number)` |
@@ -213,16 +201,15 @@ erDiagram
     PriceRecord ||--o{ RecordItem : "possui"
     PriceRecord ||--o{ DocumentExport : "possui"
 
-    Contract {
-        uuid id PK
-        text number
-        text uasg
+    ContractNote {
+        text source PK
+        bigint externalId PK
     }
 ```
 
 - **Compra → ata pública:** `PublicRecord.purchaseExternalId` corresponde a `PublicPurchase.externalId`. Na ausência do identificador externo da compra na ata, a aplicação usa `purchasePncpId` e `pncpId`. Uma ata pode ser consultada sem que a compra esteja salva localmente. Ver [helpers.ts](../apps/api/src/catalog/helpers.ts) e [purchase-evidence.ts](../apps/api/src/catalog/purchase-evidence.ts).
 - **Ata pública → ata editável:** `PriceRecord.sourcePublicRecordId` identifica a origem pública. A combinação com `sourceSupplierDocument` permite uma ata editável por fornecedor da mesma ata pública; repetir a preparação recupera a existente. A origem é opcional e não possui integridade referencial no banco. Ver [drafts.ts](../apps/api/src/catalog/drafts.ts).
-- **Contrato:** não possui relacionamento persistido com as outras tabelas. Coincidências de UASG, fornecedor ou numeração não constituem vínculos relacionais.
+- **Contrato:** os contratos não têm tabela própria na aplicação (a antiga tabela `Contract` ficou arquivada como `LegacyContract`, só para consulta direta no banco e fora deste diagrama); são lidos de `public_sources.contracts` (ver [modelo das fontes públicas](public-sources-data-model.md)). `ContractNote` referencia o contrato apenas por `(source, externalId)`, sem chave estrangeira, para que as observações sobrevivam às atualizações diárias e a um contrato que deixe de aparecer na fonte. Coincidências de UASG, fornecedor ou numeração não constituem vínculos relacionais.
 
 ## Detalhes de armazenamento
 

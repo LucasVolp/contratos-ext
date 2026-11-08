@@ -19,11 +19,11 @@ carry legal and audit consequences.
 
 Every screen MUST serve three natures of the product:
 
-| Nature | What it means in the UI |
-| --- | --- |
-| **Affirmative** | The interface states facts plainly and with certainty: what a record is, what state it is in, what is missing, what to do next. Status labels are declarative (`Pronta para exportar`, `Preenchimento pendente`), never vague (`Talvez`, `Verificar`). It affirms **only what was verified**: unknown stays unknown. |
-| **Consultative** | Public data is consulted, not invented. Every consulted value shows its origin and when it was consulted. Consultation is an explicit user action; failures keep the last saved data and offer a retry. Read-first layouts: the record is legible before it is editable. |
-| **Dynamic document elaboration** | Documents are built progressively: prefilled from consulted data, saved as drafts at any point, validated live, with a visible list of pending items before export. The path *consult → prepare → complete → export* is always visible and never blocked by optional data. |
+| Nature                           | What it means in the UI                                                                                                                                                                                                                                                                                              |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Affirmative**                  | The interface states facts plainly and with certainty: what a record is, what state it is in, what is missing, what to do next. Status labels are declarative (`Pronta para exportar`, `Preenchimento pendente`), never vague (`Talvez`, `Verificar`). It affirms **only what was verified**: unknown stays unknown. |
+| **Consultative**                 | Public data is consulted, not invented. Every consulted value shows its origin and when it was consulted. Consultation is an explicit user action; failures keep the last saved data and offer a retry. Read-first layouts: the record is legible before it is editable.                                             |
+| **Dynamic document elaboration** | Documents are built progressively: prefilled from consulted data, saved as drafts at any point, validated live, with a visible list of pending items before export. The path _consult → prepare → complete → export_ is always visible and never blocked by optional data.                                           |
 
 ### 1.1 Public-sector obligations
 
@@ -70,18 +70,18 @@ Every screen MUST serve three natures of the product:
 
 ### 2.2 Reuse before you create
 
-Before writing a new component, search for an existing one. Shared primitives
-live in `components/ui.tsx` and MUST be used for their purpose:
+Before writing a new component, search for an existing one. Shared domain
+primitives live in `components/ui.tsx` and MUST be used for their purpose. They compose shadcn/ui primitives from `components/ui/`:
 
-| Need | Use |
-| --- | --- |
-| Record or form header | `PageHead` |
-| Listing top bar | `PageBar` |
+| Need                      | Use                                         |
+| ------------------------- | ------------------------------------------- |
+| Record or form header     | `PageHead`                                  |
+| Listing top bar           | `PageBar`                                   |
 | Labelled input with error | `Field` + `FormValidation` / `focusInvalid` |
-| Record status | `Status` |
-| Pagination | `Pager` |
-| Loading / failure / empty | `Loading`, `ErrorState`, `Empty` |
-| Institution scope | `ReachContext`, `ReachSelect` |
+| Record status             | `Status`                                    |
+| Pagination                | `Pager`                                     |
+| Loading / failure / empty | `Loading`, `ErrorState`, `Empty`            |
+| Institution scope         | `ReachContext`, `ReachSelect`               |
 
 Rules:
 
@@ -113,9 +113,14 @@ Rules:
 
 ## 3. Styling
 
-- Styles are **semantic classes** in `app/globals.css`, built on the design
-  tokens declared in `:root` (`--canvas`, `--paper`, `--ink`, `--muted`,
-  `--line`, `--green`, `--accent`, `--tint`, `--danger`).
+- The shared component foundation is **shadcn/ui with Base UI**, adopted on
+  2026-11-07 after visual review. Component sources live in `components/ui/`;
+  configuration lives in `components.json`. Reuse these before adding primitives.
+- Domain layouts use **semantic classes** in `app/globals.css`. Generated shadcn
+  primitives may use Tailwind utilities, isolated inside `components/ui/`.
+  All colors resolve through semantic tokens in `:root` and `:root.dark`.
+  Existing domain tokens (`--canvas`, `--paper`, `--ink`, `--muted`, `--line`,
+  `--green`, `--accent`, `--tint`, `--danger`) map to the shared theme.
 - MUST NOT hardcode colors outside `:root`. A new color needs a new token with a
   verified contrast ratio.
 - MUST reuse existing classes before creating new ones: `button`,
@@ -124,10 +129,14 @@ Rules:
 - New CSS goes in a block headed by a comment naming the component it serves.
   No styles for components that no longer exist.
 - MUST NOT use inline `style={{}}` except for genuinely dynamic values (e.g. a
-  computed width). MUST NOT mix Tailwind utility classes into components styled
-  by semantic classes.
-- Typography: Fraunces for titles, DM Sans for body, loaded locally from
-  `public/fonts`. No runtime font CDNs.
+  computed width). Domain components MUST NOT mix Tailwind utility classes with
+  semantic layout classes. Shadcn primitive internals are the explicit exception.
+- Typography: DM Sans for interface titles, controls and body, as approved in
+  the shadcn preview. Fraunces may be used for document-oriented typography.
+  Fonts are loaded locally from `public/fonts`. No runtime font CDNs.
+- Both light and dark modes MUST be supported. Offer `Claro`, `Escuro` and
+  `Sistema`, persist the preference, follow OS changes in system mode and apply
+  the theme before first paint. Test every new state in both modes.
 - Shape: 8px maximum radius on containers, no generic drop shadows, no
   gradients. Hierarchy comes from spacing, rules (lines) and type.
 - Numbers in tables and figures use `font-variant-numeric: tabular-nums`.
@@ -187,8 +196,8 @@ Every data-driven view MUST implement all four states:
 
 Plus:
 
-- Consultation results distinguish *failure*, *last saved data* and *confirmed
-  absence*.
+- Consultation results distinguish _failure_, _last saved data_ and _confirmed
+  absence_.
 - Draft saving never requires fields that are only mandatory for export.
 - Export actions use the exact labels `Baixar DOCX` and `Baixar PDF` and list
   pending items when the document is not ready.
@@ -199,7 +208,8 @@ Plus:
 
 - Server components by default; minimal client bundles.
 - MUST NOT add a runtime dependency without stating why in the PR/commit. Icons
-  come only from `lucide-react`; class composition only via `clsx`.
+  come only from `lucide-react`. Domain class composition uses `clsx`; shadcn
+  primitives may use their generated `cn` helper and `class-variance-authority`.
 - Pagination and filtering happen on the server (SQL). Filters and page live in
   the URL so views are shareable and restorable.
 - Client requests use `AbortController`; stale responses are never rendered
@@ -214,8 +224,8 @@ Plus:
 
 A UI change is complete only when all of these hold:
 
-- [ ] Uses shared primitives and tokens; no duplicated component or hardcoded
-      color introduced.
+- [ ] Uses shared shadcn/domain primitives and tokens; no duplicated component
+      or hardcoded color introduced. Light, dark and system modes verified.
 - [ ] Works at 360px and 1440px without page-level horizontal scroll; essential
       actions visible on both.
 - [ ] Loading, failure (with retry), empty and content states implemented.

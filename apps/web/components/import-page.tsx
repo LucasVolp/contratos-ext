@@ -1,8 +1,9 @@
 "use client";
+import { Button } from "@/components/ui/button";
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowDownToLine, ExternalLink } from "lucide-react";
-import Link from "next/link";
 import { api, ApiError, validationSummary } from "@/lib/api";
 import {
   ErrorState,
@@ -12,7 +13,8 @@ import {
   focusInvalid,
 } from "./ui";
 import { validateFields, FieldErrors } from "@contracts/validation";
-export function ImportPage({ records = false }: { records?: boolean }) {
+/** Brings one published ata from Compras.gov.br in as a draft to complete. */
+export function ImportPage() {
   const [values, setValues] = useState<Record<string, string>>({
       uasg: "",
       number: "",
@@ -20,23 +22,16 @@ export function ImportPage({ records = false }: { records?: boolean }) {
       to: "",
     }),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState(""),
-    [result, setResult] = useState<{
-      created: number;
-      updated: number;
-      total: number;
-    } | null>(null);
+    [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const router = useRouter();
-  const root = records ? "/atas" : "/contratos";
   function change(k: string, v: string) {
     setValues((old) => ({ ...old, [k]: v }));
   }
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const errors = validateFields(values, "import");
-    if (records && !values.number.trim())
-      errors.number = "Informe o número da ata.";
+    if (!values.number.trim()) errors.number = "Informe o número da ata.";
     setFieldErrors(errors);
     if (Object.keys(errors).length) {
       setError(validationSummary(errors));
@@ -45,28 +40,18 @@ export function ImportPage({ records = false }: { records?: boolean }) {
     }
     setBusy(true);
     setError("");
-    setResult(null);
     try {
       const body = {
         uasg: values.uasg,
         from: values.from,
         to: values.to,
-        ...(records ? { number: values.number } : {}),
+        number: values.number,
       };
-      if (records) {
-        const data = await api<{ id: string }>("/records/import", {
-          method: "POST",
-          body: JSON.stringify(body),
-        });
-        router.push(`/atas/${data.id}/editar`);
-      } else {
-        setResult(
-          await api("/contracts/import", {
-            method: "POST",
-            body: JSON.stringify(body),
-          }),
-        );
-      }
+      const data = await api<{ id: string }>("/records/import", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      router.push(`/atas/${data.id}/editar`);
     } catch (e) {
       if (e instanceof ApiError) {
         setFieldErrors(e.fieldErrors);
@@ -84,9 +69,9 @@ export function ImportPage({ records = false }: { records?: boolean }) {
   return (
     <>
       <PageHead
-        title={records ? "Importar ata" : "Importar contratos"}
+        title="Importar ata"
         description="Traga os registros públicos do Compras.gov.br para o seu arquivo."
-        back={root}
+        back="/atas"
       />
       <div className="import-layout">
         <FormValidation.Provider
@@ -94,7 +79,7 @@ export function ImportPage({ records = false }: { records?: boolean }) {
             errors: fieldErrors,
             onBlur: (name) => {
               const errors = validateFields(values, "import");
-              if (records && !values.number.trim())
+              if (!values.number.trim())
                 errors.number = "Informe o número da ata.";
               setFieldErrors((old) => {
                 const next = { ...old };
@@ -120,15 +105,13 @@ export function ImportPage({ records = false }: { records?: boolean }) {
                 onChange={change}
                 required
               />
-              {records && (
-                <Field
-                  name="number"
-                  label="Número da ata"
-                  value={values.number}
-                  onChange={change}
-                  required
-                />
-              )}
+              <Field
+                name="number"
+                label="Número da ata"
+                value={values.number}
+                onChange={change}
+                required
+              />
               <Field
                 name="from"
                 label="Data inicial da consulta"
@@ -147,26 +130,12 @@ export function ImportPage({ records = false }: { records?: boolean }) {
               />
             </div>
             <div aria-live="polite">
-              {error && <ErrorState message={error} />}{" "}
-              {result && (
-                <div className="success-state">
-                  <h3>Importação concluída</h3>
-                  <p>
-                    {result.created} criados · {result.updated} atualizados ·{" "}
-                    {result.total} consultados
-                  </p>
-                  <Link href="/contratos">Ver contratos →</Link>
-                </div>
-              )}
+              {error && <ErrorState message={error} />}
             </div>
-            <button type="submit" disabled={busy} className="button">
+            <Button type="submit" disabled={busy} className="button">
               <ArrowDownToLine size={16} />
-              {busy
-                ? "Consultando registros…"
-                : records
-                  ? "Importar ata"
-                  : "Importar contratos"}
-            </button>
+              {busy ? "Consultando registros…" : "Importar ata"}
+            </Button>
           </form>
         </FormValidation.Provider>
         <aside className="import-note">
@@ -181,9 +150,8 @@ export function ImportPage({ records = false }: { records?: boolean }) {
             pública e do período informado.
           </p>
           <p>
-            {records
-              ? "Após a importação, revise e complete os dados antes de gerar os documentos."
-              : "Registros já existentes na unidade são atualizados sem duplicar os contratos."}
+            Após a importação, revise e complete os dados antes de gerar os
+            documentos.
           </p>
         </aside>
       </div>

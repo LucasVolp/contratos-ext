@@ -33,7 +33,6 @@ test("financial HTTP validation rejects invalid filters and bigint identities be
       "/api/finance/commitments/1/history?itemSequential=0",
       "/api/finance/commitments/1/payments?limit=-1",
       "/api/finance/commitments/1/items?page=0",
-      "/api/contracts/9007199254740993",
       "/api/finance/execution?managementCode=26421",
       "/api/finance/execution?fiscalYear=2026",
       "/api/finance/execution?managementCode=26421&fiscalYear=2026&fromMonth=0",

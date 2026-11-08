@@ -1,4 +1,15 @@
 "use client";
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from "@/components/ui/table";
+
+import { Button } from "@/components/ui/button";
+
 import { useEffect, useRef, useState } from "react";
 import { api, date } from "@/lib/api";
 import {
@@ -103,9 +114,14 @@ export function ItemSupplementPanel({
             de um fornecedor.
           </p>
         </div>
-        <button className="button secondary" onClick={refresh} disabled={busy || disabled}>
+        <Button
+          type="submit"
+          className="button secondary"
+          onClick={refresh}
+          disabled={busy || disabled}
+        >
           {busy ? "Consultando…" : "Consultar participantes e saldos"}
-        </button>
+        </Button>
       </div>
       <div aria-live="polite">
         {error && <ErrorState message={error} retry={refresh} />}
@@ -117,39 +133,39 @@ export function ItemSupplementPanel({
       >
         {(rows) => (
           <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Unidade</th>
-                  <th>Tipo / fornecedor</th>
-                  <th>Quantidade</th>
-                  <th>Saldo de adesão</th>
-                  <th>Saldo de empenho</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Unidade</TableHead>
+                  <TableHead>Tipo / fornecedor</TableHead>
+                  <TableHead>Quantidade</TableHead>
+                  <TableHead>Saldo de adesão</TableHead>
+                  <TableHead>Saldo de empenho</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {rows.map((row, i) => (
-                  <tr key={i}>
-                    <td>
+                  <TableRow key={i}>
+                    <TableCell>
                       {known(row.name)}
                       <small className="date-end">
                         {known(row.code)}
                         {row.excluded ? " · Excluída" : ""}
                       </small>
-                    </td>
-                    <td>
+                    </TableCell>
+                    <TableCell>
                       {known(row.type)}
                       <small className="date-end">
                         {document(row.supplierDocument)}
                       </small>
-                    </td>
-                    <td>{quantity(row.quantity)}</td>
-                    <td>{quantity(row.adhesionBalance)}</td>
-                    <td>{quantity(row.commitmentBalance)}</td>
-                  </tr>
+                    </TableCell>
+                    <TableCell>{quantity(row.quantity)}</TableCell>
+                    <TableCell>{quantity(row.adhesionBalance)}</TableCell>
+                    <TableCell>{quantity(row.commitmentBalance)}</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </Part>
@@ -160,52 +176,52 @@ export function ItemSupplementPanel({
       >
         {(rows) => (
           <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Unidade</th>
-                  <th>Tipo</th>
-                  <th>Quantidade</th>
-                  <th>Empenhado</th>
-                  <th>Saldo</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Unidade</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Quantidade</TableHead>
+                  <TableHead>Empenhado</TableHead>
+                  <TableHead>Saldo</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {rows.map((row, i) => (
-                  <tr key={i}>
-                    <td>{known(row.unit)}</td>
-                    <td>{known(row.type)}</td>
-                    <td>{quantity(row.quantity)}</td>
-                    <td>{quantity(row.committed)}</td>
-                    <td>{quantity(row.balance)}</td>
-                  </tr>
+                  <TableRow key={i}>
+                    <TableCell>{known(row.unit)}</TableCell>
+                    <TableCell>{known(row.type)}</TableCell>
+                    <TableCell>{quantity(row.quantity)}</TableCell>
+                    <TableCell>{quantity(row.committed)}</TableCell>
+                    <TableCell>{quantity(row.balance)}</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </Part>
       <Part<AdhesionRow> title="Adesões" part={data?.adhesions} retry={refresh}>
         {(rows) => (
           <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Unidade</th>
-                  <th>Aprovação</th>
-                  <th>Quantidade</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Unidade</TableHead>
+                  <TableHead>Aprovação</TableHead>
+                  <TableHead>Quantidade</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {rows.map((row, i) => (
-                  <tr key={i}>
-                    <td>{known(row.unit)}</td>
-                    <td>{date(row.approvedAt)}</td>
-                    <td>{quantity(row.quantity)}</td>
-                  </tr>
+                  <TableRow key={i}>
+                    <TableCell>{known(row.unit)}</TableCell>
+                    <TableCell>{date(row.approvedAt)}</TableCell>
+                    <TableCell>{quantity(row.quantity)}</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </Part>

@@ -1,4 +1,6 @@
 "use client";
+import { Button } from "@/components/ui/button";
+
 import { useState } from "react";
 import { Table2, X } from "lucide-react";
 import { PageHead, Empty, ErrorState, Loading } from "@/components/ui";
@@ -195,7 +197,7 @@ export function BudgetPanel() {
                       selectedGroup={selectedGroup}
                     />
                     <div className="panel-detail-action">
-                      <button
+                      <Button
                         className="button secondary"
                         type="button"
                         aria-expanded={details}
@@ -204,7 +206,7 @@ export function BudgetPanel() {
                       >
                         <Table2 size={15} aria-hidden="true" />
                         {details ? "Ocultar detalhamento" : "Ver detalhamento"}
-                      </button>
+                      </Button>
                       <span>Valores de todo o orçamento filtrado.</span>
                     </div>
                     {details && (

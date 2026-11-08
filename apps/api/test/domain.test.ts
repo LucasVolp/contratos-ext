@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import {
   contractStatus,
   overlaps,
-  validateContract,
   validateRecord,
   recordTotal,
   readiness,
@@ -49,39 +48,6 @@ test("period intersection includes equal dates and excludes unknown dates", () =
     overlaps({ startDate: null, endDate: null }, "2026-02-01"),
     false,
   );
-});
-const contract = {
-  number: "1",
-  object: "Compra",
-  supplierName: "Fornecedor",
-  supplierDocument: "52998224725",
-  uasg: "123456",
-  initialValue: "0.10",
-  globalValue: "0.20",
-};
-test("contract validates real calendar days, ordering and decimal inputs", () => {
-  assert.throws(
-    () => validateContract({ ...contract, startDate: "2026-02-30" }),
-    /data|Data/,
-  );
-  assert.throws(
-    () =>
-      validateContract({
-        ...contract,
-        startDate: "2026-02-02",
-        endDate: "2026-01-01",
-      }),
-    /vigência/,
-  );
-  assert.throws(
-    () => validateContract({ ...contract, globalValue: "-1" }),
-    /decimal/,
-  );
-  assert.throws(
-    () => validateContract({ ...contract, globalValue: 0.1 }),
-    /decimal/,
-  );
-  assert.equal(validateContract(contract).globalValue, "0.20");
 });
 const item = {
   number: 1,
@@ -138,31 +104,7 @@ test("readiness is shared and selected item must exist", () => {
   assert.throws(() => readiness(draft, "missing"), /Item/);
 });
 
-test("shared server validation returns every exact field error and canonical identifiers", () => {
-  assert.throws(
-    () =>
-      validateContract({
-        ...contract,
-        uasg: "123",
-        supplierDocument: "11111111111",
-        globalValue: "-1",
-      }),
-    (error: any) => {
-      assert.equal(error.statusCode, 400);
-      const { fieldErrors } = error.body;
-      assert.ok(fieldErrors.uasg);
-      assert.ok(fieldErrors.supplierDocument);
-      assert.ok(fieldErrors.globalValue);
-      return true;
-    },
-  );
-  const normalized = validateContract({
-    ...contract,
-    supplierDocument: "12.abc.345/01de-35",
-    globalValue: "R$ 1.234,567890",
-  });
-  assert.equal(normalized.supplierDocument, "12ABC34501DE35");
-  assert.equal(normalized.globalValue, "1234.567890");
+test("shared server validation returns canonical identifiers", () => {
   const record = validateRecord({
     number: "DEMO",
     object: "Objeto",

@@ -1,10 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  ComprasClient,
-  mapImportedContract,
-  mapImportedRecord,
-} from "../src/compras";
+import { ComprasClient, mapImportedRecord } from "../src/compras";
 
 test("public pagination collects every page with official parameter names", async () => {
   const urls: URL[] = [];
@@ -29,25 +25,6 @@ test("pagination fails the entire fetch when later page fails", async () => {
       : new Response("Indisponível", { status: 500 }),
   );
   await assert.rejects(() => client.pages("/test", {}), /Compras.gov/);
-});
-test("contract mapper preserves external identity and decimal strings", () => {
-  const result = mapImportedContract(
-    {
-      numeroContrato: "1/2026",
-      objeto: "Papel",
-      nomeRazaoSocialFornecedor: "Empresa",
-      niFornecedor: "11222333000181",
-      valorGlobal: "0.1",
-      codigoUnidadeGestora: 123,
-      numeroControlePncpContrato: "pncp",
-      dataVigenciaInicial: "2026-01-01T00:00:00",
-      dataVigenciaFinal: "2026-12-31",
-    },
-    "000123",
-  );
-  assert.equal(result.globalValue, "0.1");
-  assert.equal(result.externalId, "pncp");
-  assert.equal(result.startDate, "2026-01-01");
 });
 test("multiple suppliers cannot be silently flattened into a single document", () => {
   assert.throws(
@@ -162,23 +139,5 @@ test("unsupported named modalities cannot silently become a pregão document", (
       ),
     (error: any) =>
       error.statusCode === 422 && /modalidade/i.test(error.message),
-  );
-});
-test("imported contracts retain and validate alphanumeric supplier documents", () => {
-  const source = {
-    numeroContrato: "1",
-    objeto: "Objeto",
-    nomeRazaoSocialFornecedor: "Empresa",
-    niFornecedor: "12.abc.345/01de-35",
-    valorGlobal: "1.123456",
-  };
-  assert.equal(
-    mapImportedContract(source, "001234").supplierDocument,
-    "12ABC34501DE35",
-  );
-  assert.throws(
-    () =>
-      mapImportedContract({ ...source, niFornecedor: "11111111111" }, "001234"),
-    /CPF|CNPJ/,
   );
 });
