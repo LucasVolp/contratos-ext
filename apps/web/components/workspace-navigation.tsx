@@ -6,6 +6,7 @@ import {
   FilePenLine,
   Gavel,
   Landmark,
+  LayoutDashboard,
   ScrollText,
   UsersRound,
 } from "lucide-react";
@@ -69,6 +70,12 @@ export function WorkspaceNavigation({
   const icons = [Gavel, ScrollText, FileText];
   return (
     <>
+      <nav aria-label="Painel institucional">
+        <Link href="/" title="Painel de gestão" className={path === "/" ? "active" : ""} aria-current={path === "/" ? "page" : undefined}>
+          <LayoutDashboard size={18} aria-hidden="true" />
+          <span className="workspace-link-label">Painel de gestão</span>
+        </Link>
+      </nav>
       <div className="sidebar-label">COMPRAR</div>
       <nav aria-label="Fases da compra">
         <ol className="phases">

@@ -44,11 +44,16 @@ func positiveInteger(value string) (int, error) {
 
 var digits = regexp.MustCompile(`^[0-9]+$`)
 
+// Source markers that carry no classification: MU for multiple
+// classifications, -1 for unknown, S and -4 for items classified as secret.
+func classificationMarker(value string) bool {
+	return value == "MU" || value == "-1" || value == "S" || value == "-4"
+}
+
 func natureFromRow(row Row) (string, error) {
 	code := row["Código Natureza Despesa Completa"]
-	// The real files use MU for multiple classifications and -1 for unknown.
 	// Keep the source marker in source_data, not in the expense-nature dimension.
-	if code == "MU" || code == "-1" {
+	if classificationMarker(code) {
 		return "", nil
 	}
 	if code != "" {
@@ -60,7 +65,7 @@ func natureFromRow(row Row) (string, error) {
 	var parts []string
 	for i, column := range []string{"Código Categoria de Despesa", "Código Grupo de Despesa", "Código Modalidade de Aplicação", "Código Elemento de Despesa"} {
 		part := row[column]
-		if part == "" || part == "MU" || part == "-1" {
+		if part == "" || classificationMarker(part) {
 			return "", nil
 		}
 		width := 1

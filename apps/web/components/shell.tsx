@@ -60,7 +60,7 @@ function Workspace({
   const { viewer } = useSession();
   const [collapsed, toggle] = useSidebarPreference("main");
   const section =
-    sections.find(([prefix]) => path.startsWith(prefix))?.[1] ||
+    (path === "/" ? "Painel de gestão" : sections.find(([prefix]) => path.startsWith(prefix))?.[1]) ||
     "Área de trabalho";
   const institution = viewer.allInstitutions
     ? "Todas as instituições"
@@ -68,7 +68,7 @@ function Workspace({
       ? viewer.institutions[0].name
       : `${viewer.institutions.length} instituições vinculadas`;
   return (
-    <>
+    <div className={path === "/" ? "dashboard-workspace" : undefined}>
       <a className="skip" href="#conteudo">
         Ir para o conteúdo
       </a>
@@ -77,7 +77,7 @@ function Workspace({
         aria-label="Barra principal"
       >
         <div className="workspace-sidebar-header">
-          <Link href="/pregoes" className="workspace-brand">
+          <Link href="/" className="workspace-brand">
             <span className="brand-symbol">
               <Landmark size={21} aria-hidden="true" />
             </span>
@@ -121,7 +121,7 @@ function Workspace({
           <WorkspaceAccount />
         </div>
       </aside>
-      <div className="workspace-content">
+      <div className={`workspace-content${path === "/" ? " workspace-dashboard" : ""}`}>
         <header className="workspace-topbar">
           <div className="workspace-breadcrumb">
             <span>Área de trabalho</span>
@@ -141,6 +141,6 @@ function Workspace({
           {children}
         </main>
       </div>
-    </>
+    </div>
   );
 }

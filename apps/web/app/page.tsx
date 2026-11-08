@@ -1,4 +1,5 @@
-import { redirect } from "next/navigation";
+import { Dashboard } from "@/components/dashboard/dashboard";
+
 export default function Home() {
-  redirect("/pregoes");
+  return <Dashboard />;
 }

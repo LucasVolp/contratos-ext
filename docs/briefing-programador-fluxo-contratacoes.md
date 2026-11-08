@@ -3,6 +3,11 @@
 **Origem:** fluxograma geral de compras e contratações do IFMS, conforme IN PROAD/IFMS nº 02/2023, Portaria Reitoria 1370/2023 e Lei 14.133/2021.
 **Objetivo:** substituir o controle manual (planilhas, e-mails e conferência visual do fluxograma) por um sistema que conduza o processo etapa a etapa, gere os documentos, cobre prazos e permita rastrear qualquer informação.
 
+> **Situação: em espera desde 2026-11-08 — ideia mantida para continuidade futura.**
+> O projeto não tem acesso ao SUAP, que este briefing exige como processo eletrônico oficial (§8).
+> Sem essa integração, o sistema não será integrado ao Contracts Ext. Veja a [seção 10](#10-situação-no-contracts-ext)
+> para o que já existe, o que bloqueia e a condição para retomar.
+
 ---
 
 ## 1. Problema atual
@@ -92,3 +97,45 @@ Para cada fase, o critério de aceite é conseguir responder, em uma tela e sem 
 - Este item foi previsto no PCA, quanto foi estimado, quanto foi homologado e quanto foi entregue?
 - Quais campi participam desta compra e quais ainda não responderam?
 - Quem assinou cada documento e sob qual portaria?
+
+---
+
+## 10. Situação no Contracts Ext
+
+*Registrado em 2026-11-08.*
+
+### Por que está em espera
+
+O §8 define o SUAP como processo eletrônico oficial: os autos, a numeração e a tramitação permanecem nele, e o novo sistema deve integrar sem duplicar. O projeto não tem acesso ao SUAP. Construir o núcleo do fluxo (Fase 1) sem essa integração obrigaria a registrar cada movimentação duas vezes, e o painel de acompanhamento deixaria de ser confiável. Por isso o sistema descrito aqui não será integrado ao Contracts Ext enquanto o bloqueio existir.
+
+### Condição para retomar
+
+Obter acesso de leitura aos processos eletrônicos do SUAP (API ou outra forma autorizada pela TI do IFMS, com credencial de serviço), cobrindo pelo menos número do processo, etapa ou setor atual, histórico de tramitação e documentos. Antes disso, confirmar com a TI se a API do SUAP expõe processos eletrônicos e se a instituição libera o acesso a sistemas terceiros.
+
+### O que o Contracts Ext já oferece e poderá ser reaproveitado
+
+O Contracts Ext hoje consulta o fim do processo (ata, contrato, empenho e pagamento) a partir de fontes públicas.
+
+| Item do briefing | Base existente no projeto |
+|---|---|
+| Integração Contratos.gov.br (§4, Fase 4) | Réplica diária automática de contratos, com aditivos, garantias, responsáveis, itens, faturas e arquivos |
+| Integração Compras.gov.br: resultado, IRP e ARP (§4, Fase 4) | Catálogo de pregões e atas, com participantes, empenhos e saldos e adesões |
+| Documentos por modelo: ARP (§4, Fase 2) | Gerador de ata em DOCX/PDF com rascunho, pendências e histórico de geração |
+| Entidades Contrato, Empenho e Ata de registro de preços (§6) | Contratos replicados, empenhos, liquidações, pagamentos, LOA e vínculo contrato ↔ empenho |
+| Alertas de ARP (vigência e saldo) e janela de prorrogação (§5) | Dados disponíveis; as regras estão previstas na etapa de fatos derivados do roadmap atual |
+| Escopo por unidade e UASG gerenciadora 158132 (§8) | Cadastro de instituições e UASGs com acesso restrito por UASG |
+
+### O que ainda não existe
+
+Entidade Processo, etapas e tramitação, checklists, pesquisa de preços, itens do PCA, portarias e designações com vigência, demanda compartilhada, perfis por processo com segregação de funções (hoje há quatro papéis por instituição) e trilha de auditoria por processo.
+
+### Ponto de partida sugerido ao retomar
+
+1. Criar o Processo como âncora dos registros já existentes: pregão ou ata do catálogo, contrato replicado e empenhos. Assim o encerramento (§3, bem ou serviço) nasce preenchido com dados públicos verificados.
+2. Generalizar o gerador de ARP para modelos versionados, registrando a versão da AGU usada em cada processo (§8).
+3. Implementar o núcleo do fluxo (Fase 1) já lendo a tramitação do SUAP, sem registro duplicado.
+
+### Materiais relacionados
+
+- Painel HTML com as seis visualizações (macrofluxo, raias, estados, decisões, modelo de dados e requisitos), citado no §6. Ainda não está versionado no repositório.
+- Rascunhos anteriores da mesma ideia: um schema Prisma com atividades, etapas concluídas e notificações de etapa, e listas de funcionalidades (solicitações de empenho, repositório de documentos por categoria, modelos de documentos, instrução de processos licitatórios e elaboração de ETP). Estão hoje como arquivos soltos e não versionados em `apps/api/src/`.

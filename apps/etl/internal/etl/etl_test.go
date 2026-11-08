@@ -235,6 +235,25 @@ func TestImpactAggregationAndMissingAmounts(t *testing.T) {
 	}
 }
 
+func TestClassifiedItemsHaveNoNature(t *testing.T) {
+	// The Portal publishes classified items as "S" (Sigiloso) and "-4".
+	row := documentRow(Items, "015814264212026NE000001")
+	row["Código Categoria de Despesa"] = "S"
+	row["Código Grupo de Despesa"] = "S"
+	row["Código Modalidade de Aplicação"] = "-4"
+	row["Código Elemento de Despesa"] = "-4"
+	row["Código SubElemento de Despesa"] = "-4"
+	nature, err := natureFromRow(row)
+	if err != nil || nature != "" {
+		t.Fatalf("classified marker became a nature: %q %v", nature, err)
+	}
+	complete := documentRow(Items, "015814264212026NE000001")
+	complete["Código Natureza Despesa Completa"] = "-4"
+	if nature, err := natureFromRow(complete); err != nil || nature != "" {
+		t.Fatalf("classified complete nature became a nature: %q %v", nature, err)
+	}
+}
+
 func TestSourceClassificationMarkers(t *testing.T) {
 	for _, marker := range []string{"MU", "-1"} {
 		row := documentRow(Payments, "015814264212026DF800239")

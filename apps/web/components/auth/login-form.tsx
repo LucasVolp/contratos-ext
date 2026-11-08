@@ -17,7 +17,7 @@ function safeNext(value: string | null) {
   // Only same-site paths: an external URL here would turn login into an open redirect.
   return value && value.startsWith("/") && !value.startsWith("//")
     ? value
-    : "/pregoes";
+    : "/";
 }
 export function LoginForm() {
   const params = useSearchParams();
