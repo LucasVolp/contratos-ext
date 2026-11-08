@@ -23,8 +23,8 @@ it finds out by reading the amendment history term by term:
 
 Step 4 computes these facts deterministically from the replica, shows them as a
 summary at the top of the contract screen, each one explainable (which records
-it came from and how), and adds list filters so the sector finds those
-contracts without opening each one. The same facts feed the copilot later
+it came from and how), and adds list filters for contracts ending soon and
+guarantees expiring before the contract. The same facts feed the copilot later
 (Phase 2), so each fact keeps its inputs and method.
 
 ## 2. Goals, non-goals, anti-goals
@@ -41,9 +41,13 @@ Goals:
 - Guarantee expiring before the current end date.
 - Remaining contract value (already computed in step 3; reused, not duplicated).
 - Contract list filters: ending within 90 days, guarantee expires before the
-  contract, close to the amendment limit.
+  contract.
 
 Non-goals (this step):
+- **"Close to the amendment limit" list filter and list indicator.** Deferred
+  by the user on 2026-11-08 ("não é importante"). It is the only feature that
+  needs the amendment rule evaluated for every contract at list time; without
+  it no stored facts table is needed (§5). Revisit when it is wanted.
 - Notifications, e-mails or a dashboard of alerts (Phase 4).
 - Reading amendment PDFs to classify terms (Phase 4).
 - Per-unit configuration of the 90-day window or of the "close to limit"
@@ -106,7 +110,7 @@ captured, 812 history terms). This drives the method in §4.
 ## 4. Facts and methods
 
 All facts are computed from `public_sources` only (contract header, history,
-guarantees, commitments). Each fact carries: value, status (`COMPUTED`,
+guarantees, part statuses). Each fact carries: value, status (`COMPUTED`,
 `ESTIMATED`, `NOT_COMPUTABLE`, `NOT_APPLICABLE`), the ids of the records used,
 and a short method text in Portuguese for the screen.
 
@@ -114,8 +118,7 @@ and a short method text in Portuguese for the screen.
 situation, guarantee and remaining value apply to every instrument. The
 amendment-limit fact (§4.4) and the time-in-force fact (§4.3) apply only when
 the header type is `Contrato`; other types (`Empenho`, `Outros`, `Convênio`, …)
-show "não se aplica a este tipo de instrumento" and never match the
-"close to the limit" filter.
+show "não se aplica a este tipo de instrumento".
 
 **Original row:** the earliest history row by signature date whose type is not
 `Termo Aditivo`, `Termo de Apostilamento` or `Termo de Rescisão` (its type is
@@ -215,23 +218,26 @@ the instrument's own type).
 
 ## 5. Where facts are computed
 
-*(Designer's call.)* The replicator computes the stored facts during
-normalization (it already rebuilds each contract's snapshot from the latest
-captures, and nothing is fetched there), into a new table
-`public_sources.contract_facts`, one row per contract:
+**No new table (decided with the user, 2026-11-08).** The API computes the
+facts when a contract is opened, from the replica tables it already reads
+(header, `contract_amendments`, `contract_guarantees`, `contract_parts`), in a
+pure TypeScript function, and returns them with the contract detail together
+with their explanation (counted and excluded terms with reasons and flags).
+Nothing is stored, so there is no backfill and no schema change.
 
-- filterable columns: `current_end_date`, `end_date_source`,
-  `additions_pct`, `suppressions_pct`, `addition_margin`, `limit_pct`,
-  `limit_used_ratio`, `guarantee_before_end` (boolean, null when unknown),
-  `law`, `status` per fact;
-- `explanation jsonb`: counted and excluded term ids with reasons and flags,
-  method texts' inputs, divergences;
-- `computed_at`, `method_version`.
+The list needs no amendment computation, because the "close to the limit"
+filter is deferred:
 
-Time-dependent parts (days left, situation) are computed by the API at read
-time from `current_end_date`. The migration is an API migration, as for the
-other `public_sources` tables; the replicator never creates schema objects.
-A one-off `replicator normalize` fills facts for already-replicated contracts.
+- "Ending within 90 days" is the existing `EXPIRING` situation, widened to 90
+  days, on the header end date (as today). The term fallback of §4.1 is shown
+  on the detail only *(designer's call: the header lacks an end date in about
+  1 of 227 contracts)*.
+- "Guarantee expires before the contract" is a plain SQL condition: the latest
+  guarantee due date is before the header end date. It is the same rule as
+  §4.5 and shows as a row indicator.
+
+If the "close to the limit" filter comes back, the stored table is the
+recommended route (one implementation of the rule, read by list and detail).
 
 ## 6. Screens
 
@@ -254,27 +260,24 @@ right below the header, before the existing sections:
 
 - "Vence em até 90 dias" (same as situation `EXPIRING`, now 90 days).
 - "Garantia vence antes do contrato".
-- "Perto do limite de aditivos": additions ≥ 80% of the limit
-  *(designer's call; the user accepted the playback)*, including those over it.
 
-List rows gain a compact indicator for "perto do limite" and "garantia"; the
-existing situation badge already covers expiry.
+List rows gain a compact "garantia vence antes" indicator; the existing
+situation badge already covers expiry. On the detail, additions at 80% of the
+limit or more are highlighted as "perto do limite" *(designer's call)*.
 
 ## 7. Constraints
 
 - English for schema, code, tests, docs; Portuguese UI copy (AGENTS.md).
 - API never calls external sources; reads the replica only.
-- Facts computed per contract during normalization; a failed part keeps the
+- Facts computed by the API from the replica; a failed part keeps the
   previous capture, and facts say which parts were stale.
 - Money with `numeric`, never floats; percentages rounded for display only.
 - 360px usable, WCAG 2.2 AA, no fabricated data (ui-rules).
 
 ## 8. Left to the builder
 
-- Exact column types and the `explanation` JSON shape.
+- The exact shape of the explanation in the API response.
 - Visual form of the meters and the disclosure, within ui-rules.
-- Whether the facts table is rebuilt for all contracts on every normalize or
-  only for the normalized ones.
 - Test fixtures: build them from the real cases cited in §3 (migrated
   `ACRÉSCIMO / SUPRESSÃO + INFORMATIVO + VIGÊNCIA` extension, `REAJUSTE +
   VIGÊNCIA`, apostille with "acréscimo" text, rescission, header behind a later
@@ -292,5 +295,6 @@ existing situation badge already covers expiry.
 - Term-cap fact not applicable for categories `Compras` and `Obras`.
 - Amendment-limit and term-cap facts only for instruments of type `Contrato`.
 - Guarantee coverage = latest due date among the guarantee rows.
-- "Close to the limit" = 80% of the limit or more.
-- Facts persisted by the replicator in `public_sources.contract_facts`.
+- "Close to the limit" (detail highlight only) = 80% of the limit or more.
+- List situation and filters keep using the header end date; the term
+  fallback is detail-only.
