@@ -268,3 +268,60 @@ func TestValidUnitAndContractIDs(t *testing.T) {
 		}
 	}
 }
+
+// TestSyncUnitFetchesContractsConcurrently checks that contracts are fetched by
+// up to Concurrency workers at once, never more, and every part still lands.
+func TestSyncUnitFetchesContractsConcurrently(t *testing.T) {
+	f := newFixture(`[{"id":1},{"id":2},{"id":3},{"id":4},{"id":5},{"id":6},{"id":7},{"id":8}]`, `[]`)
+	var mu sync.Mutex
+	inFlight, peak := 0, 0
+	f.onHit = func(path string) {
+		if !strings.HasSuffix(path, "/historico") {
+			return
+		}
+		mu.Lock()
+		inFlight++
+		peak = max(peak, inFlight)
+		mu.Unlock()
+		time.Sleep(100 * time.Millisecond)
+		mu.Lock()
+		inFlight--
+		mu.Unlock()
+	}
+	h := newHarness(t, f)
+	h.connector.Concurrency = 3
+	summary, err := h.syncUnit(context.Background())
+	if err != nil || summary.Status != "SUCCEEDED" || summary.Requests != 2+8*7 {
+		t.Fatalf("summary = %+v, err = %v", summary, err)
+	}
+	if peak != 3 {
+		t.Fatalf("peak concurrent contracts = %d, want 3", peak)
+	}
+	if got := testdb.Scalar(t, h.store.DB, `SELECT count(*) FROM public_sources.capture_attempts`); got != "58" {
+		t.Fatalf("attempts = %s", got)
+	}
+}
+
+// TestSyncUnitConcurrentStopsOnCancellation checks that cancelling a
+// concurrent sync stops every worker.
+func TestSyncUnitConcurrentStopsOnCancellation(t *testing.T) {
+	f := newFixture(`[{"id":1},{"id":2},{"id":3},{"id":4},{"id":5},{"id":6}]`, `[]`)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	f.onHit = func(path string) {
+		if path == "/api/contrato/1/historico" {
+			cancel()
+		}
+	}
+	h := newHarness(t, f)
+	h.connector.Concurrency = 2
+	_, err := h.syncUnit(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v", err)
+	}
+	for _, id := range []string{"4", "5", "6"} {
+		if got := f.count("/api/contrato/" + id + "/historico"); got != 0 {
+			t.Fatalf("contract %s requested after cancellation", id)
+		}
+	}
+}

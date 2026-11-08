@@ -95,7 +95,8 @@ cancelled (`error = 'cancelled'`).
 
 ## Pacing
 
-Contratos.gov.br: minimum 1 s between requests (per run, `-interval`), penalty
+Contratos.gov.br: minimum 200 ms between requests, i.e. at most five per second
+(per run, `-interval`), with up to 5 contracts fetched at once (`-concurrency`), penalty
 interval doubled on each new block up to 30 s, 5m01s cooldown after HTTP 429 or a
 WAF header, longer `Retry-After` honored up to 1 hour. The penalty is dropped one
 hour after the cooldown ends without a new block. The gate only coordinates processes using this database;

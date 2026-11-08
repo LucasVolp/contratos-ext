@@ -20,6 +20,7 @@ func TestParseSyncValidation(t *testing.T) {
 		{"-source", "CONTRATOS_GOV_BR", "-unit", "158148"},
 		{"-source", "CONTRATOS_GOV_BR", "-contract", "13847", "-trigger", "SCHEDULED"},
 		{"-source", "CONTRATOS_GOV_BR", "-unit", "015814", "-inactive=false", "-retries", "0", "-interval", "2500ms"},
+		{"-source", "CONTRATOS_GOV_BR", "-unit", "158148", "-interval", "500ms", "-concurrency", "1"},
 	}
 	for _, args := range accepted {
 		if _, err := parseSync(args); err != nil {
@@ -32,8 +33,10 @@ func TestParseSyncValidation(t *testing.T) {
 		{"-source", "CONTRATOS_GOV_BR", "-unit", "15814"},
 		{"-source", "PNCP", "-unit", "158148"},
 		{"-source", "CONTRATOS_GOV_BR", "-unit", "158148", "-retries", "4"},
-		{"-source", "CONTRATOS_GOV_BR", "-unit", "158148", "-interval", "500ms"},
+		{"-source", "CONTRATOS_GOV_BR", "-unit", "158148", "-interval", "199ms"},
 		{"-source", "CONTRATOS_GOV_BR", "-unit", "158148", "-interval", "31s"},
+		{"-source", "CONTRATOS_GOV_BR", "-unit", "158148", "-concurrency", "0"},
+		{"-source", "CONTRATOS_GOV_BR", "-unit", "158148", "-concurrency", "6"},
 		{"-source", "CONTRATOS_GOV_BR", "-unit", "158148", "-interval", "1500us"},
 		{"-source", "CONTRATOS_GOV_BR", "-unit", "158148", "-trigger", "REQUESTED"},
 		{"-source", "CONTRATOS_GOV_BR", "-contract", "-5"},
@@ -45,7 +48,7 @@ func TestParseSyncValidation(t *testing.T) {
 		}
 	}
 	plan, _ := parseSync([]string{"-source", "CONTRATOS_GOV_BR", "-unit", "158148"})
-	if !plan.inactive || plan.trigger != "MANUAL" || plan.retries != 3 || plan.interval.String() != "1s" {
+	if !plan.inactive || plan.trigger != "MANUAL" || plan.retries != 3 || plan.interval.String() != "200ms" || plan.concurrency != 5 {
 		t.Fatalf("defaults = %+v", plan)
 	}
 }
@@ -145,7 +148,7 @@ func TestExecuteSyncsContract(t *testing.T) {
 func TestParseDailyValidation(t *testing.T) {
 	accepted := [][]string{
 		{"-source", "CONTRATOS_GOV_BR"},
-		{"-source", "CONTRATOS_GOV_BR", "-once", "-at", "23:30", "-timezone", "UTC", "-retries", "0", "-interval", "2s"},
+		{"-source", "CONTRATOS_GOV_BR", "-once", "-at", "23:30", "-timezone", "UTC", "-retries", "0", "-interval", "2s", "-concurrency", "2"},
 	}
 	for _, args := range accepted {
 		if _, err := parseDaily(args); err != nil {
@@ -158,7 +161,9 @@ func TestParseDailyValidation(t *testing.T) {
 		{"-source", "CONTRATOS_GOV_BR", "-at", "25:00"},
 		{"-source", "CONTRATOS_GOV_BR", "-timezone", "Mars/Olympus"},
 		{"-source", "CONTRATOS_GOV_BR", "-retries", "4"},
-		{"-source", "CONTRATOS_GOV_BR", "-interval", "500ms"},
+		{"-source", "CONTRATOS_GOV_BR", "-interval", "199ms"},
+		{"-source", "CONTRATOS_GOV_BR", "-concurrency", "0"},
+		{"-source", "CONTRATOS_GOV_BR", "-concurrency", "6"},
 		{"-source", "CONTRATOS_GOV_BR", "extra"},
 	}
 	for _, args := range rejected {
@@ -167,7 +172,7 @@ func TestParseDailyValidation(t *testing.T) {
 		}
 	}
 	plan, _ := parseDaily([]string{"-source", "CONTRATOS_GOV_BR"})
-	if plan.once || plan.at != "03:00" || plan.timezone != "America/Sao_Paulo" || plan.retries != 3 || plan.interval.String() != "1s" {
+	if plan.once || plan.at != "03:00" || plan.timezone != "America/Sao_Paulo" || plan.retries != 3 || plan.interval.String() != "200ms" || plan.concurrency != 5 {
 		t.Fatalf("defaults = %+v", plan)
 	}
 }

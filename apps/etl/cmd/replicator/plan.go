@@ -11,24 +11,26 @@ import (
 )
 
 type syncPlan struct {
-	source     string
-	unit       string
-	contractID int64
-	inactive   bool
-	trigger    string
-	retries    int
-	interval   time.Duration
-	normalize  bool
+	source      string
+	unit        string
+	contractID  int64
+	inactive    bool
+	trigger     string
+	retries     int
+	interval    time.Duration
+	concurrency int
+	normalize   bool
 }
 
 type dailyPlan struct {
-	source   string
-	at       string
-	timezone string
-	location *time.Location
-	once     bool
-	retries  int
-	interval time.Duration
+	source      string
+	at          string
+	timezone    string
+	location    *time.Location
+	once        bool
+	retries     int
+	interval    time.Duration
+	concurrency int
 }
 
 type normalizePlan struct {
@@ -83,7 +85,8 @@ func parseSync(args []string) (syncPlan, error) {
 	flags.BoolVar(&plan.inactive, "inactive", true, "Also sync the UG's inactive contracts")
 	flags.StringVar(&plan.trigger, "trigger", "MANUAL", "MANUAL or SCHEDULED")
 	flags.IntVar(&plan.retries, "retries", 3, "Retries after the first attempt (0 to 3)")
-	flags.DurationVar(&plan.interval, "interval", policy.Minimum, "Minimum request interval (whole milliseconds, 1s to 30s)")
+	flags.DurationVar(&plan.interval, "interval", policy.Minimum, "Minimum request interval (whole milliseconds, 200ms to 30s)")
+	flags.IntVar(&plan.concurrency, "concurrency", contratosgovbr.DefaultConcurrency, "Contracts fetched at once (1 to 5)")
 	flags.BoolVar(&plan.normalize, "normalize", true, "Normalize the synced contracts into typed tables after a successful capture")
 	if err := flags.Parse(args); err != nil {
 		return syncPlan{}, err
@@ -105,6 +108,8 @@ func parseSync(args []string) (syncPlan, error) {
 		return syncPlan{}, fmt.Errorf("-retries must be between 0 and 3")
 	case plan.interval%time.Millisecond != 0 || plan.interval < policy.Minimum || plan.interval > policy.Maximum:
 		return syncPlan{}, fmt.Errorf("-interval must be whole milliseconds between %s and %s", policy.Minimum, policy.Maximum)
+	case !validConcurrency(plan.concurrency):
+		return syncPlan{}, errConcurrency
 	}
 	return plan, nil
 }
@@ -120,7 +125,8 @@ func parseDaily(args []string) (dailyPlan, error) {
 	flags.StringVar(&plan.timezone, "timezone", "America/Sao_Paulo", "IANA time zone of -at")
 	flags.BoolVar(&plan.once, "once", false, "Run one cycle now and exit instead of scheduling")
 	flags.IntVar(&plan.retries, "retries", 3, "Retries after the first attempt (0 to 3)")
-	flags.DurationVar(&plan.interval, "interval", policy.Minimum, "Minimum request interval (whole milliseconds, 1s to 30s)")
+	flags.DurationVar(&plan.interval, "interval", policy.Minimum, "Minimum request interval (whole milliseconds, 200ms to 30s)")
+	flags.IntVar(&plan.concurrency, "concurrency", contratosgovbr.DefaultConcurrency, "Contracts fetched at once (1 to 5)")
 	if err := flags.Parse(args); err != nil {
 		return dailyPlan{}, err
 	}
@@ -140,6 +146,14 @@ func parseDaily(args []string) (dailyPlan, error) {
 		return dailyPlan{}, fmt.Errorf("-retries must be between 0 and 3")
 	case plan.interval%time.Millisecond != 0 || plan.interval < policy.Minimum || plan.interval > policy.Maximum:
 		return dailyPlan{}, fmt.Errorf("-interval must be whole milliseconds between %s and %s", policy.Minimum, policy.Maximum)
+	case !validConcurrency(plan.concurrency):
+		return dailyPlan{}, errConcurrency
 	}
 	return plan, nil
+}
+
+var errConcurrency = fmt.Errorf("-concurrency must be between 1 and %d", contratosgovbr.DefaultConcurrency)
+
+func validConcurrency(n int) bool {
+	return n >= 1 && n <= contratosgovbr.DefaultConcurrency
 }
