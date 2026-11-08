@@ -9,6 +9,7 @@ import { currency, date } from "@/lib/api";
 import { FinanceTabs, RequestState, display, useFinance } from "./shared";
 import { PanelMetrics } from "./panel-metrics";
 import { CommitmentCollection, childSections } from "./commitment-collections";
+import { CommitmentContract } from "../contract-commitments/commitment-contract";
 export function CommitmentPage({ id }: { id: string }) {
   const { viewer } = useSession();
   const params = useSearchParams();
@@ -68,6 +69,7 @@ export function CommitmentPage({ id }: { id: string }) {
               favorecido podem não estar informados.
             </p>
           )}
+          <CommitmentContract commitmentId={id} />
           <PanelMetrics
             metrics={[
               {

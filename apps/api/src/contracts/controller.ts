@@ -1,10 +1,11 @@
 import { FastifyInstance } from "fastify";
+import { ContractCommitmentService } from "./commitments";
 import { ContractService } from "./service";
 
 type Data = Record<string, unknown>;
 
 // Contract routes are keyed by the Contratos.gov.br external id, not a UUID.
-export function registerContractRoutes(api: FastifyInstance, contracts: ContractService) {
+export function registerContractRoutes(api: FastifyInstance, contracts: ContractService, commitments: ContractCommitmentService) {
   api.register(async (routes) => {
     type Contract = { Params: { externalId: string } };
     type Part = { Params: { externalId: string; part: string }; Querystring: Data };
@@ -14,7 +15,13 @@ export function registerContractRoutes(api: FastifyInstance, contracts: Contract
       return payload;
     });
     routes.get<{ Querystring: Data }>("/contracts", (request) => contracts.list(request.query, request.scope));
+    routes.get<{ Params: { commitmentId: string } }>("/contracts/by-commitment/:commitmentId", (request) =>
+      commitments.forCommitment(request.params.commitmentId, request.scope),
+    );
     routes.get<Contract>("/contracts/:externalId", (request) => contracts.detail(request.params.externalId, request.scope));
+    routes.get<Contract>("/contracts/:externalId/commitments", (request) =>
+      commitments.forContract(request.params.externalId, request.scope),
+    );
     routes.get<Part>("/contracts/:externalId/source/:part", (request) =>
       contracts.part(request.params.externalId, request.params.part, request.query, request.scope),
     );
