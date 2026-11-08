@@ -4233,7 +4233,8 @@ main.session-loading {
   gap: 7px;
   min-width: 0;
 }
-.filter-field select {
+.filter-field select,
+.filter-field [data-slot="native-select-wrapper"] {
   width: 100%;
 }
 .filters {

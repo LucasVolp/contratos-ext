@@ -3,7 +3,9 @@ import { useState } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import { validateFilters } from "@contracts/validation";
 import { statusLabels } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { SearchField } from "@/components/ui/search-field";
 import { Field } from "../ui";
 
@@ -46,29 +48,30 @@ export function ContractFilters({
         />
         <div className="filter-field">
           <Label htmlFor="contract-status">Situação</Label>
-          <select
+          <NativeSelect
             id="contract-status"
             aria-label="Filtrar por situação"
             value={values.status}
             onChange={(e) => onChange("status", e.target.value)}
           >
-            <option value="">Todas as situações</option>
+            <NativeSelectOption value="">Todas as situações</NativeSelectOption>
             {Object.entries(statusLabels).map(([value, label]) => (
-              <option key={value} value={value}>
+              <NativeSelectOption key={value} value={value}>
                 {label}
-              </option>
+              </NativeSelectOption>
             ))}
-          </select>
+          </NativeSelect>
         </div>
-        <button
+        <Button
           type="button"
+          variant="outline"
           className="filter-toggle"
           aria-expanded={advanced}
           onClick={() => setAdvanced(!advanced)}
         >
-          <SlidersHorizontal size={16} />
+          <SlidersHorizontal size={16} aria-hidden="true" />
           Filtros
-        </button>
+        </Button>
       </div>
       {advanced && (
         <div className="advanced-filters">
@@ -95,9 +98,9 @@ export function ContractFilters({
             onChange={(_, value) => onChange("to", value)}
             error={errors.to}
           />
-          <button type="button" className="text-button" onClick={onClear}>
+          <Button type="button" variant="ghost" className="text-button" onClick={onClear}>
             Limpar filtros
-          </button>
+          </Button>
         </div>
       )}
     </>
