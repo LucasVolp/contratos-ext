@@ -45,9 +45,11 @@ export function ContractNotes({
     setInvalid("");
     setBusy(true);
     try {
-      const result = await saveContractNotes(externalId, text);
+      const submitted = text;
+      const result = await saveContractNotes(externalId, submitted);
       setSaved(result);
-      setText(result.text);
+      // Take the server's (trimmed) text only when nothing was typed meanwhile.
+      setText((current) => (current === submitted ? result.text : current));
     } catch (e) {
       setError((e as Error).message);
     } finally {

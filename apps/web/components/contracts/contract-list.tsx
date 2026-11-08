@@ -14,7 +14,7 @@ import {
 import { maskDocument, validateFilters } from "@contracts/validation";
 import { currency, date } from "@/lib/api";
 import {
-  FIRST_LOAD,
+  freshnessLine,
   listContracts,
   vigency,
   type ContractPage,
@@ -104,7 +104,11 @@ export function ContractList() {
           {loading ? (
             <Loading />
           ) : !data ? null : firstLoad ? (
-            <Empty kind="contrato" title="Contratos em atualização" description={FIRST_LOAD} />
+            <Empty
+              kind="contrato"
+              title={data.sync.running ? "Contratos em atualização" : "Contratos ainda não carregados"}
+              description={freshnessLine(data.sync)}
+            />
           ) : !data.data.length ? (
             <Empty
               kind="contrato"

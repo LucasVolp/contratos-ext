@@ -54,6 +54,8 @@ export const NOTES_TOO_LONG =
   "As observações internas podem ter no máximo 10.000 caracteres.";
 export const FIRST_LOAD =
   "A primeira atualização dos contratos está em andamento. Os contratos aparecem conforme cada UASG é concluída.";
+export const NEVER_RUN =
+  "Os contratos ainda não foram carregados. A sincronização diária com o Contratos.gov.br ainda não foi executada.";
 
 export const listContracts = (query: URLSearchParams, signal?: AbortSignal) =>
   api<ContractPage>(`/contracts?${query}`, { signal });
@@ -88,18 +90,24 @@ export function dateTime(value: string) {
   return `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}`;
 }
 
-/** Source and time of the last completed daily run, or the first-load notice. */
+/**
+ * Source and time of the last completed daily run; before any, whether the
+ * first run is in progress or has not been executed yet.
+ */
 export function freshnessLine(sync: SyncState) {
-  return sync.lastCompletedAt
-    ? `Dados do Contratos.gov.br · atualizados em ${dateTime(sync.lastCompletedAt)}`
-    : FIRST_LOAD;
+  if (sync.lastCompletedAt)
+    return `Dados do Contratos.gov.br · atualizados em ${dateTime(sync.lastCompletedAt)}`;
+  return sync.running ? FIRST_LOAD : NEVER_RUN;
 }
 
-/** Names a unit whose listing failed in the last run, so freshness is never overstated. */
+/**
+ * Names a unit whose data is not from the last run, so freshness is never
+ * overstated: a failure with the date of its last data, or no data yet.
+ */
 export function staleUnitLine(unit: StaleUnit) {
-  return `Não foi possível atualizar ${unit.name} (${unit.uasg}) na última execução. ${
-    unit.lastGoodAt ? `Dados de ${dateTime(unit.lastGoodAt)}.` : "Ainda sem dados."
-  }`;
+  return unit.lastGoodAt
+    ? `Não foi possível atualizar ${unit.name} (${unit.uasg}) na última execução. Dados de ${dateTime(unit.lastGoodAt)}.`
+    : `${unit.name} (${unit.uasg}) ainda não tem dados do Contratos.gov.br.`;
 }
 
 export function vigency(startDate: string | null, endDate: string | null) {

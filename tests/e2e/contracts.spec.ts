@@ -16,6 +16,7 @@ const person = {
   globalValue: '1200.000000', status: 'UNKNOWN',
 };
 const stats = { count: 2, totalValue: '683518.13', expiringCount: 0, vigency: { active: 0, expiring: 0, ended: 1, upcoming: 0, unknown: 1, activeValue: null } };
+const neverRun = 'Os contratos ainda não foram carregados. A sincronização diária com o Contratos.gov.br ainda não foi executada.';
 const completed = { lastCompletedAt: '2026-11-07T06:42:00.000Z', running: false, staleUnits: [] };
 const list = (data: unknown[], sync: unknown = completed) => ({ data, total: data.length, page: 1, limit: 12, stats: { ...stats, count: data.length }, sync });
 
@@ -63,8 +64,20 @@ test.describe('lista de contratos', () => {
     await mockList(page, list([], { lastCompletedAt: null, running: true, staleUnits: [] }));
     await page.goto('/contratos');
     await expect(page.getByText('A primeira atualização dos contratos está em andamento. Os contratos aparecem conforme cada UASG é concluída.')).toHaveCount(1);
+    await expect(page.getByText('Contratos em atualização')).toBeVisible();
+    await expect(page.getByText(neverRun)).toHaveCount(0);
     await expect(page.getByText('Nenhum contrato corresponde aos filtros.')).toHaveCount(0);
     await expect(page.getByText('Nenhum registro encontrado.')).toHaveCount(0);
+  });
+
+  test('sem execução concluída nem em andamento informa que a sincronização ainda não foi executada', async ({ page }) => {
+    await mockList(page, list([], { lastCompletedAt: null, running: false, staleUnits: [] }));
+    await page.goto('/contratos');
+    await expect(page.getByText(neverRun)).toHaveCount(1);
+    await expect(page.getByText(neverRun)).toBeVisible();
+    await expect(page.getByText(/primeira atualização/)).toHaveCount(0);
+    await expect(page.getByText('Contratos em atualização')).toHaveCount(0);
+    await expect(page.getByText('Nenhum contrato encontrado.')).toHaveCount(0);
   });
 
   test('busca sem resultado informa que nenhum contrato corresponde aos filtros', async ({ page }) => {
@@ -90,7 +103,9 @@ test.describe('lista de contratos', () => {
     ] }));
     await page.goto('/contratos');
     await expect(page.getByText('Não foi possível atualizar Reitoria (158148) na última execução. Dados de 05/11/2026 03:30.')).toBeVisible();
-    await expect(page.getByText('Não foi possível atualizar Campus Novo (158999) na última execução. Ainda sem dados.')).toBeVisible();
+    await expect(page.getByText('Campus Novo (158999) ainda não tem dados do Contratos.gov.br.')).toBeVisible();
+    // A unit never captured is not reported as a failure.
+    await expect(page.getByText(/Não foi possível atualizar Campus Novo/)).toHaveCount(0);
   });
 
   test('falha ao listar oferece nova tentativa', async ({ page }) => {
@@ -144,6 +159,27 @@ test.describe('ficha do contrato', () => {
     await page.getByRole('button', { name: 'Salvar observações' }).click();
     await expect(page.getByText('Salvo por Maria Gestora em 07/11/2026 10:15')).toBeVisible();
     expect(sent).toEqual({ notes: 'Garantia renovada até 2027.' });
+  });
+
+  test('texto digitado durante o salvamento não é perdido', async ({ page }) => {
+    await mockDetail(page);
+    let release = () => {};
+    const held = new Promise<void>(resolve => { release = resolve; });
+    await page.route(`**/api/contracts/${externalId}/notes`, async route => {
+      const sent = route.request().postDataJSON() as { notes: string };
+      await held;
+      return json(route, { text: sent.notes.trim(), updatedAt: '2026-11-07T13:15:00.000Z', updatedBy: 'Maria Gestora' });
+    });
+    await page.goto(`/contratos/${externalId}`);
+    const notes = page.getByRole('textbox', { name: 'Observações internas' });
+    await notes.fill('Primeira parte.');
+    await page.getByRole('button', { name: 'Salvar observações' }).click();
+    await expect(page.getByText('Salvando…')).toBeVisible();
+    await notes.press('End');
+    await notes.pressSequentially(' Segunda parte.');
+    release();
+    await expect(page.getByText('Salvo por Maria Gestora em 07/11/2026 10:15')).toBeVisible();
+    await expect(notes).toHaveValue('Primeira parte. Segunda parte.');
   });
 
   test('falha ao salvar observações mantém o texto e oferece nova tentativa', async ({ page }) => {
