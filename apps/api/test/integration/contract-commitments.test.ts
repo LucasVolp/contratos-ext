@@ -192,3 +192,65 @@ test("same 404 as the contract", async (t) => {
     assert.equal(response.json().message, "Contrato não encontrado.");
   }
 });
+
+type Listing = { externalId: string | null; number: string; supplierName: string | null; supplierDocument: string | null; uasg: string; unitName: string | null };
+
+async function secondContract(db: Database, supplierDocument = "08273364000157") {
+  await contract(db, 20001, "158454", "00007/2025", supplierDocument);
+  await db.query(
+    `INSERT INTO public_sources.contract_commitments (source, external_id, contract_external_id, unit_code, management_code, number, committed, source_data)
+     VALUES ('CONTRATOS_GOV_BR', 9001, 20001, '158345', '26421', '2026NE000001', 300.00, '{}')`,
+  );
+}
+
+const contractsOf = async (app: Awaited<ReturnType<typeof setup>>["app"], id: string) =>
+  app.inject({ method: "GET", url: `/api/contracts/by-commitment/${id}` });
+
+test("returns the contracts that list a commitment", async (t) => {
+  const { db, app } = await setup(t);
+  await secondContract(db);
+  const response = await contractsOf(app, "501");
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.headers["cache-control"], "no-store");
+  assert.deepEqual(response.json().contracts, [
+    { externalId: "13847", number: "00004/2017", supplierName: "Fornecedor", supplierDocument: "08273364000157", uasg: "158148", unitName: "IFMS Reitoria" },
+    { externalId: "20001", number: "00007/2025", supplierName: "Fornecedor", supplierDocument: "08273364000157", uasg: "158454", unitName: "IFMS Três Lagoas" },
+  ]);
+});
+
+test("out-of-scope contract is text only", async (t) => {
+  const { db, app } = await setup(t, restrictedTo("158345"));
+  await secondContract(db);
+  const response = await contractsOf(app, "501");
+  assert.equal(response.statusCode, 200);
+  const contracts: Listing[] = response.json().contracts;
+  assert.equal(contracts.length, 2);
+  for (const listing of contracts) {
+    assert.equal(listing.externalId, null);
+    assert.ok(listing.number);
+    assert.equal(listing.supplierName, "Fornecedor");
+  }
+});
+
+test("CPF supplier is masked", async (t) => {
+  const { db, app } = await setup(t);
+  await secondContract(db, "12345678901");
+  const contracts: Listing[] = (await contractsOf(app, "501")).json().contracts;
+  assert.equal(contracts.find((c) => c.number === "00007/2025")!.supplierDocument, "***.456.789-**");
+});
+
+test("commitment without contract", async (t) => {
+  const { app } = await setup(t);
+  const response = await contractsOf(app, "503");
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), { contracts: [] });
+});
+
+test("unknown or out-of-scope commitment is 404", async (t) => {
+  const { app } = await setup(t, restrictedTo("158454"));
+  for (const id of ["999", "501"]) {
+    const response = await contractsOf(app, id);
+    assert.equal(response.statusCode, 404, id);
+    assert.equal(response.json().message, "Empenho não encontrado.");
+  }
+});

@@ -15,6 +15,9 @@ export function registerContractRoutes(api: FastifyInstance, contracts: Contract
       return payload;
     });
     routes.get<{ Querystring: Data }>("/contracts", (request) => contracts.list(request.query, request.scope));
+    routes.get<{ Params: { commitmentId: string } }>("/contracts/by-commitment/:commitmentId", (request) =>
+      commitments.forCommitment(request.params.commitmentId, request.scope),
+    );
     routes.get<Contract>("/contracts/:externalId", (request) => contracts.detail(request.params.externalId, request.scope));
     routes.get<Contract>("/contracts/:externalId/commitments", (request) =>
       commitments.forContract(request.params.externalId, request.scope),

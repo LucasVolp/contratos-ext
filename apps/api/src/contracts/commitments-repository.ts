@@ -28,6 +28,16 @@ export interface CommitmentLinkRow extends Amounts {
   lastImportedOn: string | null;
 }
 
+export interface CommitmentContractRow {
+  externalId: string;
+  number: string;
+  supplierName: string | null;
+  supplierDocument: string | null;
+  uasg: string;
+  unitName: string | null;
+  registered: boolean;
+}
+
 export interface CampusTotalsRow extends Amounts {
   unitCode: string;
   unitName: string;
@@ -78,7 +88,9 @@ const linked = `coverage AS (
     FROM public_sources.contract_commitments cc
     LEFT JOIN finance.commitment_references ref ON ref.source = 'TRANSPARENCY_PORTAL' AND ref.document_code = cc.transparency_code
     LEFT JOIN finance.commitments fc ON fc.id = ref.id
-    LEFT JOIN LATERAL (SELECT sum(i.current_value) AS committed FROM finance.commitment_items i WHERE i.commitment_id = fc.id) items ON true
+    -- Same rule as the finance detail's committedValue: unknown without items or with any unknown item.
+    LEFT JOIN LATERAL (SELECT CASE WHEN count(*) > 0 AND count(*) = count(i.current_value) THEN sum(i.current_value) END AS committed
+      FROM finance.commitment_items i WHERE i.commitment_id = fc.id) items ON true
     LEFT JOIN finance.management_units mu ON mu.management_code = cc.management_code AND mu.code = cc.unit_code
     LEFT JOIN coverage cov ON cov.external_id = cc.external_id
     WHERE cc.source = $1 AND cc.contract_external_id = $2::bigint)`;
@@ -107,6 +119,24 @@ export class ContractCommitmentRepository {
        SELECT l.unit_code AS "unitCode", COALESCE(max(l.unit_name), l.unit_code) AS "unitName", count(*)::int AS count, ${sums}
        FROM linked l GROUP BY l.unit_code ORDER BY "unitName", l.unit_code`,
       [CONTRACT_SOURCE, externalId],
+    );
+  }
+
+  // Contracts whose Contratos.gov.br commitments include finance reference $2.
+  contractsOf(commitmentId: string) {
+    return this.db.query<CommitmentContractRow & Record<string, unknown>>(
+      `SELECT DISTINCT c.external_id::text AS "externalId", c.number, c.supplier_name AS "supplierName",
+         c.supplier_document AS "supplierDocument", c.managing_unit_code AS uasg, COALESCE(i.name, mu.name) AS "unitName",
+         i.uasg IS NOT NULL AS registered
+       FROM finance.commitment_references ref
+       JOIN public_sources.contract_commitments cc ON cc.source = $1 AND cc.transparency_code = ref.document_code
+       JOIN public_sources.contracts c ON c.source = cc.source AND c.external_id = cc.contract_external_id
+       LEFT JOIN "Institution" i ON i.uasg = c.managing_unit_code
+       LEFT JOIN LATERAL (SELECT u.name FROM finance.management_units u WHERE u.code = c.managing_unit_code
+         ORDER BY u.management_code LIMIT 1) mu ON true
+       WHERE ref.id = $2::bigint
+       ORDER BY c.number, "externalId"`,
+      [CONTRACT_SOURCE, commitmentId],
     );
   }
 
