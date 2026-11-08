@@ -14,6 +14,7 @@ import { FinanceTabs } from "./shared";
 import { useFinanceQuery } from "./use-finance-query";
 import { usePanelScope } from "./use-panel-scope";
 import { PanelControls } from "./panel-controls";
+import { ScopeSearch } from "./scope-search";
 import { ExecutionNavigator } from "./execution-navigation";
 import { FinanceContent } from "./finance-content";
 import { ExecutionContext } from "./execution-context";
@@ -93,7 +94,14 @@ export function ExecutionPanel() {
       <PageHead
         title="Execução da despesa"
         description="Do panorama do exercício aos elementos e documentos disponíveis."
-      />
+      >
+        <ScopeSearch
+          units={units}
+          unitKey="managementUnitCode"
+          periods
+          onApply={change}
+        />
+      </PageHead>
       <div className="finance-toolbar">
         <FinanceTabs active="execution" query={query} />
         <PanelControls

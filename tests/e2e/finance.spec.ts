@@ -11,6 +11,7 @@ import {
   expenseBarData,
 } from "../../apps/web/lib/finance-chart";
 import type { ExecutionNature } from "../../apps/web/lib/finance-types";
+import { interpretScopeSearch } from "../../apps/web/lib/finance-scope-search";
 let fixture: Awaited<ReturnType<typeof financeFixture>>;
 test.describe.configure({ mode: "serial" });
 test.beforeAll(async () => {
@@ -48,6 +49,117 @@ test("shared money presentation keeps significant decimal places, large aggregat
   expect(compactMoney("-0.000021")).toBe("-R$ 0,000021");
   expect(formatMoney(null)).toBe("Não informado");
   expect(compactMoney("0.000000000000")).toBe("R$ 0,00");
+});
+
+const searchUnits = [
+  { code: "015814", name: "Campus São Paulo" },
+  { code: "158148", name: "Campus São Roque" },
+  { code: "158270", name: "Reitoria" },
+];
+
+test("scope search understands units, fiscal years and periods in plain text", () => {
+  const read = (text: string) => interpretScopeSearch(text, searchUnits);
+  expect(read("campus sao paulo 2025 1º semestre")).toMatchObject({
+    changes: {
+      managementUnitCode: "015814",
+      fiscalYear: "2025",
+      fromMonth: "1",
+      toMonth: "6",
+    },
+    labels: ["Campus São Paulo", "Exercício 2025", "1º semestre"],
+    unmatched: [],
+    candidates: [],
+  });
+  expect(read("Reitoria").changes).toEqual({ managementUnitCode: "158270" });
+  expect(read("158148").changes).toEqual({ managementUnitCode: "158148" });
+  expect(read("exercício de 2024").changes).toEqual({ fiscalYear: "2024" });
+  expect(read("terceiro trimestre").changes).toEqual({
+    fromMonth: "7",
+    toMonth: "9",
+  });
+  expect(read("2º sem").changes).toEqual({ fromMonth: "7", toMonth: "12" });
+  expect(read("março").changes).toEqual({ fromMonth: "3", toMonth: "3" });
+  expect(read("de jan a abr 2026").changes).toEqual({
+    fiscalYear: "2026",
+    fromMonth: "1",
+    toMonth: "4",
+  });
+  expect(read("até junho").changes).toEqual({ fromMonth: "1", toMonth: "6" });
+  expect(read("03/2024").changes).toEqual({
+    fiscalYear: "2024",
+    fromMonth: "3",
+    toMonth: "3",
+  });
+  expect(read("ano inteiro").changes).toEqual({
+    fromMonth: "1",
+    toMonth: "12",
+  });
+  expect(read("todas as unidades").changes).toEqual({
+    managementUnitCode: "",
+  });
+});
+
+test("scope search reports ambiguous units and words it did not understand", () => {
+  const ambiguous = interpretScopeSearch("campus 2025", searchUnits);
+  expect(ambiguous.changes).toEqual({ fiscalYear: "2025" });
+  expect(ambiguous.candidates.map((unit) => unit.code)).toEqual([
+    "015814",
+    "158148",
+  ]);
+  const typo = interpretScopeSearch("reitoria xpto", searchUnits);
+  expect(typo.changes).toEqual({ managementUnitCode: "158270" });
+  expect(typo.unmatched).toEqual(["xpto"]);
+  expect(interpretScopeSearch("", searchUnits).labels).toEqual([]);
+  expect(
+    interpretScopeSearch("reitoria 2º trimestre", searchUnits, {
+      unitKey: "budgetaryUnitCode",
+      periods: false,
+    }),
+  ).toMatchObject({
+    changes: { budgetaryUnitCode: "158270" },
+    unmatched: ["2º trimestre"],
+  });
+});
+
+test("scope search applies what it understood to the panel filters", async ({
+  page,
+}) => {
+  await page.goto(fixture.baseURL + overview);
+  const search = page.getByLabel("Buscar recorte", { exact: true });
+  await search.fill("unidade de teste b 2025 1º semestre");
+  await expect(page.locator(".scope-search-preview")).toContainText(
+    "Unidade de teste B · Exercício 2025 · 1º semestre",
+  );
+  await search.press("Enter");
+  await expect(page).toHaveURL(/managementUnitCode=158148/);
+  await expect(page).toHaveURL(/fiscalYear=2025/);
+  await expect(page).toHaveURL(/fromMonth=1&toMonth=6|toMonth=6.*fromMonth=1/);
+  await expect(page.getByLabel("Unidade", { exact: true })).toHaveValue(
+    "158148",
+  );
+  await expect(page.getByLabel("Exercício", { exact: true })).toHaveValue(
+    "2025",
+  );
+  await expect(page.getByLabel("Período", { exact: true })).toHaveValue("1-6");
+  await expect(page.getByRole("status").filter({ hasText: "Aplicado" })).toContainText(
+    "Unidade de teste B",
+  );
+  await search.fill("unidade de teste 2026");
+  await search.press("Enter");
+  await expect(page).toHaveURL(/fiscalYear=2026/);
+  await page
+    .getByRole("button", { name: "Usar Unidade de teste A", exact: true })
+    .click();
+  await expect(page.getByLabel("Unidade", { exact: true })).toHaveValue(
+    "015814",
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(search).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
 });
 
 test("approved finance workspace replaces trends and rankings with overview and element exploration", async ({
