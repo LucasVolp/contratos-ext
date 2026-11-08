@@ -396,6 +396,8 @@ test.describe('situação do contrato', () => {
     await page.goto(`/contratos/${externalId}`);
     await expect(summary(page).getByText('A garantia vence em 21/11/2026, 30 dias antes do contrato')).toBeVisible();
     await expect(summary(page).getByText('Acréscimos excedem o limite em R$ 5.000,00')).toBeVisible();
+    await expect(summary(page).getByText('Acima do limite', { exact: true })).toBeVisible();
+    await expect(summary(page).getByText('Perto do limite', { exact: true })).toHaveCount(0);
   });
 
   test('instrumento que não é contrato não recebe estimativas', async ({ page }) => {

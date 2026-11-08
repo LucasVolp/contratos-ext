@@ -15,7 +15,7 @@ export function AmendmentMeter({ amendments }: { amendments: ContractFacts["amen
         <Badge variant="outline">Estimativa</Badge>
         {amendments.nearLimit && (
           <Badge variant="outline" className="fact-warning">
-            Perto do limite
+            {amendments.margin?.startsWith("-") ? "Acima do limite" : "Perto do limite"}
           </Badge>
         )}
       </p>
