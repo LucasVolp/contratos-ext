@@ -106,7 +106,8 @@ that replica.
 - API: `POST /contracts/import`, `POST /contracts`, contract update/delete
   routes, `importContracts`, and the Dados Abertos `contracts()` client call.
   The ata import (`POST /records/import`, `record()` client call) stays.
-- Data: the `"Contract"` table and its rows (user decision 6). The read-time
+- Data: the `"Contract"` table leaves the app; its rows are archived as
+  `"LegacyContract"` (see 4.6). The read-time
   resolution between `"Contract"` and the replica built in step 2
   (RESOLVED / NOT_FOUND / AMBIGUOUS) is no longer needed: the detail page reads
   the replica directly by external id. The unused `importable()` query from
@@ -199,7 +200,9 @@ consultative: origin and date shown; 360 px usable; WCAG 2.2 AA).
   `/api/contrato/id/{id}` payload and the listings, so a stale one-off `/id`
   capture never masks daily listing updates.
 - New app table for notes (name per `AGENTS.md`, English).
-- Drop `"Contract"` and its indexes.
+- Rename `"Contract"` (and its indexes) to `"LegacyContract"`: a read-only
+  archive of the old rows that no screen or route reads (user decision,
+  2026-11-07, refining decision 6); a later migration may drop it.
 - These changes go in a **new** migration; `202611080001` is not edited, since
   the checksum guard in `apps/api/src/migrate.ts` stops the API on any database
   where it already ran. Finance data is untouched.
