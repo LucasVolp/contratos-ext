@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
+import { uncapturedFacts } from '../helpers/contract-facts';
 
 // Contract ↔ commitment screens. Every API call is mocked: links come from the
 // daily replica and the finance import, never from the UI.
@@ -50,7 +51,7 @@ const noCommitments = { commitments: [], campuses: [], totals: { count: 0, ...am
 
 async function mockContract(page: Page, options: { commitmentsPart?: unknown; body?: () => [unknown, number] } = {}) {
   await page.route(`**/api/contracts/${externalId}`, route =>
-    json(route, { contract: detail, parts: parts(options.commitmentsPart as ReturnType<typeof state>), notes: noNotes }));
+    json(route, { contract: detail, parts: parts(options.commitmentsPart as ReturnType<typeof state>), notes: noNotes, facts: uncapturedFacts }));
   await page.route(`**/api/contracts/${externalId}/source/*`, route => json(route, { data: [], total: 0, page: 1, limit: 20 }));
   await page.route(`**/api/contracts/${externalId}/commitments`, route => {
     const [body, status] = options.body?.() ?? [commitments, 200];

@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -207,7 +208,14 @@ function ContractTable({ rows }: { rows: ContractSummary[] }) {
                 </TableCell>
                 <TableCell className="amount">{currency(entry.globalValue)}</TableCell>
                 <TableCell>
-                  <Status status={entry.status} />
+                  <div className="row-badges">
+                    <Status status={entry.status} />
+                    {entry.guaranteeBeforeEnd && (
+                      <Badge variant="outline" className="fact-warning">
+                        Garantia vence antes
+                      </Badge>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <Link className="row-arrow" aria-label={`Abrir ${entry.number}`} href={href}>

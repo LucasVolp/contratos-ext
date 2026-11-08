@@ -894,6 +894,12 @@ td:first-child {
   font-size: 29px;
   font-weight: 400;
 }
+/* Contract list situation cell: status plus fact badges (contracts/contract-list) */
+.row-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
 /* Contract facts summary (components/contract-facts) */
 .contract-facts .metadata dd > strong {
   display: block;

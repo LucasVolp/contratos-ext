@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { uncapturedFacts } from "../helpers/contract-facts";
 
 // Contracts come only from the daily replica, so their API is mocked here.
 const contract = {
@@ -53,6 +54,7 @@ async function mockContracts(page: Page) {
         },
         parts: [],
         notes: { text: "", updatedAt: null, updatedBy: null },
+        facts: uncapturedFacts,
       },
     }),
   );

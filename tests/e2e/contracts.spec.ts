@@ -130,6 +130,29 @@ test.describe('lista de contratos', () => {
     await expect(page.getByText(/Não foi possível atualizar Campus Novo/)).toHaveCount(0);
   });
 
+  test('filtra contratos cuja garantia vence antes do fim', async ({ page }) => {
+    const seen: URL[] = [];
+    await mockList(page, list([summary]), seen);
+    await page.goto('/contratos');
+    await page.getByRole('button', { name: 'Filtros' }).click();
+    await page.getByLabel('Garantia').selectOption({ label: 'Vence antes do contrato' });
+    await expect.poll(() => seen.some(url => url.searchParams.get('guaranteeBeforeEnd') === 'true')).toBe(true);
+    await page.getByRole('button', { name: 'Limpar filtros' }).click();
+    await expect.poll(() => seen.at(-1)?.searchParams.get('guaranteeBeforeEnd') ?? '').toBe('');
+  });
+
+  test('linha mostra a garantia que vence antes do contrato', async ({ page }) => {
+    await mockList(page, list([{ ...summary, guaranteeBeforeEnd: true }, { ...person, guaranteeBeforeEnd: false }]));
+    await page.goto('/contratos');
+    await expect(page.getByText('Garantia vence antes', { exact: true })).toHaveCount(1);
+  });
+
+  test('situação vence em breve nomeia a janela de 90 dias', async ({ page }) => {
+    await mockList(page, list([summary]));
+    await page.goto('/contratos');
+    await expect(page.getByRole('option', { name: 'Vence em breve (até 90 dias)' })).toHaveCount(1);
+  });
+
   test('falha ao listar oferece nova tentativa', async ({ page }) => {
     let fail = true;
     await page.route(url => url.pathname === '/api/contracts', route =>

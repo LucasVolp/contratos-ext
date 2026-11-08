@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { SlidersHorizontal } from "lucide-react";
-import { validateFilters } from "@contracts/validation";
+import { EXPIRING_WINDOW_DAYS, validateFilters } from "@contracts/validation";
 import { statusLabels } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,8 @@ export type ContractFilterValues = {
   uasg: string;
   from: string;
   to: string;
+  /** "true" keeps contracts whose guarantee expires before the end date. */
+  guaranteeBeforeEnd: "" | "true";
 };
 export const noContractFilters: ContractFilterValues = {
   search: "",
@@ -22,6 +24,7 @@ export const noContractFilters: ContractFilterValues = {
   uasg: "",
   from: "",
   to: "",
+  guaranteeBeforeEnd: "",
 };
 
 /** Search, situation, UASG and vigência filters of the contract list. */
@@ -57,7 +60,7 @@ export function ContractFilters({
             <NativeSelectOption value="">Todas as situações</NativeSelectOption>
             {Object.entries(statusLabels).map(([value, label]) => (
               <NativeSelectOption key={value} value={value}>
-                {label}
+                {value === "EXPIRING" ? `${label} (até ${EXPIRING_WINDOW_DAYS} dias)` : label}
               </NativeSelectOption>
             ))}
           </NativeSelect>
@@ -98,6 +101,17 @@ export function ContractFilters({
             onChange={(_, value) => onChange("to", value)}
             error={errors.to}
           />
+          <div className="filter-field">
+            <Label htmlFor="contract-guarantee">Garantia</Label>
+            <NativeSelect
+              id="contract-guarantee"
+              value={values.guaranteeBeforeEnd}
+              onChange={(e) => onChange("guaranteeBeforeEnd", e.target.value)}
+            >
+              <NativeSelectOption value="">Todas</NativeSelectOption>
+              <NativeSelectOption value="true">Vence antes do contrato</NativeSelectOption>
+            </NativeSelect>
+          </div>
           <Button type="button" variant="ghost" className="text-button" onClick={onClear}>
             Limpar filtros
           </Button>

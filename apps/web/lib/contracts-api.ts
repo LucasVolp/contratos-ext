@@ -15,6 +15,8 @@ export type ContractSummary = {
   endDate: string | null;
   globalValue: string | null;
   status: string;
+  /** Latest guarantee due date is before the end date (list only). */
+  guaranteeBeforeEnd?: boolean;
 };
 export type ContractDetail = ContractSummary & {
   originUnitCode: string | null;
