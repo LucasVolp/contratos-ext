@@ -8,7 +8,7 @@ import {
   readiness,
 } from "../src/domain";
 
-test("calendar statuses honor inclusive end and 30-day boundary", () => {
+test("calendar statuses honor inclusive end and 90-day boundary", () => {
   const today = new Date("2026-10-30T23:59:59Z");
   assert.equal(
     contractStatus({ startDate: "2026-10-31", endDate: "2026-12-30" }, today),
@@ -27,7 +27,11 @@ test("calendar statuses honor inclusive end and 30-day boundary", () => {
     "EXPIRING",
   );
   assert.equal(
-    contractStatus({ startDate: "2026-01-01", endDate: "2026-11-30" }, today),
+    contractStatus({ startDate: "2026-01-01", endDate: "2027-01-28" }, today),
+    "EXPIRING",
+  );
+  assert.equal(
+    contractStatus({ startDate: "2026-01-01", endDate: "2027-01-29" }, today),
     "ACTIVE",
   );
   assert.equal(

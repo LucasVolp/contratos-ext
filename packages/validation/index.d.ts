@@ -1,4 +1,6 @@
 export type FieldErrors = Record<string, string>;
+/** Days before the end date in which a contract counts as "Vence em breve". */
+export const EXPIRING_WINDOW_DAYS: number;
 export function normalizeDocument(value: unknown): string;
 export function isCPF(value: unknown): boolean;
 export function isCNPJ(value: unknown): boolean;

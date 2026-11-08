@@ -59,10 +59,11 @@ export async function createApplication(options: ApplicationOptions = {}) {
     repositories.finance,
     repositories.financeReports,
   );
-  const contracts = new ContractService(repositories.contracts);
+  const commitmentRepository = new ContractCommitmentRepository(db);
+  const contracts = new ContractService(repositories.contracts, commitmentRepository);
   const contractCommitments = new ContractCommitmentService(
     contracts,
-    new ContractCommitmentRepository(db),
+    commitmentRepository,
     finance,
   );
   const app = Fastify({

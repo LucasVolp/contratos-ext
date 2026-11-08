@@ -3,6 +3,7 @@ import {
   normalizeDocument,
   parseDecimal,
   isDate,
+  EXPIRING_WINDOW_DAYS,
 } from "@contracts/validation";
 import { BadRequestException, NotFoundException } from "./errors";
 import Decimal from "decimal.js";
@@ -137,7 +138,7 @@ export function contractStatus(record: Data, now = new Date()): string {
   if (record.startDate > today) return "UPCOMING";
   if (record.endDate < today) return "EXPIRED";
   const boundary = new Date(`${today}T00:00:00Z`);
-  boundary.setUTCDate(boundary.getUTCDate() + 30);
+  boundary.setUTCDate(boundary.getUTCDate() + EXPIRING_WINDOW_DAYS);
   return record.endDate <= boundary.toISOString().slice(0, 10)
     ? "EXPIRING"
     : "ACTIVE";

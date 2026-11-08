@@ -101,7 +101,7 @@ test("scoped contract listing keeps the scope when a UASG filter is requested", 
     stats: async () => ({ count: 0 }),
     sync: async () => ({ lastCompletedAt: null, running: false, staleUnits: [] }),
   };
-  await new ContractService(repository).list({ uasg: "154054" }, ["158454"]);
+  await new ContractService(repository, { totals: async () => { throw new Error("unused"); } }).list({ uasg: "154054" }, ["158454"]);
   assert.deepEqual(where.scope, ["158454"]);
   assert.deepEqual(where.uasg, "154054");
 });

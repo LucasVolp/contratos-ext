@@ -2,6 +2,7 @@ import { Scope } from "../auth/access";
 import { SqlConnection } from "../database";
 import { Page, Pagination } from "../finance/types";
 import { Conditions } from "../repositories/sql";
+import { FactInput } from "./facts";
 
 export const CONTRACT_SOURCE = "CONTRATOS_GOV_BR";
 
@@ -15,6 +16,7 @@ export interface ContractFilters {
   from: string | null;
   to: string | null;
   status?: string;
+  guaranteeBeforeEnd?: boolean;
   today: string;
   boundary: string;
 }
@@ -139,8 +141,14 @@ const partQueries: Record<SourcePart, { table: string; projection: string; order
   },
 };
 
+// The latest guarantee due date is before the contract end (same rule as the
+// guarantee fact in facts.ts); false without guarantees, due dates or end date.
+const guaranteeBeforeEndSql = `COALESCE((SELECT max(g.due_date) FROM public_sources.contract_guarantees g
+  WHERE g.source = c.source AND g.contract_external_id = c.external_id) < c.end_date, false)`;
+
 // Vigência status conditions share the date boundaries of contractStatus in
-// domain.ts: unknown without both dates, expiring within 30 days, inclusive end.
+// domain.ts: unknown without both dates, expiring within EXPIRING_WINDOW_DAYS
+// (90) days, inclusive end.
 function statusSql(status: string | undefined, today: string, boundary: string, c: Conditions): string {
   const known = "c.start_date IS NOT NULL AND c.end_date IS NOT NULL";
   switch (status) {
@@ -176,6 +184,7 @@ function conditions(f: ContractFilters) {
   if (f.from) c.add(`c.end_date >= ${c.param(f.from)}::date`);
   if (f.to) c.add(`c.start_date <= ${c.param(f.to)}::date`);
   c.add(statusSql(f.status, f.today, f.boundary, c));
+  if (f.guaranteeBeforeEnd) c.add(guaranteeBeforeEndSql);
   return c;
 }
 
@@ -184,8 +193,8 @@ export class ContractRepository {
 
   list(f: ContractFilters, page: number, limit: number) {
     const c = conditions(f);
-    return this.db.query<ContractRow & Record<string, unknown>>(
-      `SELECT ${summaryProjection} FROM ${registered} WHERE ${c.text}
+    return this.db.query<ContractRow & { guaranteeBeforeEnd: boolean } & Record<string, unknown>>(
+      `SELECT ${summaryProjection}, ${guaranteeBeforeEndSql} AS "guaranteeBeforeEnd" FROM ${registered} WHERE ${c.text}
        ORDER BY c.end_date DESC NULLS LAST, c.external_id LIMIT ${c.param(limit)} OFFSET ${c.param((page - 1) * limit)}`,
       c.values,
     );
@@ -265,6 +274,33 @@ export class ContractRepository {
       [CONTRACT_SOURCE, externalId, pagination.limit, pagination.offset],
     );
     return { data: row.data, total: Number(row.total), page: pagination.page, limit: pagination.limit };
+  }
+
+  // Replica rows the derived facts are computed from (facts.ts); part statuses
+  // come from parts(). Dates and decimals stay text.
+  async factInput(externalId: string): Promise<Omit<FactInput, "parts">> {
+    const args = [CONTRACT_SOURCE, externalId];
+    const [[header], history, guarantees] = await Promise.all([
+      this.db.query<FactInput["header"] & Record<string, unknown>>(
+        `SELECT type_name AS "typeName", category, legal_basis AS "legalBasis", signature_date::text AS "signatureDate",
+           start_date::text AS "startDate", end_date::text AS "endDate", initial_value::text AS "initialValue"
+         FROM public_sources.contracts WHERE source = $1 AND external_id = $2::bigint`,
+        args,
+      ),
+      this.db.query<FactInput["history"][number] & Record<string, unknown>>(
+        `SELECT external_id::text AS "externalId", number, type_name AS "typeName", qualifications, observation,
+           signature_date::text AS "signatureDate", start_date::text AS "startDate", end_date::text AS "endDate",
+           global_value::text AS "globalValue"
+         FROM public_sources.contract_amendments WHERE source = $1 AND contract_external_id = $2::bigint`,
+        args,
+      ),
+      this.db.query<FactInput["guarantees"][number] & Record<string, unknown>>(
+        `SELECT external_id::text AS "externalId", due_date::text AS "dueDate"
+         FROM public_sources.contract_guarantees WHERE source = $1 AND contract_external_id = $2::bigint`,
+        args,
+      ),
+    ]);
+    return { header, history, guarantees };
   }
 
   async notes(externalId: string) {

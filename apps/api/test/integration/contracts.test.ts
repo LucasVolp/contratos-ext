@@ -143,6 +143,7 @@ test("lists replica contracts of registered UASGs with stats and sync state", as
     endDate: day(100),
     globalValue: "682318.130000",
     status: "ACTIVE",
+    guaranteeBeforeEnd: false,
   });
   assert.equal(body.data[1].externalId, "13848");
   assert.equal(body.data[1].status, "UNKNOWN");
@@ -220,6 +221,79 @@ test("filters by search, status, uasg and vigência", async (t) => {
   assert.equal(page.total, 5);
   // end_date DESC NULLS LAST: 4, 1, 2, 3, 5.
   assert.deepEqual(page.data.map((row: { externalId: string }) => row.externalId), ["2", "3"]);
+});
+
+async function guarantee(db: Database, externalId: number, contractId: number, dueDate: string | null) {
+  await db.query(
+    `INSERT INTO public_sources.contract_guarantees (source, external_id, contract_external_id, guarantee_type, amount, due_date, source_data)
+     VALUES ('CONTRATOS_GOV_BR', $1, $2, 'Seguro Garantia', 1000, $3, '{}')`,
+    [externalId, contractId, dueDate],
+  );
+}
+
+test("list filters guarantees expiring before the contract", async (t) => {
+  const { db, app } = await setup(t);
+  await replica(db, 1, { number: "00001/2026", startDate: day(-10), endDate: day(30) });
+  await replica(db, 2, { number: "00002/2026", startDate: day(-10), endDate: day(30) });
+  await replica(db, 3, { number: "00003/2026", startDate: day(-10), endDate: day(30) });
+  await guarantee(db, 11, 1, day(-100));
+  await guarantee(db, 12, 1, day(5));
+  await guarantee(db, 21, 2, day(60));
+  const list = async (query: string) => {
+    const response = await app.inject({ method: "GET", url: `/api/contracts?${query}` });
+    assert.equal(response.statusCode, 200, response.body);
+    return response.json().data as { externalId: string; guaranteeBeforeEnd: boolean }[];
+  };
+  assert.deepEqual((await list("guaranteeBeforeEnd=true")).map((row) => row.externalId), ["1"]);
+  const all = Object.fromEntries((await list("")).map((row) => [row.externalId, row.guaranteeBeforeEnd]));
+  assert.deepEqual(all, { "1": true, "2": false, "3": false });
+});
+
+test("list rejects unknown fact filter values", async (t) => {
+  const { app } = await setup(t);
+  const response = await app.inject({ method: "GET", url: "/api/contracts?guaranteeBeforeEnd=yes" });
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().message, "Filtro inválido.");
+});
+
+test("expiring uses a 90-day window", async (t) => {
+  const { db, app } = await setup(t);
+  await replica(db, 1, { startDate: day(-10), endDate: day(60) });
+  await replica(db, 2, { number: "00002/2026", startDate: day(-10), endDate: day(91) });
+  const body = (await app.inject({ method: "GET", url: "/api/contracts?status=EXPIRING" })).json();
+  assert.deepEqual(body.data.map((row: { externalId: string }) => row.externalId), ["1"]);
+  assert.equal(body.stats.expiringCount, 1);
+  assert.equal(body.data[0].status, "EXPIRING");
+});
+
+test("detail returns facts with days left and remaining value", async (t) => {
+  const { db, app } = await setup(t);
+  await replica(db, 13847, { startDate: day(-400), endDate: day(10) });
+  await guarantee(db, 1, 13847, day(3));
+  const body = (await app.inject({ method: "GET", url: "/api/contracts/13847" })).json();
+  assert.equal(body.facts.endDate.value, day(10));
+  assert.equal(body.facts.endDate.daysLeft, 10);
+  assert.equal(body.facts.guarantee.status, "BEFORE_END");
+  assert.equal(body.facts.guarantee.daysBeforeEnd, 7);
+  assert.equal(body.facts.amendments.limitPct, "25");
+  assert.equal(body.facts.guaranteesPart, "FAILED");
+  const commitments = (await app.inject({ method: "GET", url: "/api/contracts/13847/commitments" })).json();
+  assert.equal(body.facts.remaining, commitments.balance.remaining);
+});
+
+test("detail facts report a failed history part", async (t) => {
+  const { db, app } = await setup(t);
+  await replica(db, 13847);
+  await db.query(`UPDATE public_sources.contracts SET initial_value = 1000 WHERE external_id = 13847`);
+  await db.query(`UPDATE public_sources.contract_parts SET status = 'FAILED' WHERE contract_external_id = 13847 AND part = 'history'`);
+  await db.query(`INSERT INTO public_sources.contract_amendments (source, external_id, contract_external_id, number, type_name, qualifications, signature_date, global_value, source_data)
+    VALUES ('CONTRATOS_GOV_BR', 1, 13847, '00004/2017', 'Contrato', '{}', '2017-01-26', 1000, '{}'),
+           ('CONTRATOS_GOV_BR', 2, 13847, '00001/2018', 'Termo Aditivo', ARRAY['ACRÉSCIMO / SUPRESSÃO'], '2018-01-26', 1100, '{}')`);
+  const facts = (await app.inject({ method: "GET", url: "/api/contracts/13847" })).json().facts;
+  assert.equal(facts.historyPart, "FAILED");
+  assert.equal(facts.amendments.status, "ESTIMATED");
+  assert.equal(facts.amendments.additionsPct, "10.0000");
+  assert.deepEqual(facts.amendments.terms.map((t: { externalId: string }) => t.externalId), ["1", "2"]);
 });
 
 test("rejects invalid filters", async (t) => {

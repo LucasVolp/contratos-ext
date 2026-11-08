@@ -253,7 +253,10 @@ function blurFieldErrors(previous, current, name) {
   }
   return next;
 }
+// Days before the end date in which a contract counts as "Vence em breve".
+const EXPIRING_WINDOW_DAYS = 90;
 module.exports = {
+  EXPIRING_WINDOW_DAYS,
   normalizeDocument,
   isCPF,
   isCNPJ,

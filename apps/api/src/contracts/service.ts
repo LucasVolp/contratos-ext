@@ -1,8 +1,10 @@
-import { validateFilters } from "@contracts/validation";
+import { EXPIRING_WINDOW_DAYS, validateFilters } from "@contracts/validation";
 import { inScope, narrowScope, Scope, Viewer } from "../auth/access";
 import { contractStatus, Data, date, pagination } from "../domain";
 import { BadRequestException, NotFoundException } from "../errors";
 import { known, pagination as partPagination } from "../finance/validation";
+import type { ContractCommitmentRepository } from "./commitments-repository";
+import { computeFacts } from "./facts";
 import {
   ContractDetailRow,
   ContractRepository,
@@ -60,7 +62,10 @@ function presentDetail(row: ContractDetailRow) {
 // Contracts come only from the Contratos.gov.br daily replica; the API never
 // calls the source. Internal notes are the only data the app writes.
 export class ContractService {
-  constructor(private readonly contracts: ContractRepository) {}
+  constructor(
+    private readonly contracts: ContractRepository,
+    private readonly commitments: Pick<ContractCommitmentRepository, "totals">,
+  ) {}
 
   async list(query: Data, scope: Scope) {
     const fieldErrors = validateFilters(query);
@@ -71,9 +76,10 @@ export class ContractService {
       to = date(query.to, "to");
     if (from && to && from > to) throw new BadRequestException("Período inválido: início posterior ao fim.");
     if (query.status && !STATUSES.includes(query.status)) throw new BadRequestException("Status de contrato inválido.");
+    if (query.guaranteeBeforeEnd && query.guaranteeBeforeEnd !== "true") throw new BadRequestException("Filtro inválido.");
     const today = new Date().toISOString().slice(0, 10);
     const boundary = new Date(`${today}T00:00:00Z`);
-    boundary.setUTCDate(boundary.getUTCDate() + 30);
+    boundary.setUTCDate(boundary.getUTCDate() + EXPIRING_WINDOW_DAYS);
     const visible = narrowScope(scope, query.uasgs);
     const filter = {
       scope: visible,
@@ -82,6 +88,7 @@ export class ContractService {
       from,
       to,
       status: query.status,
+      guaranteeBeforeEnd: query.guaranteeBeforeEnd === "true",
       today,
       boundary: boundary.toISOString().slice(0, 10),
     };
@@ -90,13 +97,29 @@ export class ContractService {
       this.contracts.stats(filter),
       this.contracts.sync(visible),
     ]);
-    return { data: rows.map(presentSummary), total: stats.count, page, limit, stats, sync };
+    const data = rows.map((row) => ({ ...presentSummary(row), guaranteeBeforeEnd: row.guaranteeBeforeEnd }));
+    return { data, total: stats.count, page, limit, stats, sync };
   }
 
   async detail(externalId: string, scope: Scope) {
     const contract = await this.find(externalId, scope);
-    const [parts, notes] = await Promise.all([this.contracts.parts(externalId), this.contracts.notes(externalId)]);
-    return { contract: presentDetail(contract), parts, notes: notes ?? { text: "", updatedAt: null, updatedBy: null } };
+    const [parts, notes, input, totals] = await Promise.all([
+      this.contracts.parts(externalId),
+      this.contracts.notes(externalId),
+      this.contracts.factInput(externalId),
+      this.commitments.totals(externalId),
+    ]);
+    const status = (part: string) => parts.find((p) => p.part === part)?.status ?? "MISSING";
+    const facts = computeFacts(
+      { ...input, parts: { history: status("history"), guarantees: status("guarantees") } },
+      new Date().toISOString().slice(0, 10),
+    );
+    return {
+      contract: presentDetail(contract),
+      parts,
+      notes: notes ?? { text: "", updatedAt: null, updatedBy: null },
+      facts: { ...facts, remaining: totals.remaining },
+    };
   }
 
   async part(externalId: string, part: string, query: Data, scope: Scope) {
