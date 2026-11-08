@@ -1,7 +1,7 @@
 # Public document store — initial design
 
 Date: 2026-11-08
-Status: proposed for user review
+Status: approved by the user on 2026-11-08.
 Roadmap: Phase 1, step 5 of `2026-11-07-institutional-copilot-design.md`.
 
 ## Intent and user decisions
@@ -11,8 +11,9 @@ and priorities, beyond answering questions about individual contracts. This step
 prepares the evidence foundation: preserved source documents, their provenance,
 and text that can later be cited by document version and page.
 
-The user agreed to prepare an initial repository. The implementation choices
-below are proposals by the designer, not additional user decisions.
+The user agreed to prepare an initial repository and approved this design.
+Implementation defaults below originated with the designer and were accepted
+as part of the scope; they are not independently requested product features.
 
 Institutional health assessments, priority rankings and legal interpretation
 are later work. A document being absent, inaccessible or unreadable is a coverage
